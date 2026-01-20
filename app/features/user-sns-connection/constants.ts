@@ -1,3 +1,3 @@
 export const SNS_TYPES = [
-    'discord', 'kakao', 'email'
+    'discord', 'kakao', 'email', 'telegram'
 ] as const;
