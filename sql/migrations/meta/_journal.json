@@ -15,6 +15,34 @@
       "when": 1744715791562,
       "tag": "0001_great_junta",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1768820717079,
+      "tag": "0002_spotty_zemo",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1768822400288,
+      "tag": "0003_special_sentinel",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1768822931043,
+      "tag": "0004_medical_proemial_gods",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1768875641328,
+      "tag": "0005_futuristic_valkyrie",
+      "breakpoints": true
     }
   ]
 }
