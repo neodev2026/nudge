@@ -1,0 +1,4 @@
+CREATE POLICY "card_schedule_n8n_worker_select" ON "card_schedule" AS PERMISSIVE FOR SELECT TO "n8n_worker" USING (true);--> statement-breakpoint
+CREATE POLICY "learning_card_n8n_worker_select" ON "learning_card" AS PERMISSIVE FOR SELECT TO "n8n_worker" USING ("learning_card"."is_active" = true);--> statement-breakpoint
+CREATE POLICY "learning_content_n8n_worker_select" ON "learning_content" AS PERMISSIVE FOR SELECT TO "n8n_worker" USING ("learning_content"."is_active" = true);--> statement-breakpoint
+CREATE POLICY "learning_product_n8n_worker_select" ON "learning_product" AS PERMISSIVE FOR SELECT TO "n8n_worker" USING ("learning_product"."is_active" = true);
