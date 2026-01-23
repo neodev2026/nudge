@@ -1,0 +1,1 @@
+export const PUSH_CHANNELS = ['discord', 'kakao', 'email', 'telegram'] as const;

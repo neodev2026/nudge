@@ -216,6 +216,14 @@ export const cardSchedule = pgTable(
       as: 'permissive',
       using: isAdmin,
     }),
+
+    // n8n_worker는 모든 스케줄 접근 가능
+    pgPolicy('card_schedule_n8n_worker_select', {
+      for: 'select',
+      to: 'n8n_worker',
+      as: 'permissive',
+      using: sql`true`,
+    }),
   ],
 );
 

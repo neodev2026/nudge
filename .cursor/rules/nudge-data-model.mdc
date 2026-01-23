@@ -1,0 +1,28 @@
+---
+description: Nudge 프로젝트 데이터 모델·스키마·비즈니스 규칙 설계 시 참고 문서
+alwaysApply: true
+---
+
+# Nudge 데이터 모델 참고 문서
+
+이 프로젝트의 **엔터티 정의, 스키마, 관계, CRUD, 비즈니스 규칙**을 다룰 때는 아래 문서를 **반드시 참고**한다.
+
+## 참고 URL
+
+**Data Model Planning (Nudge)**  
+https://gist.github.com/neodev2026/79cc080b1a4200a545072a569f96b7e5
+
+- Raw: `https://gist.githubusercontent.com/neodev2026/79cc080b1a4200a545072a569f96b7e5/raw`
+
+## 문서에서 다루는 내용
+
+- **엔터티**: UserSNSConnection, LearningProduct, LearningContent, LearningCard, CardFeedback, CardSchedule, UserProductSubscription, UserLearningContentProgress
+- **필드 정의, enum, unique/check 제약, 인덱스**
+- **엔터티 간 관계**
+- **CRUD 권한 (Admin/User/System)**
+- **비즈니스 규칙**: 플랜별 인터벌, 푸시 전송, SRS, 카드 순서, RLS, 데이터 보존 등
+
+## 작업 시
+
+- 스키마·Drizzle·마이그레이션·새 테이블/필드 추가·RLS 설계 시 위 gist 내용과 일치하는지 확인한다.
+- 문서에 없는 필드/규칙을 새로 도입할 때는 설계 의도를 명확히 하고, 필요하면 문서 업데이트를 제안한다.

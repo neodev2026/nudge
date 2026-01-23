@@ -90,6 +90,14 @@ export const learningProduct = pgTable(
       as: 'permissive',
       using: isAdmin,
     }),
+
+    // n8n_worker는 활성화된 상품만 접근
+    pgPolicy('learning_product_n8n_worker_select', {
+      for: 'select',
+      to: 'n8n_worker',
+      as: 'permissive',
+      using: sql`${table.isActive} = true`,
+    }),
   ],
 );
 

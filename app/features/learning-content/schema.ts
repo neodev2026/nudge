@@ -139,6 +139,14 @@ export const learningContent = pgTable(
       as: 'permissive',
       using: isAdmin,
     }),
+
+    // n8n_worker는 활성화된 콘텐츠만 접근
+    pgPolicy('learning_content_n8n_worker_select', {
+      for: 'select',
+      to: 'n8n_worker',
+      as: 'permissive',
+      using: sql`${table.isActive} = true`,
+    }),
   ],
 );
 
