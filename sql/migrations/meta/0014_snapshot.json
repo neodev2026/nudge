@@ -1,0 +1,2582 @@
+{
+  "id": "35548d2b-bffb-4c73-a893-42c1424dd8b7",
+  "prevId": "69da86ad-92a5-4c50-8991-9a73392b3737",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.admins": {
+      "name": "admins",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "admins_email_unique": {
+          "name": "admins_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {
+        "admins_select_all": {
+          "name": "admins_select_all",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "true"
+        },
+        "admins_insert_admin": {
+          "name": "admins_insert_admin",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "\n        EXISTS (\n          SELECT 1 FROM admins\n          WHERE email = (auth.jwt()->>'email')::text\n        )\n      "
+        },
+        "admins_delete_admin": {
+          "name": "admins_delete_admin",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n        EXISTS (\n          SELECT 1 FROM admins\n          WHERE email = (auth.jwt()->>'email')::text\n        )\n      "
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.card_feedback": {
+      "name": "card_feedback",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "learning_product_id": {
+          "name": "learning_product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "learning_content_id": {
+          "name": "learning_content_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "learning_card_id": {
+          "name": "learning_card_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "feedback_score": {
+          "name": "feedback_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "card_opened_at": {
+          "name": "card_opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "feedback_submitted_at": {
+          "name": "feedback_submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "time_spent_seconds": {
+          "name": "time_spent_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "device_info": {
+          "name": "device_info",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "push_channel": {
+          "name": "push_channel",
+          "type": "push_channel",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_review": {
+          "name": "is_review",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "previous_feedback_score": {
+          "name": "previous_feedback_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "card_presentation_count": {
+          "name": "card_presentation_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "card_feedback_user_created_at_idx": {
+          "name": "card_feedback_user_created_at_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_feedback_user_idx": {
+          "name": "card_feedback_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_feedback_learning_product_idx": {
+          "name": "card_feedback_learning_product_idx",
+          "columns": [
+            {
+              "expression": "learning_product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_feedback_learning_content_idx": {
+          "name": "card_feedback_learning_content_idx",
+          "columns": [
+            {
+              "expression": "learning_content_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_feedback_learning_card_idx": {
+          "name": "card_feedback_learning_card_idx",
+          "columns": [
+            {
+              "expression": "learning_card_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_feedback_user_product_idx": {
+          "name": "card_feedback_user_product_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "learning_product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_feedback_user_content_idx": {
+          "name": "card_feedback_user_content_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "learning_content_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_feedback_user_card_idx": {
+          "name": "card_feedback_user_card_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "learning_card_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_feedback_score_idx": {
+          "name": "card_feedback_score_idx",
+          "columns": [
+            {
+              "expression": "feedback_score",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_feedback_is_review_idx": {
+          "name": "card_feedback_is_review_idx",
+          "columns": [
+            {
+              "expression": "is_review",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "card_feedback_user_id_users_id_fk": {
+          "name": "card_feedback_user_id_users_id_fk",
+          "tableFrom": "card_feedback",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "card_feedback_learning_product_id_learning_product_id_fk": {
+          "name": "card_feedback_learning_product_id_learning_product_id_fk",
+          "tableFrom": "card_feedback",
+          "tableTo": "learning_product",
+          "columnsFrom": [
+            "learning_product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "card_feedback_learning_content_id_learning_content_id_fk": {
+          "name": "card_feedback_learning_content_id_learning_content_id_fk",
+          "tableFrom": "card_feedback",
+          "tableTo": "learning_content",
+          "columnsFrom": [
+            "learning_content_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "card_feedback_learning_card_id_learning_card_id_fk": {
+          "name": "card_feedback_learning_card_id_learning_card_id_fk",
+          "tableFrom": "card_feedback",
+          "tableTo": "learning_card",
+          "columnsFrom": [
+            "learning_card_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "card_feedback_select_own": {
+          "name": "card_feedback_select_own",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"card_feedback\".\"user_id\" = (select auth.uid())"
+        },
+        "card_feedback_select_admin": {
+          "name": "card_feedback_select_admin",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "card_feedback_insert_own": {
+          "name": "card_feedback_insert_own",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "\"card_feedback\".\"user_id\" = (select auth.uid())"
+        },
+        "card_feedback_insert_admin": {
+          "name": "card_feedback_insert_admin",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "card_feedback_update_none": {
+          "name": "card_feedback_update_none",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "false",
+          "withCheck": "false"
+        },
+        "card_feedback_delete_none": {
+          "name": "card_feedback_delete_none",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "false"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.card_schedule": {
+      "name": "card_schedule",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_sns_connection_id": {
+          "name": "user_sns_connection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "learning_product_id": {
+          "name": "learning_product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "learning_content_id": {
+          "name": "learning_content_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "learning_card_id": {
+          "name": "learning_card_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scheduled_at": {
+          "name": "scheduled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sent_at": {
+          "name": "sent_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "delivery_status": {
+          "name": "delivery_status",
+          "type": "delivery_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "previous_schedule_id": {
+          "name": "previous_schedule_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "card_schedule_user_idx": {
+          "name": "card_schedule_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_schedule_pending_idx": {
+          "name": "card_schedule_pending_idx",
+          "columns": [
+            {
+              "expression": "delivery_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "scheduled_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_schedule_user_product_idx": {
+          "name": "card_schedule_user_product_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "learning_product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_schedule_user_content_idx": {
+          "name": "card_schedule_user_content_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "learning_content_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_schedule_user_card_status_idx": {
+          "name": "card_schedule_user_card_status_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "learning_card_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "delivery_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_schedule_sns_idx": {
+          "name": "card_schedule_sns_idx",
+          "columns": [
+            {
+              "expression": "user_sns_connection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_schedule_sent_at_idx": {
+          "name": "card_schedule_sent_at_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sent_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "card_schedule_previous_idx": {
+          "name": "card_schedule_previous_idx",
+          "columns": [
+            {
+              "expression": "previous_schedule_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "card_schedule_user_id_users_id_fk": {
+          "name": "card_schedule_user_id_users_id_fk",
+          "tableFrom": "card_schedule",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "card_schedule_user_sns_connection_id_user_sns_connection_id_fk": {
+          "name": "card_schedule_user_sns_connection_id_user_sns_connection_id_fk",
+          "tableFrom": "card_schedule",
+          "tableTo": "user_sns_connection",
+          "columnsFrom": [
+            "user_sns_connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "card_schedule_learning_product_id_learning_product_id_fk": {
+          "name": "card_schedule_learning_product_id_learning_product_id_fk",
+          "tableFrom": "card_schedule",
+          "tableTo": "learning_product",
+          "columnsFrom": [
+            "learning_product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "card_schedule_learning_content_id_learning_content_id_fk": {
+          "name": "card_schedule_learning_content_id_learning_content_id_fk",
+          "tableFrom": "card_schedule",
+          "tableTo": "learning_content",
+          "columnsFrom": [
+            "learning_content_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "card_schedule_learning_card_id_learning_card_id_fk": {
+          "name": "card_schedule_learning_card_id_learning_card_id_fk",
+          "tableFrom": "card_schedule",
+          "tableTo": "learning_card",
+          "columnsFrom": [
+            "learning_card_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "card_schedule_previous_schedule_id_card_schedule_id_fk": {
+          "name": "card_schedule_previous_schedule_id_card_schedule_id_fk",
+          "tableFrom": "card_schedule",
+          "tableTo": "card_schedule",
+          "columnsFrom": [
+            "previous_schedule_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "card_schedule_select_own": {
+          "name": "card_schedule_select_own",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"card_schedule\".\"user_id\" = (select auth.uid())"
+        },
+        "card_schedule_select_admin": {
+          "name": "card_schedule_select_admin",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "card_schedule_insert_system": {
+          "name": "card_schedule_insert_system",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "false"
+        },
+        "card_schedule_insert_admin": {
+          "name": "card_schedule_insert_admin",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "card_schedule_update_system": {
+          "name": "card_schedule_update_system",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "false",
+          "withCheck": "false"
+        },
+        "card_schedule_update_admin": {
+          "name": "card_schedule_update_admin",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n",
+          "withCheck": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "card_schedule_delete_admin": {
+          "name": "card_schedule_delete_admin",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "card_schedule_n8n_worker_select": {
+          "name": "card_schedule_n8n_worker_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "n8n_worker"
+          ],
+          "using": "true"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.learning_card": {
+      "name": "learning_card",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "learning_content_id": {
+          "name": "learning_content_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "card_type": {
+          "name": "card_type",
+          "type": "card_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "card_scope": {
+          "name": "card_scope",
+          "type": "card_scope",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'shared'"
+        },
+        "card_data": {
+          "name": "card_data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_valid": {
+          "name": "is_valid",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "learning_card_content_idx": {
+          "name": "learning_card_content_idx",
+          "columns": [
+            {
+              "expression": "learning_content_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learning_card_type_idx": {
+          "name": "learning_card_type_idx",
+          "columns": [
+            {
+              "expression": "card_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learning_card_scope_idx": {
+          "name": "learning_card_scope_idx",
+          "columns": [
+            {
+              "expression": "card_scope",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learning_card_validation_idx": {
+          "name": "learning_card_validation_idx",
+          "columns": [
+            {
+              "expression": "is_valid",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"learning_card\".\"is_valid\" = false",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "learning_card_learning_content_id_learning_content_id_fk": {
+          "name": "learning_card_learning_content_id_learning_content_id_fk",
+          "tableFrom": "learning_card",
+          "tableTo": "learning_content",
+          "columnsFrom": [
+            "learning_content_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "learning_card_select_scoped": {
+          "name": "learning_card_select_scoped",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n        \"learning_card\".\"is_active\" = true AND \n        \"learning_card\".\"is_valid\" = true AND (\n          \"learning_card\".\"card_scope\" = 'shared' OR \n          (\"learning_card\".\"card_scope\" = 'personalized' AND (\"learning_card\".\"card_data\"->'meta'->>'userId')::uuid = (select auth.uid()))\n        )\n      "
+        },
+        "learning_card_admin_all": {
+          "name": "learning_card_admin_all",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "learning_card_n8n_worker_all": {
+          "name": "learning_card_n8n_worker_all",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.learning_content": {
+      "name": "learning_content",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "learning_product_id": {
+          "name": "learning_product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_type": {
+          "name": "content_type",
+          "type": "content_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_name": {
+          "name": "content_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "learning_content_product_idx": {
+          "name": "learning_content_product_idx",
+          "columns": [
+            {
+              "expression": "learning_product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learning_content_product_order_idx": {
+          "name": "learning_content_product_order_idx",
+          "columns": [
+            {
+              "expression": "learning_product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "display_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learning_content_active_idx": {
+          "name": "learning_content_active_idx",
+          "columns": [
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "learning_content_type_idx": {
+          "name": "learning_content_type_idx",
+          "columns": [
+            {
+              "expression": "content_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "learning_content_learning_product_id_learning_product_id_fk": {
+          "name": "learning_content_learning_product_id_learning_product_id_fk",
+          "tableFrom": "learning_content",
+          "tableTo": "learning_product",
+          "columnsFrom": [
+            "learning_product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "learning_content_select_active": {
+          "name": "learning_content_select_active",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "public"
+          ],
+          "using": "\n        \"learning_content\".\"is_active\" = true\n        AND EXISTS (\n          SELECT 1 FROM \"learning_product\"\n          WHERE \"learning_product\".\"id\" = \"learning_content\".\"learning_product_id\"\n          AND \"learning_product\".\"is_active\" = true\n        )\n      "
+        },
+        "learning_content_select_admin": {
+          "name": "learning_content_select_admin",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "learning_content_insert_admin": {
+          "name": "learning_content_insert_admin",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "learning_content_update_admin": {
+          "name": "learning_content_update_admin",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n",
+          "withCheck": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "learning_content_delete_admin": {
+          "name": "learning_content_delete_admin",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "learning_content_n8n_worker_select": {
+          "name": "learning_content_n8n_worker_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "n8n_worker"
+          ],
+          "using": "\"learning_content\".\"is_active\" = true"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.learning_product": {
+      "name": "learning_product",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "learning_product_active_display_idx": {
+          "name": "learning_product_active_display_idx",
+          "columns": [
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "display_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "learning_product_name_unique": {
+          "name": "learning_product_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        }
+      },
+      "policies": {
+        "learning_product_select_active": {
+          "name": "learning_product_select_active",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "public"
+          ],
+          "using": "\"learning_product\".\"is_active\" = true"
+        },
+        "learning_product_select_admin": {
+          "name": "learning_product_select_admin",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "learning_product_insert_admin": {
+          "name": "learning_product_insert_admin",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "learning_product_update_admin": {
+          "name": "learning_product_update_admin",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n",
+          "withCheck": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "learning_product_delete_admin": {
+          "name": "learning_product_delete_admin",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "learning_product_n8n_worker_select": {
+          "name": "learning_product_n8n_worker_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "n8n_worker"
+          ],
+          "using": "\"learning_product\".\"is_active\" = true"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payments": {
+      "name": "payments",
+      "schema": "",
+      "columns": {
+        "payment_id": {
+          "name": "payment_id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "payments_payment_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "payment_key": {
+          "name": "payment_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order_name": {
+          "name": "order_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_amount": {
+          "name": "total_amount",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw_data": {
+          "name": "raw_data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "receipt_url": {
+          "name": "receipt_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "payments_user_id_users_id_fk": {
+          "name": "payments_user_id_users_id_fk",
+          "tableFrom": "payments",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "select-payment-policy": {
+          "name": "select-payment-policy",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"payments\".\"user_id\""
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_learning_content_progress": {
+      "name": "user_learning_content_progress",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "learning_product_id": {
+          "name": "learning_product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "learning_content_id": {
+          "name": "learning_content_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_studied_at": {
+          "name": "last_studied_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "study_count": {
+          "name": "study_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_feedback_score": {
+          "name": "last_feedback_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "user_progress_user_idx": {
+          "name": "user_progress_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_progress_user_product_idx": {
+          "name": "user_progress_user_product_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "learning_product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_progress_user_product_studied_idx": {
+          "name": "user_progress_user_product_studied_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "learning_product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_studied_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_progress_feedback_score_idx": {
+          "name": "user_progress_feedback_score_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_feedback_score",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "user_learning_content_progress_user_id_users_id_fk": {
+          "name": "user_learning_content_progress_user_id_users_id_fk",
+          "tableFrom": "user_learning_content_progress",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_learning_content_progress_learning_product_id_learning_product_id_fk": {
+          "name": "user_learning_content_progress_learning_product_id_learning_product_id_fk",
+          "tableFrom": "user_learning_content_progress",
+          "tableTo": "learning_product",
+          "columnsFrom": [
+            "learning_product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_learning_content_progress_learning_content_id_learning_content_id_fk": {
+          "name": "user_learning_content_progress_learning_content_id_learning_content_id_fk",
+          "tableFrom": "user_learning_content_progress",
+          "tableTo": "learning_content",
+          "columnsFrom": [
+            "learning_content_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_content_progress_unique": {
+          "name": "user_content_progress_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "learning_product_id",
+            "learning_content_id"
+          ]
+        }
+      },
+      "policies": {
+        "user_progress_select_own": {
+          "name": "user_progress_select_own",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"user_learning_content_progress\".\"user_id\" = (select auth.uid())"
+        },
+        "user_progress_select_admin": {
+          "name": "user_progress_select_admin",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "user_progress_insert_system": {
+          "name": "user_progress_insert_system",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "false"
+        },
+        "user_progress_insert_admin": {
+          "name": "user_progress_insert_admin",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "user_progress_update_system": {
+          "name": "user_progress_update_system",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "false",
+          "withCheck": "false"
+        },
+        "user_progress_update_admin": {
+          "name": "user_progress_update_admin",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n",
+          "withCheck": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "user_progress_delete_admin": {
+          "name": "user_progress_delete_admin",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_product_subscription": {
+      "name": "user_product_subscription",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "learning_product_id": {
+          "name": "learning_product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_sns_connection_id": {
+          "name": "user_sns_connection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subscription_tier": {
+          "name": "subscription_tier",
+          "type": "subscription_tier",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'basic'"
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "push_enabled": {
+          "name": "push_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "memory_percentage": {
+          "name": "memory_percentage",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "preferred_push_time": {
+          "name": "preferred_push_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_card_sent_at": {
+          "name": "last_card_sent_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subscribed_at": {
+          "name": "subscribed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "unsubscribed_at": {
+          "name": "unsubscribed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "user_subscription_user_idx": {
+          "name": "user_subscription_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_subscription_active_idx": {
+          "name": "user_subscription_active_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_subscription_tier_idx": {
+          "name": "user_subscription_tier_idx",
+          "columns": [
+            {
+              "expression": "subscription_tier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_subscription_last_sent_idx": {
+          "name": "user_subscription_last_sent_idx",
+          "columns": [
+            {
+              "expression": "last_card_sent_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_subscription_push_enabled_idx": {
+          "name": "user_subscription_push_enabled_idx",
+          "columns": [
+            {
+              "expression": "push_enabled",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_subscription_sns_idx": {
+          "name": "user_subscription_sns_idx",
+          "columns": [
+            {
+              "expression": "user_sns_connection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_subscription_product_idx": {
+          "name": "user_subscription_product_idx",
+          "columns": [
+            {
+              "expression": "learning_product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "user_product_subscription_user_id_users_id_fk": {
+          "name": "user_product_subscription_user_id_users_id_fk",
+          "tableFrom": "user_product_subscription",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_product_subscription_learning_product_id_learning_product_id_fk": {
+          "name": "user_product_subscription_learning_product_id_learning_product_id_fk",
+          "tableFrom": "user_product_subscription",
+          "tableTo": "learning_product",
+          "columnsFrom": [
+            "learning_product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_product_subscription_user_sns_connection_id_user_sns_connection_id_fk": {
+          "name": "user_product_subscription_user_sns_connection_id_user_sns_connection_id_fk",
+          "tableFrom": "user_product_subscription",
+          "tableTo": "user_sns_connection",
+          "columnsFrom": [
+            "user_sns_connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_product_subscription_unique": {
+          "name": "user_product_subscription_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "learning_product_id"
+          ]
+        }
+      },
+      "policies": {
+        "user_subscription_select_own": {
+          "name": "user_subscription_select_own",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"user_product_subscription\".\"user_id\" = (select auth.uid())"
+        },
+        "user_subscription_select_admin": {
+          "name": "user_subscription_select_admin",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "user_subscription_insert_own": {
+          "name": "user_subscription_insert_own",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "\"user_product_subscription\".\"user_id\" = (select auth.uid())"
+        },
+        "user_subscription_update_own": {
+          "name": "user_subscription_update_own",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"user_product_subscription\".\"user_id\" = (select auth.uid())",
+          "withCheck": "\"user_product_subscription\".\"user_id\" = (select auth.uid())"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.user_sns_connection": {
+      "name": "user_sns_connection",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sns_type": {
+          "name": "sns_type",
+          "type": "sns_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sns_identifier": {
+          "name": "sns_identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_primary": {
+          "name": "is_primary",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "push_enabled": {
+          "name": "push_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "verified_at": {
+          "name": "verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "user_sns_user_idx": {
+          "name": "user_sns_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_sns_primary_idx": {
+          "name": "user_sns_primary_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "is_primary",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_sns_type_idx": {
+          "name": "user_sns_type_idx",
+          "columns": [
+            {
+              "expression": "sns_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_sns_identifier_idx": {
+          "name": "user_sns_identifier_idx",
+          "columns": [
+            {
+              "expression": "sns_identifier",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_sns_verified_idx": {
+          "name": "user_sns_verified_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "verified_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "user_sns_connection_user_id_users_id_fk": {
+          "name": "user_sns_connection_user_id_users_id_fk",
+          "tableFrom": "user_sns_connection",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "user_sns_connection_unique": {
+          "name": "user_sns_connection_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "sns_type",
+            "sns_identifier"
+          ]
+        }
+      },
+      "policies": {
+        "user_sns_select_own": {
+          "name": "user_sns_select_own",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"user_sns_connection\".\"user_id\" = (select auth.uid())"
+        },
+        "user_sns_select_admin": {
+          "name": "user_sns_select_admin",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "user_sns_insert_own": {
+          "name": "user_sns_insert_own",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "\"user_sns_connection\".\"user_id\" = (select auth.uid())"
+        },
+        "user_sns_insert_admin": {
+          "name": "user_sns_insert_admin",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "user_sns_update_own": {
+          "name": "user_sns_update_own",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"user_sns_connection\".\"user_id\" = (select auth.uid())",
+          "withCheck": "\"user_sns_connection\".\"user_id\" = (select auth.uid())"
+        },
+        "user_sns_update_admin": {
+          "name": "user_sns_update_admin",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n",
+          "withCheck": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        },
+        "user_sns_delete_own": {
+          "name": "user_sns_delete_own",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\"user_sns_connection\".\"user_id\" = (select auth.uid())"
+        },
+        "user_sns_delete_admin": {
+          "name": "user_sns_delete_admin",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "\n  EXISTS (\n    SELECT 1 FROM admins\n    WHERE email = (auth.jwt()->>'email')::text\n  )\n"
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.profiles": {
+      "name": "profiles",
+      "schema": "",
+      "columns": {
+        "profile_id": {
+          "name": "profile_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "avatar_url": {
+          "name": "avatar_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "marketing_consent": {
+          "name": "marketing_consent",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "profiles_profile_id_users_id_fk": {
+          "name": "profiles_profile_id_users_id_fk",
+          "tableFrom": "profiles",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "profile_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "edit-profile-policy": {
+          "name": "edit-profile-policy",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"profiles\".\"profile_id\"",
+          "withCheck": "(select auth.uid()) = \"profiles\".\"profile_id\""
+        },
+        "delete-profile-policy": {
+          "name": "delete-profile-policy",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"profiles\".\"profile_id\""
+        },
+        "select-profile-policy": {
+          "name": "select-profile-policy",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"profiles\".\"profile_id\""
+        }
+      },
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.push_channel": {
+      "name": "push_channel",
+      "schema": "public",
+      "values": [
+        "discord",
+        "kakao",
+        "email",
+        "telegram"
+      ]
+    },
+    "public.delivery_status": {
+      "name": "delivery_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "sent",
+        "failed",
+        "opened",
+        "feedback_received"
+      ]
+    },
+    "public.card_scope": {
+      "name": "card_scope",
+      "schema": "public",
+      "values": [
+        "shared",
+        "personalized"
+      ]
+    },
+    "public.card_type": {
+      "name": "card_type",
+      "schema": "public",
+      "values": [
+        "basic_meaning",
+        "pronunciation",
+        "etymology",
+        "cloze",
+        "contrast",
+        "cultural_context",
+        "example",
+        "derivatives",
+        "idiom",
+        "pos_specific"
+      ]
+    },
+    "public.content_type": {
+      "name": "content_type",
+      "schema": "public",
+      "values": [
+        "word",
+        "sentence",
+        "formula"
+      ]
+    },
+    "public.subscription_tier": {
+      "name": "subscription_tier",
+      "schema": "public",
+      "values": [
+        "basic",
+        "premium",
+        "vip"
+      ]
+    },
+    "public.sns_type": {
+      "name": "sns_type",
+      "schema": "public",
+      "values": [
+        "discord",
+        "kakao",
+        "email",
+        "telegram"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
