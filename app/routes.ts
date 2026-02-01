@@ -109,5 +109,13 @@ export default [
       index("features/blog/screens/posts.tsx"),
       route("/:slug", "features/blog/screens/post.tsx"),
     ]),
+  ]), 
+
+  // 학습 카드 단독 화면 (몰입을 위해 네비게이션 레이아웃 제외)
+  layout("core/layouts/private.layout.tsx", [
+    route("/cards/:cardId", "features/learning-card/screens/learning-card.tsx"),
   ]),
+
+  route("/cards/simulation", "features/learning-card/screens/simulation.tsx"),
+
 ] satisfies RouteConfig;
