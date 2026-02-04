@@ -1,0 +1,2 @@
+DROP POLICY "learning_card_n8n_worker_all" ON "learning_card" CASCADE;--> statement-breakpoint
+CREATE POLICY "learning_card_n8n_worker_insert" ON "learning_card" AS PERMISSIVE FOR INSERT TO "n8n_worker" WITH CHECK (true);

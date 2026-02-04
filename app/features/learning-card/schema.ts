@@ -68,11 +68,21 @@ export const learningCard = pgTable(
       using: isAdmin,
     }),
 
-    // n8n worker: 배치 처리를 위한 모든 접근 허용
-    pgPolicy('learning_card_n8n_worker_all', {
-      for: 'all',
-      to: authenticatedRole,
-      using: isAdmin, // 혹은 특정 worker 권한 체크
+    // [추가된 Policy] n8n_worker: 자동화 워크플로우를 위한 정책
+    // 1. 조회: 전체 카드 상태 모니터링 및 중복 확인을 위해 모든 카드 조회 허용
+    pgPolicy('learning_card_n8n_worker_select', {
+      for: 'select',
+      to: 'n8n_worker',
+      as: 'permissive',
+      using: sql`true`, // 워커는 관리를 위해 전체 조회가 필요한 경우가 많음
     }),
+        
+    // 2. 삽입: AI가 생성한 신규 카드를 테이블에 넣기 위해 허용
+    pgPolicy('learning_card_n8n_worker_insert', {
+      for: 'insert',
+      to: 'n8n_worker',
+      as: 'permissive',
+      withCheck: sql`true`,
+    }),    
   ]
 );
