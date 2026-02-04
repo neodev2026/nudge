@@ -1,0 +1,1 @@
+CREATE POLICY "learning_card_n8n_worker_select" ON "learning_card" AS PERMISSIVE FOR SELECT TO "n8n_worker" USING (true);
