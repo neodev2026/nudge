@@ -117,5 +117,6 @@ export default [
   ]),
 
   route("/cards/simulation", "features/learning-card/screens/simulation.tsx"),
+  route("/cards/simulation-page", "features/learning-card/screens/simulation-page.tsx"),
 
 ] satisfies RouteConfig;
