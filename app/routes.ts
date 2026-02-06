@@ -97,6 +97,7 @@ export default [
      */
     // 제품 목록 브라우징 페이지
     route("/learning-products", "features/learning-product/screens/products-page.tsx"),
+    route("/learning-products/:productId", "features/learning-product/screens/product-detail-page.tsx"),
   ]),
 
   layout("core/layouts/private.layout.tsx", { id: "private-dashboard" }, [
@@ -124,8 +125,4 @@ export default [
 
   route("/cards/simulation", "features/learning-card/screens/simulation.tsx"),
   route("/cards/simulation-page", "features/learning-card/screens/simulation-page.tsx"),
-
-  // 제품 상세 페이지 (다음 단계에서 구현 예정)
-  // route("products/:productId", "features/learning-product/screens/product-detail-page.tsx"),
-
 ] satisfies RouteConfig;

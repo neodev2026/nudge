@@ -6,7 +6,7 @@ import { ProductCard } from "../components/product-card";
 import type { Route } from "./+types/products-page";
 
 /**
- * 메타데이터 설정
+ * Set metadata
  */
 export const meta = () => {
   return [
@@ -16,8 +16,8 @@ export const meta = () => {
 };
 
 /**
- * 서버 사이드 로더
- * 유효한 세션을 유지하며 DB에서 제품 목록을 가져옵니다.
+ * Server-side loader
+ * Fetches product list from DB while maintaining valid session
  */
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const [client, headers] = makeServerClient(request);
