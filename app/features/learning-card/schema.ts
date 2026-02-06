@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, pgPolicy, pgEnum, pgTable, jsonb, uuid, integer, index, text } from "drizzle-orm/pg-core";
+import { boolean, pgPolicy, pgEnum, pgTable, jsonb, uuid, integer, index, text, doublePrecision, timestamp, unique } from "drizzle-orm/pg-core";
 import { authUid, authenticatedRole } from "drizzle-orm/supabase";
 
 import { timestamps } from "~/core/db/helpers.server";
@@ -84,5 +84,56 @@ export const learningCard = pgTable(
       as: 'permissive',
       withCheck: sql`true`,
     }),    
+  ]
+);
+
+/**
+ * 단어별 통합 학습 진도 테이블
+ * 한 사용자가 특정 단어에 대해 가지는 통합적인 SM-2 상태를 관리합니다.
+ */
+export const learningContentProgress = pgTable(
+  "learning_content_progress",
+  {
+    userId: uuid("user_id").notNull(),
+    learningContentId: uuid("learning_content_id")
+      .notNull()
+      .references(() => learningContent.id, { onDelete: "cascade" }),
+    
+    // SM-2 알고리즘 변수
+    iteration: integer("iteration").notNull().default(0),
+    easiness: doublePrecision("easiness").notNull().default(2.5),
+    interval: integer("interval").notNull().default(0),
+    
+    // 카드 순환 관리 (9개 카드를 순차적으로 보여주기 위한 인덱스)
+    currentCardIndex: integer("current_card_index").notNull().default(0),
+    
+    // 복습 일정 관리
+    nextReviewAt: timestamp("next_review_at", { withTimezone: true }).notNull().defaultNow(),
+    lastReviewAt: timestamp("last_review_at", { withTimezone: true }),
+    
+    ...timestamps,
+  },
+  (table) => [
+    // 사용자와 단어 ID의 조합으로 유니크한 진도를 보장합니다.
+    unique('learning_content_progress_unique').on(table.userId, table.learningContentId),
+
+    // RLS Policies
+    
+    // 1. 일반 사용자: 본인의 진도 데이터만 관리 가능
+    pgPolicy('learning_content_progress_user_manage', {
+      for: 'all',
+      to: authenticatedRole,
+      using: sql`${table.userId} = ${authUid}`,
+      withCheck: sql`${table.userId} = ${authUid}`,
+    }),
+
+    // 2. n8n_worker: 복습 알림 및 자동화 처리를 위해 전체 데이터 접근 허용
+    pgPolicy('learning_content_progress_worker_all', {
+      for: 'all',
+      to: 'n8n_worker',
+      as: 'permissive',
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
   ]
 );

@@ -286,6 +286,53 @@ export type Database = {
           },
         ]
       }
+      learning_content_progress: {
+        Row: {
+          created_at: string
+          current_card_index: number
+          easiness: number
+          interval: number
+          iteration: number
+          last_review_at: string | null
+          learning_content_id: string
+          next_review_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_card_index?: number
+          easiness?: number
+          interval?: number
+          iteration?: number
+          last_review_at?: string | null
+          learning_content_id: string
+          next_review_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_card_index?: number
+          easiness?: number
+          interval?: number
+          iteration?: number
+          last_review_at?: string | null
+          learning_content_id?: string
+          next_review_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_content_progress_learning_content_id_learning_content_"
+            columns: ["learning_content_id"]
+            isOneToOne: false
+            referencedRelation: "learning_content"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       learning_product: {
         Row: {
           created_at: string

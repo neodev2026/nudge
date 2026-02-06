@@ -120,6 +120,13 @@
       "when": 1770193658129,
       "tag": "0016_silent_the_executioner",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1770354094201,
+      "tag": "0017_striped_invisible_woman",
+      "breakpoints": true
     }
   ]
 }
