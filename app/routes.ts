@@ -98,6 +98,9 @@ export default [
     // 제품 목록 브라우징 페이지
     route("/learning-products", "features/learning-product/screens/products-page.tsx"),
     route("/learning-products/:productId", "features/learning-product/screens/product-detail-page.tsx"),
+
+    route("/user-sns-settings", "features/user-sns-connection/screens/sns-settings-page.tsx"),
+    
   ]),
 
   layout("core/layouts/private.layout.tsx", { id: "private-dashboard" }, [

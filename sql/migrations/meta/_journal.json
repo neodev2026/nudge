@@ -127,6 +127,13 @@
       "when": 1770354094201,
       "tag": "0017_striped_invisible_woman",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1770396302011,
+      "tag": "0018_ambitious_earthquake",
+      "breakpoints": true
     }
   ]
 }

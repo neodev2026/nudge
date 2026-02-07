@@ -1,89 +1,181 @@
-import { data } from "react-router";
+import { data, redirect, Form } from "react-router";
 import { z } from "zod";
+import { 
+  CheckIcon, 
+  ZapIcon, 
+  CrownIcon, 
+  RocketIcon, 
+  AlertCircleIcon,
+  ChevronRightIcon
+} from "lucide-react";
+
+/**
+ * Server-side utilities and queries
+ */
 import makeServerClient from "~/core/lib/supa-client.server";
 import { getProductById } from "../queries";
+import { getUserSnsConnections } from "~/features/user-sns-connection/queries";
+import { createSubscription } from "~/features/user-product-subscription/queries";
+
+/**
+ * Common UI components
+ */
 import { Hero } from "~/core/components/hero";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "~/core/components/ui/card";
 import { Button } from "~/core/components/ui/button";
 import { Badge } from "~/core/components/ui/badge";
-import { CheckIcon, ZapIcon, CrownIcon, RocketIcon } from "lucide-react";
+
 import type { Route } from "./+types/product-detail-page";
 
 /**
- * parameter validation schema
+ * Zod schema for parameter validation
  */
 const paramsSchema = z.object({
-  productId: z.string().uuid(),
+  productId: z.string().uuid("Invalid product ID format."),
 });
 
+/**
+ * Dynamic Page Metadata
+ */
 export const meta = ({ data }: Route.MetaArgs) => {
   return [
     { title: `${data?.product?.name || "Product"} | Nudge` },
-    { name: "description", content: data?.product?.description },
+    { name: "description", content: data?.product?.description || "Product details" },
   ];
 };
 
 /**
- * server-side loader
+ * Server-Side Loader: Fetches product details and validates user SNS status
  */
 export const loader = async ({ params, request }: Route.LoaderArgs) => {
   const { data: parsed, success } = paramsSchema.safeParse(params);
-  if (!success) throw new Response("Invalid Product ID", { status: 400 });
+  if (!success) throw new Response("Not Found", { status: 404 });
 
   const [client, headers] = makeServerClient(request);
-  const product = await getProductById(client, { productId: parsed.productId });
+  
+  const { data: { user } } = await client.auth.getUser();
+  
+  /**
+   * Fetch product data and user SNS connections in parallel for optimization
+   */
+  const [product, snsConnections] = await Promise.all([
+    getProductById(client, { productId: parsed.productId }),
+    user ? getUserSnsConnections(client, { userId: user.id }) : Promise.resolve([]),
+  ]);
 
-  return data({ product }, { headers });
+  if (!product) throw new Response("Product Not Found", { status: 404 });
+
+  return data({ 
+    product, 
+    isSnsConnected: snsConnections.length > 0,
+    isLoggedIn: !!user 
+  }, { headers });
+};
+
+/**
+ * Action: Handles subscription logic and SNS connection guard
+ */
+export const action = async ({ request, params }: Route.ActionArgs) => {
+  const [client, headers] = makeServerClient(request);
+  const { data: { user } } = await client.auth.getUser();
+  const formData = await request.formData();
+  
+  const tier = formData.get("tier") as "basic" | "premium" | "vip";
+
+  // 1. Authentication Check
+  if (!user) return redirect("/auth/login", { headers });
+
+  // 2. SNS Connection Verification
+  const snsConnections = await getUserSnsConnections(client, { userId: user.id });
+  
+  if (snsConnections.length === 0) {
+    // Redirect to settings if no verified SNS is found
+    return redirect("/my/settings/sns?error=sns_required", { headers });
+  }
+
+  // Pick the primary connection or the first available one
+  const targetSns = snsConnections.find(c => c.is_primary) || snsConnections[0];
+
+  try {
+    // 3. Create or update the subscription
+    await createSubscription(client, {
+      userId: user.id,
+      productId: params.productId!,
+      snsConnectionId: targetSns.id,
+      tier: tier || "basic",
+    });
+
+    return redirect("/my/dashboard?success=subscribed", { headers });
+  } catch (error) {
+    console.error("Subscription Error:", error);
+    throw new Response("Failed to process subscription", { status: 500 });
+  }
 };
 
 export default function ProductDetailPage({ loaderData }: Route.ComponentProps) {
-  const { product } = loaderData;
+  const { product, isSnsConnected } = loaderData;
 
+  /**
+   * Tier definitions for the UI
+   */
   const tiers = [
     {
       id: "basic",
       name: "Basic",
       price: "Free",
-      description: "무료로 시작하는 무지성 암기",
-      features: ["2시간마다 Nudge 발송", "공유 카드 라이브러리", "기본 학습 통계"],
+      description: "Nudges every 2 hours",
+      features: ["SM-2 SRS Engine", "All 9 card types", "Basic stats"],
       icon: <RocketIcon className="size-5" />,
-      buttonVariant: "outline" as const,
+      highlight: false,
     },
     {
       id: "premium",
       name: "Premium",
-      price: "₩3,900 / mo",
-      description: "바쁜 분들을 위한 빠른 회독",
-      features: ["5분마다 Nudge 발송", "VIP 전용 알림 인터벌", "상세 학습 리포트"],
+      price: "₩3,900",
+      description: "Fast nudges every 5 minutes",
+      features: ["High-speed intervals", "Premium UI Theme", "PDF Learning Reports"],
       icon: <ZapIcon className="size-5 text-yellow-500" />,
-      buttonVariant: "default" as const,
+      highlight: true,
     },
     {
       id: "vip",
       name: "VIP",
-      price: "₩8,900 / mo",
-      description: "AI 개인화의 끝판왕",
-      features: ["즉시 무제한 Nudge", "AI 개인화 커스텀 카드", "우선 순위 지원"],
+      price: "₩8,900",
+      description: "Instant AI Personalization",
+      features: ["Unlimited instant nudges", "AI Custom Example Generation", "Priority Support"],
       icon: <CrownIcon className="size-5 text-purple-500" />,
-      buttonVariant: "default" as const,
+      highlight: false,
     },
   ];
 
   return (
-    <div className="space-y-16 pb-20 font-bold">
+    <div className="space-y-16 pb-24 font-bold">
       <Hero title={product.name} subtitle={product.description || ''} />
 
-      <div className="container mx-auto max-w-screen-xl px-4 space-y-12">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="container mx-auto max-w-screen-xl px-4 space-y-16">
+        {/* Pricing Tiers Section */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
           {tiers.map((tier) => (
-            <Card key={tier.id} className={`border-4 rounded-[2.5rem] flex flex-col ${tier.id === 'premium' ? 'border-primary shadow-xl scale-105' : 'border-muted'}`}>
-              <CardHeader className="p-8 pb-4 text-center space-y-2">
-                <div className="mx-auto size-12 rounded-full bg-muted/50 flex items-center justify-center mb-2">
+            <Card 
+              key={tier.id} 
+              className={`border-4 rounded-[2.5rem] flex flex-col transition-all ${
+                tier.highlight ? 'border-primary shadow-2xl scale-105' : 'border-muted'
+              }`}
+            >
+              <CardHeader className="p-8 pb-4 text-center space-y-3">
+                <div className="mx-auto size-12 rounded-2xl bg-muted/50 flex items-center justify-center">
                   {tier.icon}
                 </div>
-                <CardTitle className="text-2xl font-black uppercase tracking-tighter italic">{tier.name}</CardTitle>
-                <div className="text-3xl font-black text-primary">{tier.price}</div>
-                <p className="text-xs text-muted-foreground font-medium">{tier.description}</p>
+                <CardTitle className="text-2xl font-black uppercase italic tracking-tighter">
+                  {tier.name}
+                </CardTitle>
+                <div className="flex items-baseline justify-center gap-1">
+                  <span className="text-3xl font-black text-primary">{tier.price}</span>
+                  {tier.id !== 'basic' && <span className="text-xs text-muted-foreground">/mo</span>}
+                </div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest leading-relaxed">
+                  {tier.description}
+                </p>
               </CardHeader>
               
               <CardContent className="p-8 flex-1">
@@ -93,30 +185,52 @@ export default function ProductDetailPage({ loaderData }: Route.ComponentProps) 
                       <div className="size-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                         <CheckIcon className="size-3 text-primary" />
                       </div>
-                      {feature}
+                      <span className="font-medium text-foreground/80">{feature}</span>
                     </li>
                   ))}
                 </ul>
               </CardContent>
 
               <CardFooter className="p-8 pt-0">
-                <Button variant={tier.buttonVariant} className="w-full h-12 rounded-full font-black uppercase text-xs tracking-widest shadow-lg">
-                  구독하기
-                </Button>
+                <Form method="post" className="w-full">
+                  {/* Pass the selected tier to the action */}
+                  <input type="hidden" name="tier" value={tier.id} />
+                  <Button 
+                    type="submit"
+                    variant={tier.highlight ? "default" : "outline"} 
+                    className={`w-full h-14 rounded-full font-black uppercase text-xs tracking-widest shadow-lg ${
+                      !isSnsConnected && "opacity-80"
+                    }`}
+                  >
+                    {isSnsConnected ? "Start Learning" : "Connect SNS to Start"}
+                  </Button>
+                </Form>
               </CardFooter>
             </Card>
           ))}
         </div>
-        
-        {/* 제품 추가 정보 섹션 */}
-        <div className="bg-muted/10 border-2 border-dashed rounded-[3rem] p-12 text-center space-y-4">
-          <Badge className="px-4 py-1 text-[10px] uppercase font-black tracking-tighter">Product Info</Badge>
-          {/* <h2 className="text-2xl font-black">이 단어장은 {product.target_language?} {product.level} 수준입니다.</h2>
-          <p className="text-muted-foreground max-w-xl mx-auto">
-            Nudge는 여러분의 모국어({product.learner_language})를 기반으로 가장 효율적인 암기 경로를 생성합니다. 
-            지금 바로 SNS를 연결하고 학습을 시작하세요.
-          </p> */}
-        </div>
+
+        {/* SNS Connection Nudge */}
+        {!isSnsConnected && (
+          <div className="bg-destructive/5 border-2 border-dashed border-destructive/20 rounded-[3rem] p-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4 text-left">
+              <div className="p-4 bg-destructive/10 rounded-2xl">
+                <AlertCircleIcon className="size-8 text-destructive" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-lg font-black tracking-tight text-destructive italic">Connection Required</h4>
+                <p className="text-sm text-muted-foreground font-medium">
+                  To receive Nudge cards, you must link your Telegram or KakaoTalk account first.
+                </p>
+              </div>
+            </div>
+            <Button variant="destructive" asChild className="rounded-full px-8 font-black text-xs uppercase shadow-xl">
+              <a href="/my/settings/sns">
+                Go to Settings <ChevronRightIcon className="size-4 ml-2" />
+              </a>
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
