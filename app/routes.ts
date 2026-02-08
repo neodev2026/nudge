@@ -100,6 +100,7 @@ export default [
     route("/learning-products/:productId", "features/learning-product/screens/product-detail-page.tsx"),
 
     route("/user-sns-settings", "features/user-sns-connection/screens/sns-settings-page.tsx"),
+    route("/welcome", "features/users/screens/welcome-page.tsx"),
     
   ]),
 

@@ -567,8 +567,10 @@ export type Database = {
           push_enabled: boolean
           sns_identifier: string
           sns_type: Database["public"]["Enums"]["sns_type"]
+          token_expires_at: string | null
           updated_at: string
           user_id: string
+          verification_token: string | null
           verified_at: string | null
         }
         Insert: {
@@ -579,8 +581,10 @@ export type Database = {
           push_enabled?: boolean
           sns_identifier: string
           sns_type: Database["public"]["Enums"]["sns_type"]
+          token_expires_at?: string | null
           updated_at?: string
           user_id: string
+          verification_token?: string | null
           verified_at?: string | null
         }
         Update: {
@@ -591,8 +595,10 @@ export type Database = {
           push_enabled?: boolean
           sns_identifier?: string
           sns_type?: Database["public"]["Enums"]["sns_type"]
+          token_expires_at?: string | null
           updated_at?: string
           user_id?: string
+          verification_token?: string | null
           verified_at?: string | null
         }
         Relationships: []

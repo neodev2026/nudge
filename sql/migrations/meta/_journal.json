@@ -134,6 +134,13 @@
       "when": 1770396302011,
       "tag": "0018_ambitious_earthquake",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1770492877455,
+      "tag": "0019_petite_ben_grimm",
+      "breakpoints": true
     }
   ]
 }
