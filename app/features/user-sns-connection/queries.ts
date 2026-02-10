@@ -29,6 +29,35 @@ export const prepareVerification = async (
 };
 
 /**
+ * Generate a verification token for SNS connection.
+ * This runs only on the server to ensure security.
+ */
+export const prepareSnsVerification = async (
+  client: SupabaseClient<Database>,
+  { connectionId }: { connectionId: string }
+) => {
+  // Use dynamic import to avoid bundling issues in the browser
+  const { randomBytes } = await import("node:crypto");
+  
+  const token = randomBytes(16).toString('hex');
+  const expiresAt = new Date();
+  expiresAt.setMinutes(expiresAt.getMinutes() + 15); // Token valid for 15 mins
+
+  const { data, error } = await client
+    .from("user_sns_connection")
+    .update({
+      verification_token: token,
+      token_expires_at: expiresAt.toISOString(),
+    })
+    .eq("id", connectionId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+/**
  * Fetches the user's active SNS connection list
  */
 export const getUserSnsConnections = async (

@@ -1,175 +1,296 @@
-import { data, useSearchParams, Form } from "react-router";
-import { 
-  SendIcon, 
-  MessageSquareIcon, 
-  MailIcon, 
-  CheckCircle2Icon, 
-  AlertTriangleIcon,
-  Trash2Icon,
-  StarIcon,
-  PlusIcon
-} from "lucide-react";
-import { toast } from "sonner";
+import { data, Form, useActionData, useSearchParams, redirect } from "react-router";
 import { useEffect } from "react";
+import { toast } from "sonner";
+import { 
+  Trash2Icon, 
+  ExternalLinkIcon, 
+  CheckCircle2Icon, 
+  ClockIcon,
+  MessageSquareIcon,
+  AlertCircleIcon
+} from "lucide-react";
 
-// Server-side utilities
+/**
+ * Server-side utilities and queries
+ */
 import makeServerClient from "~/core/lib/supa-client.server";
-import { getAllUserSnsConnections } from "../queries";
+import { getAllUserSnsConnections, prepareSnsVerification } from "../queries";
 
-// Common UI components
+/**
+ * Custom Icons and Shared Components
+ */
 import { Hero } from "~/core/components/hero";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "~/core/components/ui/card";
+import { Card, CardContent } from "~/core/components/ui/card";
 import { Button } from "~/core/components/ui/button";
 import { Badge } from "~/core/components/ui/badge";
-import { Input } from "~/core/components/ui/input";
+import { DiscordIcon, TelegramIcon } from "~/core/components/icons";
 
 import type { Route } from "./+types/sns-settings-page";
 
 /**
- * [wemake Style] Loader: Fetch current user and their SNS connections.
+ * Page Metadata
+ */
+export const meta = () => [
+  { title: "SNS Channels | Nudge" },
+  { name: "description", content: "Manage your notification channels for language learning cards." },
+];
+
+/**
+ * Loader: Fetches the authenticated user's SNS connections.
  */
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const [client, headers] = makeServerClient(request);
   const { data: { user } } = await client.auth.getUser();
 
-  if (!user) throw new Response("Unauthorized", { status: 401 });
+  if (!user) throw redirect("/auth/login");
 
   const connections = await getAllUserSnsConnections(client, { userId: user.id });
-
-  return data({ connections }, { headers });
+  return data({ connections,
+    env: {
+      DISCORD_CLIENT_ID: process.env.DISCORD_OAUTH2_CLIENT_ID!,
+      DISCORD_REDIRECT_URI: process.env.DISCORD_OAUTH2_REDIRECT_URI!,
+    }
+   }, { headers });
 };
 
 /**
- * [wemake Style] Action: Handle connection management (Delete, Set Primary).
+ * Action: Manages SNS connection lifecycle (Create/Upsert, Tokenize, Delete).
  */
 export const action = async ({ request }: Route.ActionArgs) => {
   const [client, headers] = makeServerClient(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
   const connectionId = formData.get("connectionId") as string;
+  const { data: { user } } = await client.auth.getUser();
 
-  if (intent === "delete") {
-    await client.from("user_sns_connection").delete().eq("id", connectionId);
+  if (!user) return redirect("/auth/login");
+
+  try {
+    /**
+     * Intent: create_connection
+     * Handles initial linking or re-linking with guard logic and upsert.
+     */
+    if (intent === "create_connection") {
+      const snsType = formData.get("snsType") as "discord" | "telegram";
+
+      // [Guard Logic] Prevent re-creating a connection if it's already verified
+      const { data: existing } = await client
+        .from("user_sns_connection")
+        .select("id, verified_at")
+        .eq("user_id", user.id)
+        .eq("sns_type", snsType)
+        .maybeSingle();
+
+      if (existing?.verified_at) {
+        return data({ error: `This ${snsType} account is already verified.` }, { status: 400, headers });
+      }
+
+      // [Upsert] Use upsert with onConflict to handle existing "pending" records
+      const { data: connection, error: upsertError } = await client
+        .from("user_sns_connection")
+        .upsert(
+          {
+            user_id: user.id,
+            sns_type: snsType,
+            sns_identifier: "pending...",
+            is_active: false,
+          },
+          { onConflict: "user_id, sns_type, sns_identifier" }
+        )
+        .select()
+        .single();
+
+      if (upsertError) throw upsertError;
+
+      // Immediately generate/refresh the verification token
+      const updated = await prepareSnsVerification(client, { connectionId: connection.id });
+      return data({ connection: updated }, { headers });
+    }
+
+    if (intent === "generate_token") {
+      const connection = await prepareSnsVerification(client, { connectionId });
+      return data({ connection }, { headers });
+    }
+
+    if (intent === "delete") {
+      const { error: deleteError } = await client.from("user_sns_connection").delete().eq("id", connectionId);
+      if (deleteError) throw deleteError;
+      return data({ success: true }, { headers });
+    }
+  } catch (error: any) {
+    return data({ error: error.message || "Internal Server Error" }, { status: 500, headers });
   }
-
-  return data({ success: true }, { headers });
 };
 
-export default function SnsSettingsPage({ loaderData }: Route.ComponentProps) {
+export default function SnsSettingsPage({ loaderData, actionData }: Route.ComponentProps) {
   const [searchParams] = useSearchParams();
   const errorType = searchParams.get("error");
+  const { env } = loaderData; // Get env from loaderData
 
-  // Show error toast if redirected from subscription page
+  /**
+   * Safe Data Merging: Narrowing union types to resolve actionData property errors
+   */
+  const connections = loaderData.connections.map((conn) => {
+    if (actionData && "connection" in actionData && actionData.connection?.id === conn.id) {
+      return actionData.connection;
+    }
+    return conn;
+  });
+
   useEffect(() => {
+    // Notify user if they were redirected because SNS connection is required for subscription
     if (errorType === "sns_required") {
-      toast.error("SNS Connection Required", {
-        description: "Please connect at least one SNS channel to subscribe to Nudge products.",
+      toast.error("SNS Required", {
+        description: "Please link an account to receive your learning cards.",
       });
     }
-  }, [errorType]);
+    // Notify user about action errors (e.g., from Guard Logic)
+    if (actionData && "error" in actionData) {
+      toast.error("Operation Failed", { description: actionData.error });
+    }
+  }, [errorType, actionData]);
 
-  const snsIcons: Record<string, any> = {
-    telegram: <SendIcon className="size-5 text-sky-500" />,
-    kakao: <MessageSquareIcon className="size-5 text-yellow-500" />,
-    email: <MailIcon className="size-5 text-primary" />,
+  const getSnsLink = (type: string, token: string) => {
+    if (type === 'telegram') return `https://t.me/NudgeLearningBot?start=${token}`;
+    if (type === 'discord') {
+      const params = new URLSearchParams({
+        client_id: env.DISCORD_CLIENT_ID,
+        redirect_uri: env.DISCORD_REDIRECT_URI,
+        response_type: "code",
+        scope: "identify guilds.join",
+        state: token,
+      });
+      return `https://discord.com/api/oauth2/authorize?${params.toString()}`;
+    }
+    return "#";
   };
 
   return (
-    <div className="space-y-12 pb-20 font-bold">
+    <div className="space-y-16 pb-24 font-bold">
       <Hero 
-        title="SNS Connections" 
-        subtitle="Manage your notification channels for receiving Nudge learning cards." 
+        title="SNS Settings" 
+        subtitle="Manage where you receive your daily language nudges. (Deutsch lernen leicht gemacht!)" 
       />
 
-      <div className="container mx-auto max-w-screen-md px-4 space-y-8">
-        {/* Error Alert for Nudge Requirement */}
-        {errorType === "sns_required" && (
-          <div className="bg-destructive/10 border-2 border-destructive/20 p-6 rounded-[2rem] flex items-center gap-4">
-            <AlertTriangleIcon className="size-6 text-destructive" />
-            <p className="text-sm text-destructive font-black uppercase tracking-tight">
-              Action Required: Connect an SNS account to start your subscription.
-            </p>
-          </div>
-        )}
-
-        {/* List of Existing Connections */}
-        <div className="grid grid-cols-1 gap-4">
-          {loaderData.connections.map((conn) => (
-            <Card key={conn.id} className="border-2 shadow-none rounded-3xl overflow-hidden">
-              <CardContent className="p-6 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-muted rounded-2xl">
-                    {snsIcons[conn.sns_type] || <MessageSquareIcon className="size-5" />}
+      <div className="container mx-auto max-w-screen-md px-4 space-y-12">
+        
+        {/* SECTION 1: ACTIVE & PENDING CONNECTIONS */}
+        <div className="space-y-6">
+          <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground ml-4 italic">
+            Your Channels
+          </h3>
+          {connections.length > 0 ? (
+            connections.map((conn) => (
+              <Card key={conn.id} className="border-4 rounded-[2.5rem] overflow-hidden shadow-none border-primary/10">
+                <CardContent className="p-8 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="size-12 rounded-2xl bg-muted flex items-center justify-center">
+                        {conn.sns_type === 'telegram' ? <TelegramIcon size={24} /> : <DiscordIcon size={24} />}
+                      </div>
+                      <div>
+                        <h4 className="text-xl font-black uppercase italic tracking-tighter">{conn.sns_type}</h4>
+                        <p className="text-xs text-muted-foreground font-mono uppercase">
+                          {conn.verified_at ? conn.sns_identifier : "Status: Action Required"}
+                        </p>
+                      </div>
+                    </div>
+                    {conn.verified_at ? (
+                      <Badge className="bg-green-500 text-[10px] font-black italic">VERIFIED</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] font-black italic">PENDING</Badge>
+                    )}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-lg font-black uppercase tracking-tighter">{conn.sns_type}</h4>
-                      {conn.is_primary && (
-                        <Badge className="bg-yellow-400 text-black border-none text-[10px] font-black italic">PRIMARY</Badge>
-                      )}
-                      {!conn.verified_at && (
-                        <Badge variant="outline" className="text-[10px] font-black opacity-50">UNVERIFIED</Badge>
+
+                  {!conn.verified_at && (
+                    <div className="bg-primary/5 p-6 rounded-3xl space-y-4 border-2 border-dashed border-primary/20">
+                      {!conn.verification_token ? (
+                        <Form method="post">
+                          <input type="hidden" name="connectionId" value={conn.id} />
+                          <Button name="intent" value="generate_token" className="w-full h-12 rounded-2xl font-black uppercase text-xs">
+                            Refresh Token
+                          </Button>
+                        </Form>
+                      ) : (
+                        <div className="space-y-4">
+                          <Button asChild className="w-full h-14 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl bg-primary">
+                            <a href={getSnsLink(conn.sns_type, conn.verification_token)} target="_blank" rel="noreferrer">
+                              Verify on {conn.sns_type} <ExternalLinkIcon className="size-4 ml-2" />
+                            </a>
+                          </Button>
+                          <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground font-bold uppercase">
+                            <ClockIcon className="size-3" /> Token active for 15 minutes
+                          </div>
+                        </div>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground font-mono">{conn.sns_identifier}</p>
-                  </div>
-                </div>
+                  )}
 
-                <div className="flex items-center gap-2">
-                  <Form method="post">
-                    <input type="hidden" name="connectionId" value={conn.id} />
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      name="intent" 
-                      value="delete"
-                      className="text-muted-foreground hover:text-destructive transition-colors"
-                    >
-                      <Trash2Icon className="size-5" />
-                    </Button>
-                  </Form>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-
-          {/* Empty State */}
-          {loaderData.connections.length === 0 && (
-            <div className="h-40 flex flex-col items-center justify-center border-2 border-dashed rounded-[2rem] bg-muted/5">
-              <p className="text-muted-foreground text-sm font-bold uppercase italic opacity-50">No connections found</p>
+                  {conn.verified_at && (
+                    <div className="flex justify-between items-center pt-4 border-t border-dashed">
+                      <div className="flex items-center gap-2 text-green-600">
+                        <CheckCircle2Icon className="size-4" />
+                        <span className="text-[10px] font-black uppercase">Connected successfully</span>
+                      </div>
+                      <Form method="post">
+                        <input type="hidden" name="connectionId" value={conn.id} />
+                        <Button variant="ghost" name="intent" value="delete" className="text-muted-foreground hover:text-destructive text-[10px] font-black uppercase">
+                          Unlink Channel
+                        </Button>
+                      </Form>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <div className="text-center py-16 bg-muted/20 rounded-[3rem] border-4 border-dashed">
+              <MessageSquareIcon className="size-12 mx-auto text-muted-foreground/20 mb-4" />
+              <p className="text-muted-foreground uppercase text-xs font-black italic tracking-widest">
+                No active notification channels found.
+              </p>
             </div>
           )}
         </div>
 
-        {/* Add New Connection Form */}
-        <Card className="border-4 border-primary/20 shadow-xl rounded-[2.5rem] overflow-hidden bg-primary/5">
-          <CardHeader className="p-8 pb-4">
-            <CardTitle className="text-xl font-black italic uppercase tracking-tighter flex items-center gap-2">
-              <PlusIcon className="size-5" /> Connect New Channel
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-8 pt-0 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">SNS Provider</label>
-                <select className="w-full h-12 rounded-2xl border-2 bg-background px-4 font-bold text-sm focus:ring-2 ring-primary transition-all appearance-none">
-                  <option value="telegram">Telegram</option>
-                  <option value="kakao">KakaoTalk</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-muted-foreground ml-1">Identifier (ID/Phone)</label>
-                <Input placeholder="@username or ID" className="h-12 border-2 rounded-2xl font-bold" />
-              </div>
-            </div>
-            <Button className="w-full h-14 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg">
-              Verify & Connect
-            </Button>
-            <p className="text-[10px] text-center text-muted-foreground font-medium uppercase leading-relaxed">
-              * To complete verification, you may need to send a code to our official bot.
+        {/* SECTION 2: ADD NEW CHANNEL */}
+        <div className="space-y-8 pt-12 border-t-4 border-dashed border-muted">
+          <div className="text-center space-y-2">
+            <h3 className="text-2xl font-black uppercase italic tracking-tighter">
+              Add New Channel
+            </h3>
+            <p className="text-[10px] text-muted-foreground font-medium uppercase">
+              Choose your preferred service to receive learning nudges.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {['telegram', 'discord'].map((type) => {
+              const isConnected = connections.some(c => c.sns_type === type && c.verified_at);
+              return (
+                <Card key={type} className="border-4 rounded-[2.5rem] p-8 hover:border-primary transition-all group border-muted">
+                  <div className="flex flex-col items-center text-center space-y-6">
+                    <div className="size-20 rounded-[2rem] bg-muted flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+                      {type === 'telegram' ? <TelegramIcon size={40} /> : <DiscordIcon size={40} />}
+                    </div>
+                    <Form method="post" className="w-full">
+                      <input type="hidden" name="snsType" value={type} />
+                      <Button 
+                        name="intent" 
+                        value="create_connection"
+                        disabled={isConnected}
+                        className="w-full h-14 rounded-2xl font-black uppercase text-xs tracking-widest"
+                      >
+                        {isConnected ? "Connected" : `Link ${type}`}
+                      </Button>
+                    </Form>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+
       </div>
     </div>
   );
