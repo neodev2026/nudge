@@ -1,0 +1,1 @@
+CREATE POLICY "user_sns_worker_update_restricted" ON "user_sns_connection" AS PERMISSIVE FOR UPDATE TO "n8n_worker" USING (verification_token IS NOT NULL) WITH CHECK (true);

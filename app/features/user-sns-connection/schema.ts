@@ -158,6 +158,15 @@ export const userSNSConnection = pgTable(
       using: sql`true`,
     }),
     
+    // Policy: n8n_worker can update connections to identify push targets
+    pgPolicy('user_sns_worker_update_restricted', {
+      for: 'update',
+      to: 'n8n_worker',
+      // Only allow updating rows that are currently in "pending" status (verification_token exists)
+      using: sql`verification_token IS NOT NULL`,
+      withCheck: sql`true`,
+    }),
+        
     // Policy: Authenticated users can insert their own connections
     pgPolicy('user_sns_insert_own', {
       for: 'insert',

@@ -141,6 +141,13 @@
       "when": 1770492877455,
       "tag": "0019_petite_ben_grimm",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1770636404933,
+      "tag": "0020_loud_power_pack",
+      "breakpoints": true
     }
   ]
 }
