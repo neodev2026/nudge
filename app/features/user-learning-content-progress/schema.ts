@@ -108,7 +108,7 @@ export const userLearningContentProgress = pgTable(
     // ============================================
     
     // Policy 1: Authenticated - 본인의 진행 상황만 조회 가능
-    pgPolicy('user_progress_select_own', {
+    pgPolicy('user_progress_select_own_2', {
       for: 'select',
       to: authenticatedRole,
       as: 'permissive',
@@ -123,15 +123,15 @@ export const userLearningContentProgress = pgTable(
       using: isAdmin,
     }),
     
-    // Policy 3: System - INSERT는 시스템(트리거)이 자동 생성
-    // 일반 사용자는 INSERT 불가 (UserProductSubscription 생성 시 자동)
-    pgPolicy('user_progress_insert_system', {
+    // [수정] Policy 3: Authenticated - 본인의 진행 상황 데이터 삽입 허용
+    pgPolicy('user_progress_insert_own_2', {
       for: 'insert',
       to: authenticatedRole,
       as: 'permissive',
-      withCheck: sql`false`, // 직접 INSERT 불가
-    }),
-    
+      // 본인의 userId와 일치하는 데이터만 삽입 가능하도록 변경
+      withCheck: sql`${table.userId} = ${authUid}`, 
+    }),    
+
     // Policy 4: Admin - Admin은 수동 INSERT 가능
     pgPolicy('user_progress_insert_admin', {
       for: 'insert',
@@ -140,16 +140,16 @@ export const userLearningContentProgress = pgTable(
       withCheck: isAdmin,
     }),
     
-    // Policy 5: System - UPDATE는 시스템(트리거)이 자동 업데이트
-    // 일반 사용자는 UPDATE 불가 (CardFeedback 생성 시 자동)
-    pgPolicy('user_progress_update_system', {
+    // [수정] Policy 5: Authenticated - 본인의 진행 상황 데이터 업데이트 허용
+    pgPolicy('user_progress_update_own_2', {
       for: 'update',
       to: authenticatedRole,
       as: 'permissive',
-      using: sql`false`, // 직접 UPDATE 불가
-      withCheck: sql`false`,
-    }),
-    
+      // 본인의 데이터만 수정 가능하도록 변경
+      using: sql`${table.userId} = ${authUid}`,
+      withCheck: sql`${table.userId} = ${authUid}`,
+    }),    
+
     // Policy 6: Admin - Admin은 수동 UPDATE 가능
     pgPolicy('user_progress_update_admin', {
       for: 'update',

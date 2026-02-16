@@ -6,7 +6,8 @@ import {
   CrownIcon, 
   RocketIcon, 
   AlertCircleIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  PartyPopperIcon
 } from "lucide-react";
 
 /**
@@ -15,7 +16,7 @@ import {
 import makeServerClient from "~/core/lib/supa-client.server";
 import { getProductById } from "../queries";
 import { getUserSnsConnections } from "~/features/user-sns-connection/queries";
-import { createSubscription } from "~/features/user-product-subscription/queries";
+import { subscribeAndInitializeAction } from "~/features/user-product-subscription/lib/services.server";
 
 /**
  * Common UI components
@@ -45,35 +46,46 @@ export const meta = ({ data }: Route.MetaArgs) => {
 };
 
 /**
- * Server-Side Loader: Fetches product details and validates user SNS status
+ * Server-Side Loader: Fetches product details and validates user SNS/Subscription status
  */
 export const loader = async ({ params, request }: Route.LoaderArgs) => {
   const { data: parsed, success } = paramsSchema.safeParse(params);
   if (!success) throw new Response("Not Found", { status: 404 });
 
   const [client, headers] = makeServerClient(request);
-  
   const { data: { user } } = await client.auth.getUser();
   
   /**
-   * Fetch product data and user SNS connections in parallel for optimization
+   * Fetch data in parallel: Product, SNS Connections, and existing Subscription
    */
-  const [product, snsConnections] = await Promise.all([
+  const [product, snsConnections, subscriptionResult] = await Promise.all([
     getProductById(client, { productId: parsed.productId }),
     user ? getUserSnsConnections(client, { userId: user.id }) : Promise.resolve([]),
+    user 
+      ? client
+          .from("user_product_subscription")
+          .select("id, is_active")
+          .eq("user_id", user.id)
+          .eq("learning_product_id", parsed.productId)
+          .maybeSingle() 
+      : Promise.resolve({ data: null }),
   ]);
 
   if (!product) throw new Response("Product Not Found", { status: 404 });
 
+  const isVerified = snsConnections.some(c => c.is_active && c.verified_at);
+  const isSubscribed = subscriptionResult.data?.is_active ?? false;
+
   return data({ 
     product, 
-    isSnsConnected: snsConnections.length > 0,
-    isLoggedIn: !!user 
+    isSnsConnected: isVerified,
+    isLoggedIn: !!user,
+    isSubscribed // Added subscription status
   }, { headers });
 };
 
 /**
- * Action: Handles subscription logic and SNS connection guard
+ * Action: Handles subscription logic and initializes learning progress
  */
 export const action = async ({ request, params }: Route.ActionArgs) => {
   const [client, headers] = makeServerClient(request);
@@ -82,42 +94,38 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
   
   const tier = formData.get("tier") as "basic" | "premium" | "vip";
 
-  // 1. Authentication Check
   if (!user) return redirect("/auth/login", { headers });
 
-  // 2. SNS Connection Verification
   const snsConnections = await getUserSnsConnections(client, { userId: user.id });
+  const validConnections = snsConnections.filter(c => c.is_active && c.verified_at);
   
-  if (snsConnections.length === 0) {
-    // Redirect to settings if no verified SNS is found
+  if (validConnections.length === 0) {
     return redirect("/my/settings/sns?error=sns_required", { headers });
   }
 
-  // Pick the primary connection or the first available one
-  const targetSns = snsConnections.find(c => c.is_primary) || snsConnections[0];
+  const targetSns = validConnections.find(c => c.is_primary) || validConnections[0];
 
   try {
-    // 3. Create or update the subscription
-    await createSubscription(client, {
-      userId: user.id,
-      productId: params.productId!,
-      snsConnectionId: targetSns.id,
-      tier: tier || "basic",
-    });
+    /**
+     * Executes subscription and engine initialization in a single transaction
+     */
+    await subscribeAndInitializeAction(user.id, params.productId!, targetSns.id, tier);
 
-    return redirect("/my/dashboard?success=subscribed", { headers });
+    /**
+     * [UPDATE] Refresh the current page
+     * Redirecting back to request.url triggers loader revalidation, 
+     * which will now find the new subscription and show the 'Already Subscribed' UI.
+     */
+    return redirect(request.url, { headers });
   } catch (error) {
-    console.error("Subscription Error:", error);
-    throw new Response("Failed to process subscription", { status: 500 });
+    console.error("Subscription Initialization Error:", error);
+    throw new Response("Failed to initialize your learning journey", { status: 500 });
   }
 };
 
 export default function ProductDetailPage({ loaderData }: Route.ComponentProps) {
-  const { product, isSnsConnected } = loaderData;
+  const { product, isSnsConnected, isSubscribed } = loaderData;
 
-  /**
-   * Tier definitions for the UI
-   */
   const tiers = [
     {
       id: "basic",
@@ -153,65 +161,88 @@ export default function ProductDetailPage({ loaderData }: Route.ComponentProps) 
       <Hero title={product.name} subtitle={product.description || ''} />
 
       <div className="container mx-auto max-w-screen-xl px-4 space-y-16">
-        {/* Pricing Tiers Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
-          {tiers.map((tier) => (
-            <Card 
-              key={tier.id} 
-              className={`border-4 rounded-[2.5rem] flex flex-col transition-all ${
-                tier.highlight ? 'border-primary shadow-2xl scale-105' : 'border-muted'
-              }`}
-            >
-              <CardHeader className="p-8 pb-4 text-center space-y-3">
-                <div className="mx-auto size-12 rounded-2xl bg-muted/50 flex items-center justify-center">
-                  {tier.icon}
+        
+        {/* Conditional Rendering: Already Subscribed vs Pricing Tiers */}
+        {isSubscribed ? (
+          <div className="max-w-2xl mx-auto">
+            <Card className="border-4 border-primary rounded-[3rem] overflow-hidden shadow-2xl">
+              <CardContent className="p-12 text-center space-y-6">
+                <div className="mx-auto size-20 rounded-full bg-primary/10 flex items-center justify-center">
+                  <PartyPopperIcon className="size-10 text-primary" />
                 </div>
-                <CardTitle className="text-2xl font-black uppercase italic tracking-tighter">
-                  {tier.name}
-                </CardTitle>
-                <div className="flex items-baseline justify-center gap-1">
-                  <span className="text-3xl font-black text-primary">{tier.price}</span>
-                  {tier.id !== 'basic' && <span className="text-xs text-muted-foreground">/mo</span>}
+                <div className="space-y-2">
+                  <h3 className="text-3xl font-black uppercase italic tracking-tighter">Already Subscribed!</h3>
+                  <p className="text-muted-foreground font-medium">
+                    You are already learning with this product. Keep up the great work!
+                  </p>
                 </div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest leading-relaxed">
-                  {tier.description}
-                </p>
-              </CardHeader>
-              
-              <CardContent className="p-8 flex-1">
-                <ul className="space-y-4">
-                  {tier.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-3 text-sm">
-                      <div className="size-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                        <CheckIcon className="size-3 text-primary" />
-                      </div>
-                      <span className="font-medium text-foreground/80">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
+                <Button asChild className="hidden w-full h-16 rounded-full font-black uppercase text-sm tracking-widest shadow-xl">
+                  <a href="/my/dashboard">
+                    Go to My Dashboard <ChevronRightIcon className="size-5 ml-2" />
+                  </a>
+                </Button>
               </CardContent>
-
-              <CardFooter className="p-8 pt-0">
-                <Form method="post" className="w-full">
-                  {/* Pass the selected tier to the action */}
-                  <input type="hidden" name="tier" value={tier.id} />
-                  <Button 
-                    type="submit"
-                    variant={tier.highlight ? "default" : "outline"} 
-                    className={`w-full h-14 rounded-full font-black uppercase text-xs tracking-widest shadow-lg ${
-                      !isSnsConnected && "opacity-80"
-                    }`}
-                  >
-                    {isSnsConnected ? "Start Learning" : "Connect SNS to Start"}
-                  </Button>
-                </Form>
-              </CardFooter>
             </Card>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+            {tiers.map((tier) => (
+              <Card 
+                key={tier.id} 
+                className={`border-4 rounded-[2.5rem] flex flex-col transition-all ${
+                  tier.highlight ? 'border-primary shadow-2xl scale-105' : 'border-muted'
+                }`}
+              >
+                <CardHeader className="p-8 pb-4 text-center space-y-3">
+                  <div className="mx-auto size-12 rounded-2xl bg-muted/50 flex items-center justify-center">
+                    {tier.icon}
+                  </div>
+                  <CardTitle className="text-2xl font-black uppercase italic tracking-tighter">
+                    {tier.name}
+                  </CardTitle>
+                  <div className="flex items-baseline justify-center gap-1">
+                    <span className="text-3xl font-black text-primary">{tier.price}</span>
+                    {tier.id !== 'basic' && <span className="text-xs text-muted-foreground">/mo</span>}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest leading-relaxed">
+                    {tier.description}
+                  </p>
+                </CardHeader>
+                
+                <CardContent className="p-8 flex-1">
+                  <ul className="space-y-4">
+                    {tier.features.map((feature) => (
+                      <li key={feature} className="flex items-center gap-3 text-sm">
+                        <div className="size-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <CheckIcon className="size-3 text-primary" />
+                        </div>
+                        <span className="font-medium text-foreground/80">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
 
-        {/* SNS Connection Nudge */}
-        {!isSnsConnected && (
+                <CardFooter className="p-8 pt-0">
+                  <Form method="post" className="w-full">
+                    <input type="hidden" name="tier" value={tier.id} />
+                    <Button 
+                      type="submit"
+                      variant={tier.highlight ? "default" : "outline"} 
+                      className={`w-full h-14 rounded-full font-black uppercase text-xs tracking-widest shadow-lg ${
+                        !isSnsConnected && "opacity-80"
+                      }`}
+                    >
+                      {isSnsConnected ? "Start Learning" : "Connect SNS to Start"}
+                    </Button>
+                  </Form>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* SNS Connection Nudge (Only shown if not subscribed) */}
+        {!isSubscribed && !isSnsConnected && (
           <div className="bg-destructive/5 border-2 border-dashed border-destructive/20 rounded-[3rem] p-10 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4 text-left">
               <div className="p-4 bg-destructive/10 rounded-2xl">
@@ -220,7 +251,7 @@ export default function ProductDetailPage({ loaderData }: Route.ComponentProps) 
               <div className="space-y-1">
                 <h4 className="text-lg font-black tracking-tight text-destructive italic">Connection Required</h4>
                 <p className="text-sm text-muted-foreground font-medium">
-                  To receive Nudge cards, you must link your Telegram or KakaoTalk account first.
+                  To receive Nudge cards, you must link and verify your Discord account first.
                 </p>
               </div>
             </div>

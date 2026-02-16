@@ -1,0 +1,2 @@
+ALTER POLICY "user_progress_insert_system" ON "user_learning_content_progress" RENAME TO "user_progress_insert_own";--> statement-breakpoint
+ALTER POLICY "user_progress_update_system" ON "user_learning_content_progress" RENAME TO "user_progress_update_own";
