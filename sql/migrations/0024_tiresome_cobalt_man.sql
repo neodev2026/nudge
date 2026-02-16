@@ -1,0 +1,2 @@
+CREATE POLICY "card_delivery_insert_own" ON "card_delivery_queue" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ("card_delivery_queue"."user_id" = (select auth.uid()));--> statement-breakpoint
+CREATE POLICY "card_delivery_select_own" ON "card_delivery_queue" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("card_delivery_queue"."user_id" = (select auth.uid()));

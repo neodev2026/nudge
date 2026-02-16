@@ -32,6 +32,69 @@ export type Database = {
         }
         Relationships: []
       }
+      card_delivery_queue: {
+        Row: {
+          connection_id: string
+          created_at: string
+          id: string
+          last_error: string | null
+          learning_card_id: string
+          opened_at: string | null
+          previous_delivery_id: string | null
+          retry_count: number
+          scheduled_at: string
+          sent_at: string | null
+          status: Database["public"]["Enums"]["card_delivery_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          learning_card_id: string
+          opened_at?: string | null
+          previous_delivery_id?: string | null
+          retry_count?: number
+          scheduled_at: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["card_delivery_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          learning_card_id?: string
+          opened_at?: string | null
+          previous_delivery_id?: string | null
+          retry_count?: number
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["card_delivery_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_delivery_queue_connection_id_user_sns_connection_id_fk"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "user_sns_connection"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_delivery_queue_learning_card_id_learning_card_id_fk"
+            columns: ["learning_card_id"]
+            isOneToOne: false
+            referencedRelation: "learning_card"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       card_feedback: {
         Row: {
           card_opened_at: string
@@ -611,6 +674,13 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      card_delivery_status:
+        | "pending"
+        | "sent"
+        | "failed"
+        | "cancelled"
+        | "opened"
+        | "feedback_received"
       card_scope: "shared" | "personalized"
       card_type:
         | "basic_meaning"
@@ -760,6 +830,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      card_delivery_status: [
+        "pending",
+        "sent",
+        "failed",
+        "cancelled",
+        "opened",
+        "feedback_received",
+      ],
       card_scope: ["shared", "personalized"],
       card_type: [
         "basic_meaning",

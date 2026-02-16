@@ -1,0 +1,6 @@
+DROP POLICY "user_progress_select_own" ON "user_learning_content_progress" CASCADE;--> statement-breakpoint
+DROP POLICY "user_progress_insert_own" ON "user_learning_content_progress" CASCADE;--> statement-breakpoint
+DROP POLICY "user_progress_update_own" ON "user_learning_content_progress" CASCADE;--> statement-breakpoint
+CREATE POLICY "user_progress_select_own_2" ON "user_learning_content_progress" AS PERMISSIVE FOR SELECT TO "authenticated" USING ("user_learning_content_progress"."user_id" = (select auth.uid()));--> statement-breakpoint
+CREATE POLICY "user_progress_insert_own_2" ON "user_learning_content_progress" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ("user_learning_content_progress"."user_id" = (select auth.uid()));--> statement-breakpoint
+CREATE POLICY "user_progress_update_own_2" ON "user_learning_content_progress" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ("user_learning_content_progress"."user_id" = (select auth.uid())) WITH CHECK ("user_learning_content_progress"."user_id" = (select auth.uid()));

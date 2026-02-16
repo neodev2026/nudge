@@ -23,7 +23,7 @@ export function ProductCard({
   viewsCount = 0,
 }: ProductCardProps) {
   return (
-    <Link to={`/products/${id}`} className="group block transition-transform hover:-translate-y-1">
+    <Link to={`/learning-products/${id}`} className="group block transition-transform hover:-translate-y-1">
       <Card className="border-2 shadow-none rounded-[2rem] overflow-hidden group-hover:border-primary/50 transition-colors">
         <CardContent className="p-8 space-y-4">
           <div className="flex justify-between items-start">

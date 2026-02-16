@@ -148,6 +148,34 @@
       "when": 1770636404933,
       "tag": "0020_loud_power_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1770785102557,
+      "tag": "0021_blue_namorita",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1771151735890,
+      "tag": "0022_daily_marten_broadcloak",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1771153780115,
+      "tag": "0023_loud_black_bird",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1771154649251,
+      "tag": "0024_tiresome_cobalt_man",
+      "breakpoints": true
     }
   ]
 }
