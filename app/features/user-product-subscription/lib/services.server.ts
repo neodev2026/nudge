@@ -55,7 +55,7 @@ export async function subscribeAndInitializeAction(
           subscriptionTier: tier, 
           isActive: true, 
           userSnsConnectionId: snsConnection.id,
-        //   updatedAt: new Date() 
+          updated_at: new Date() 
         },
       })
       .returning();

@@ -1,16 +1,20 @@
 import * as React from "react";
 import { useState } from "react";
-import { Volume2Icon } from "lucide-react";
+import { Volume2Icon, Loader2Icon } from "lucide-react";
 import { cn } from "~/core/lib/utils";
 import { Button } from "~/core/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "~/core/components/ui/card";
 import { Badge } from "~/core/components/ui/badge";
 import { type StandardizedCardData } from "../types";
 
+/**
+ * [Update] Added isSubmitting to FlashCardProps interface
+ */
 interface FlashCardProps {
   cardType: string;
   data: StandardizedCardData;
   onFeedback: (score: number) => void;
+  isSubmitting?: boolean; // New: Tracks server action state
   isFlippedExternal?: boolean;
   onFlipChange?: (isFlipped: boolean) => void;
 }
@@ -19,6 +23,7 @@ export function FlashCard({
   cardType, 
   data, 
   onFeedback, 
+  isSubmitting = false, // Default to false if not provided
   isFlippedExternal, 
   onFlipChange 
 }: FlashCardProps) {
@@ -28,13 +33,16 @@ export function FlashCard({
 
   const { presentation, details, meta } = data;
 
+  /**
+   * Toggles the card flip state
+   */
   const handleFlip = (state: boolean) => {
     if (onFlipChange) onFlipChange(state);
     else setInternalFlipped(state);
   };
 
   /**
-   * [개선] meta.target_locale을 기반으로 한 지능형 TTS 정책
+   * Handles Text-to-Speech (TTS) based on the target_locale
    */
   const playAudio = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -43,6 +51,7 @@ export function FlashCard({
     const targetLocale = meta.target_locale || "en-US";
     let textToRead = "";
 
+    // Determine text based on card type and flip state
     if (cardType === 'example') {
       textToRead = presentation.back;
     } else if (cardType === 'cloze') {
@@ -74,12 +83,18 @@ export function FlashCard({
           isFlipped ? "rotate-y-180" : ""
         )}
       >
-        {/* --- FRONT --- */}
+        {/* --- FRONT SIDE --- */}
         <Card className="absolute inset-0 backface-hidden z-10 flex flex-col shadow-xl border-2 bg-card">
           <CardHeader className="flex flex-row justify-between items-center border-b pb-4">
             <Badge variant="secondary" className="capitalize">{cardType.replace("_", " ")}</Badge>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="size-8 rounded-full" onClick={playAudio}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="size-8 rounded-full" 
+                onClick={playAudio}
+                disabled={isSubmitting}
+              >
                 <Volume2Icon className="size-4 text-primary" />
               </Button>
               <span className="text-2xl">{details.visual_cue}</span>
@@ -96,19 +111,32 @@ export function FlashCard({
           </CardContent>
 
           <CardFooter className="p-6">
-            <Button className="w-full h-14 text-lg font-semibold" onClick={(e) => { e.stopPropagation(); handleFlip(true); }}>
+            <Button 
+              className="w-full h-14 text-lg font-semibold" 
+              disabled={isSubmitting}
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                handleFlip(true); 
+              }}
+            >
               내용 확인하기
             </Button>
           </CardFooter>
         </Card>
 
-        {/* --- BACK --- */}
+        {/* --- BACK SIDE --- */}
         <Card className="absolute inset-0 backface-hidden rotate-y-180 flex flex-col shadow-xl border-primary/20 border-2 bg-card">
           <CardHeader className="flex flex-row justify-between items-center border-b pb-4 bg-muted/30">
             <Badge variant="default">내용 확인</Badge>
             <div className="flex items-center gap-3">
               <span className="text-[10px] font-black uppercase tracking-widest text-primary/70">{meta.logic_key}</span>
-              <Button variant="outline" size="icon" className="size-7 rounded-full" onClick={playAudio}>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="size-7 rounded-full" 
+                onClick={playAudio}
+                disabled={isSubmitting}
+              >
                 <Volume2Icon className="size-3" />
               </Button>
             </div>
@@ -130,10 +158,35 @@ export function FlashCard({
 
           <CardFooter className="flex flex-col gap-4 p-6 border-t bg-muted/10">
             <div className="w-full space-y-2 text-center">
-              <input type="range" min="1" max="10" step="1" value={feedbackScore} onChange={(e) => setFeedbackScore(parseInt(e.target.value))} className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary" />
-              <p className="font-bold text-primary text-sm">{feedbackScore}점</p>
+              <input 
+                type="range" 
+                min="0" 
+                max="5" 
+                step="1" 
+                value={feedbackScore} 
+                onChange={(e) => setFeedbackScore(parseInt(e.target.value))} 
+                disabled={isSubmitting}
+                className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary" 
+              />
+              <p className="font-bold text-primary text-sm">{feedbackScore}점 (Quality Scale)</p>
             </div>
-            <Button variant="default" className="w-full h-12" onClick={() => onFeedback(feedbackScore)}>학습 완료</Button>
+            
+            {/* [Update] Button now disables and shows loader during submission */}
+            <Button 
+              variant="default" 
+              className="w-full h-12" 
+              onClick={() => onFeedback(feedbackScore)}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                  Saving Progress...
+                </>
+              ) : (
+                "학습 완료"
+              )}
+            </Button>
           </CardFooter>
         </Card>
       </div>
