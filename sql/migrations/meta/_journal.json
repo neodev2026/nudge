@@ -176,6 +176,13 @@
       "when": 1771154649251,
       "tag": "0024_tiresome_cobalt_man",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1771267332551,
+      "tag": "0025_empty_gideon",
+      "breakpoints": true
     }
   ]
 }
