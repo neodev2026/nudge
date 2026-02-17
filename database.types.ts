@@ -39,6 +39,7 @@ export type Database = {
           id: string
           last_error: string | null
           learning_card_id: string
+          next_retry_at: string | null
           opened_at: string | null
           previous_delivery_id: string | null
           retry_count: number
@@ -54,6 +55,7 @@ export type Database = {
           id?: string
           last_error?: string | null
           learning_card_id: string
+          next_retry_at?: string | null
           opened_at?: string | null
           previous_delivery_id?: string | null
           retry_count?: number
@@ -69,6 +71,7 @@ export type Database = {
           id?: string
           last_error?: string | null
           learning_card_id?: string
+          next_retry_at?: string | null
           opened_at?: string | null
           previous_delivery_id?: string | null
           retry_count?: number
@@ -677,6 +680,7 @@ export type Database = {
       card_delivery_status:
         | "pending"
         | "sent"
+        | "retry_required"
         | "failed"
         | "cancelled"
         | "opened"
@@ -833,6 +837,7 @@ export const Constants = {
       card_delivery_status: [
         "pending",
         "sent",
+        "retry_required",
         "failed",
         "cancelled",
         "opened",
