@@ -1,0 +1,1 @@
+ALTER TABLE "user_product_subscription" ADD COLUMN "dispatch_delay_seconds" integer DEFAULT 7200 NOT NULL;

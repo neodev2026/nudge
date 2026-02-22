@@ -8,6 +8,15 @@ import { userProductSubscription } from "~/features/user-product-subscription/sc
 import { cardDeliveryQueue } from "~/features/card-delivery/schema";
 
 /**
+ * Maps subscription tiers to their respective dispatch delay durations (in seconds).
+ */
+const TIER_DELAY_MAP = {
+  basic: 7200,    // 2 hours
+  premium: 300,   // 5 minutes
+  vip: 0          // Instant
+};
+
+/**
  * Executes the complete subscription and learning engine initialization.
  * Wrapped in a single transaction to ensure data atomicity.
  */
@@ -15,8 +24,12 @@ export async function subscribeAndInitializeAction(
   userId: string, 
   productId: string,
   snsConnectionId: string,
-  tier: "basic" | "premium" | "vip" = "basic"
+  tier: "basic" | "premium" | "vip" = "basic",
+  dailyGoal: number = 10 // Added: Configurable daily goal, defaulting to 10
 ) {
+  // Determine the dispatch delay based on the chosen subscription tier
+  const dispatchDelaySeconds = TIER_DELAY_MAP[tier];
+
   return await db.transaction(async (tx) => {
     // 1. Validate Active SNS Connection
     const [snsConnection] = await tx
@@ -38,6 +51,7 @@ export async function subscribeAndInitializeAction(
     }
 
     // 2. Create or Update Product Subscription
+    // Stores the daily goal and the calculated dispatch delay for n8n Flow 1.
     const [subscription] = await tx
       .insert(userProductSubscription)
       .values({
@@ -45,6 +59,8 @@ export async function subscribeAndInitializeAction(
         learningProductId: productId,
         userSnsConnectionId: snsConnection.id,
         subscriptionTier: tier,
+        dailyGoal, // [Added]
+        dispatchDelaySeconds, // [Added]
         isActive: true,
         pushEnabled: true,
         subscribedAt: new Date(),
@@ -53,6 +69,8 @@ export async function subscribeAndInitializeAction(
         target: [userProductSubscription.userId, userProductSubscription.learningProductId],
         set: { 
           subscriptionTier: tier, 
+          dailyGoal, // [Added] Ensure goal is updated
+          dispatchDelaySeconds, // [Added] Ensure delay policy is updated
           isActive: true, 
           userSnsConnectionId: snsConnection.id,
           updated_at: new Date() 
@@ -78,7 +96,7 @@ export async function subscribeAndInitializeAction(
 
     // 4. Initialize Progress for Each Content
     for (const content of contents) {
-      // General Statistics
+      // General Statistics Tracking
       await tx
         .insert(userLearningContentProgress)
         .values({
@@ -88,7 +106,7 @@ export async function subscribeAndInitializeAction(
         })
         .onConflictDoNothing();
 
-      // SM-2 Algorithm Variables
+      // SM-2 Algorithm Variable Initialization
       await tx
         .insert(learningContentProgress)
         .values({
@@ -103,6 +121,7 @@ export async function subscribeAndInitializeAction(
     }
 
     // 5. Queue the First Learning Card
+    // Starts the learning cycle immediately upon subscription.
     const firstContent = contents[0];
     const [firstCard] = await tx
       .select({ id: learningCard.id })
