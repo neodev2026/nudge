@@ -1,0 +1,2 @@
+ALTER TABLE "user_product_subscription" ADD COLUMN "daily_goal" integer DEFAULT 10 NOT NULL;--> statement-breakpoint
+CREATE INDEX "user_sub_goal_idx" ON "user_product_subscription" USING btree ("user_id","daily_goal");

@@ -11,24 +11,27 @@ export const createSubscription = async (
     userId, 
     productId, 
     snsConnectionId, 
-    tier 
+    tier,
+    dailyGoal
   }: { 
     userId: string; 
     productId: string; 
     snsConnectionId: string; 
-    tier: "basic" | "premium" | "vip" 
+    tier: "basic" | "premium" | "vip";
+    dailyGoal: number;
   }
 ) => {
   const { data, error } = await client
     .from("user_product_subscription")
     .upsert({
-      user_id: userId, // Corrected: use snake_case as defined in the DB schema
-      learning_product_id: productId, // Corrected
-      user_sns_connection_id: snsConnectionId, // Corrected
-      subscription_tier: tier, // Corrected
-      is_active: true, // Corrected
-      push_enabled: true, // Corrected
-      subscribed_at: new Date().toISOString(), // Corrected
+      user_id: userId,
+      learning_product_id: productId,
+      user_sns_connection_id: snsConnectionId,
+      subscription_tier: tier,
+      daily_goal: dailyGoal,
+      is_active: true,
+      push_enabled: true,
+      subscribed_at: new Date().toISOString(),
     })
     .select()
     .single();

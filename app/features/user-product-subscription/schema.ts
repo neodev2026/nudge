@@ -22,7 +22,7 @@ import { userSNSConnection } from '~/features/user-sns-connection/schema';
 import { SUBSCRIPTION_TIERS } from "./constants";
 
 /**
- * [wemake Style] 구독 티어 Enum 정의
+ * Subscription Tier Enum Definition
  */
 export const subscriptionTier = pgEnum(
   "subscription_tier",
@@ -31,7 +31,7 @@ export const subscriptionTier = pgEnum(
 
 /**
  * User Product Subscription Table
- * 사용자의 제품 구독 상태 및 푸시 발송 제어를 관리합니다.
+ * Manages the user's subscription status per product and controls notification delivery.
  */
 export const userProductSubscription = pgTable(
   'user_product_subscription',
@@ -40,7 +40,7 @@ export const userProductSubscription = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     
-    // 외래키 설정
+    // Foreign Key Relationships
     userId: uuid('user_id')
       .notNull()
       .references(() => authUsers.id, { onDelete: 'cascade' }),
@@ -53,28 +53,44 @@ export const userProductSubscription = pgTable(
       .notNull()
       .references(() => userSNSConnection.id, { onDelete: 'restrict' }),
 
-    // 구독 플랜 정보
+    // Subscription Plan Details
     subscriptionTier: subscriptionTier('subscription_tier')
       .notNull()
       .default('basic'),
+    
+    /**
+     * Daily learning goal for the product.
+     * Defines how many new learning contents (e.g., words) should be introduced daily.
+     */
+    dailyGoal: integer('daily_goal')
+      .notNull()
+      .default(10),
+
+    /**
+     * Time delay (in seconds) before the next card is sent.
+     * Managed at the subscription level to allow for dynamic policy changes.
+     */
+    dispatchDelaySeconds: integer('dispatch_delay_seconds')
+      .notNull()
+      .default(7200), // Default: 7200 seconds (2 hours) for basic tier
     
     isActive: boolean('is_active')
       .notNull()
       .default(true),
     
-    // 알림 설정
+    // Notification Settings
     pushEnabled: boolean('push_enabled')
       .notNull()
       .default(true),
     
     preferredPushTime: time('preferred_push_time'),
 
-    // 학습 통계 (제품 내 모든 단어의 평균 진도)
+    // Learning Statistics (Average progress across all items in the product)
     memoryPercentage: integer('memory_percentage')
       .notNull()
       .default(0),
 
-    // n8n 워커가 다음 발송 시간을 계산하기 위한 기준점
+    // Reference point for n8n workers to calculate the next delivery time
     lastCardSentAt: timestamp('last_card_sent_at', { withTimezone: true }),
     
     subscribedAt: timestamp('subscribed_at', { withTimezone: true })
@@ -86,23 +102,28 @@ export const userProductSubscription = pgTable(
     ...timestamps,
   },
   (table) => [
-    // 한 사용자가 동일 제품을 중복 구독하는 것을 방지
+    // Prevent duplicate subscriptions for the same user and product
     unique('user_product_subscription_unique').on(table.userId, table.learningProductId),
     
-    // [최적화] n8n 워커의 발송 대상 추출 쿼리 성능 향상용 인덱스
+    // [Optimization] Indexes for n8n worker to efficiently fetch delivery targets
     index('user_sub_worker_batch_idx').on(table.isActive, table.pushEnabled, table.lastCardSentAt),
     index('user_sub_tier_check_idx').on(table.subscriptionTier, table.lastCardSentAt),
+    
+    /**
+     * Index for Flow 1 to quickly check if the daily goal or delay constraints are met.
+     */
+    index('user_sub_goal_idx').on(table.userId, table.dailyGoal),
 
-    // 기본 검색용 인덱스
+    // General purpose search indexes
     index('user_subscription_user_idx').on(table.userId),
     index('user_subscription_sns_idx').on(table.userSnsConnectionId),
     index('user_subscription_product_idx').on(table.learningProductId),
     
     /**
-     * RLS Policies
+     * RLS (Row Level Security) Policies
      */
     
-    // 1. 일반 사용자: 본인의 구독 정보 조회 및 설정 변경 가능
+    // 1. Standard Users: Can view and manage their own subscriptions
     pgPolicy('user_subscription_select_own', {
       for: 'select',
       to: authenticatedRole,
@@ -120,7 +141,7 @@ export const userProductSubscription = pgTable(
       withCheck: sql`${table.userId} = ${authUid}`,
     }),
 
-    // 2. n8n_worker: 전역에서 발송 대상 조회 및 전송 시간 업데이트 허용
+    // 2. n8n_worker: Permissive access for batch processing and automated updates
     pgPolicy('user_subscription_worker_manage', {
       for: 'all',
       to: 'n8n_worker',
@@ -129,7 +150,7 @@ export const userProductSubscription = pgTable(
       withCheck: sql`true`,
     }),
 
-    // 3. Admin: 관리자 헬퍼 함수를 이용한 전체 접근
+    // 3. Admin: Full access via administrative helper functions
     pgPolicy('user_subscription_admin_all', {
       for: 'all',
       to: authenticatedRole,
