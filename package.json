@@ -4,7 +4,7 @@
   "type": "module",
   "version": "1.0",
   "scripts": {
-    "prebuild": "npm run typecheck && npm run db:typegen",
+    "prebuild": "npm run typecheck",
     "build": "react-router build",
     "dev": "react-router dev",
     "dev:with-sentry": "cross-env NODE_OPTIONS='--import ./instrument.server.mjs' react-router dev",
