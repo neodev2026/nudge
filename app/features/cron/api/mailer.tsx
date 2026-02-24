@@ -66,11 +66,11 @@ export async function action({ request }: Route.LoaderArgs) {
   
   // Pop a message from the Postgres message queue (PGMQ)
   // Note: Using admin client is necessary to access the queue
-  const { data: message, error } = await adminClient
-    // @ts-expect-error - PGMQ types are not fully defined in the Supabase client
-    .schema("pgmq_public")
-    // @ts-expect-error - PGMQ types are not fully defined in the Supabase client
-    .rpc("pop", {
+  // PGMQ lives in a custom schema that Supabase's TypeScript client doesn't know about.
+  // We explicitly suppress the schema type error but keep the RPC call typed.
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-expect-error - PGMQ schema is not declared in Supabase types
+  const { data: message, error } = await adminClient.schema("pgmq_public").rpc("pop", {
       queue_name: "mailer", // Queue name in Postgres
     });
   
