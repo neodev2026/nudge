@@ -83,6 +83,7 @@ export default [
       ]),
       // Routes that should only be visible to authenticated users.
       route("/logout", "features/auth/screens/logout.tsx"),
+      route("/user-sns-settings", "features/user-sns-connection/screens/sns-settings-page.tsx"),
     ]),
     route("/contact", "features/contact/screens/contact-us.tsx"),
     ...prefix("/payments", [
@@ -99,17 +100,17 @@ export default [
     route("/learning-products", "features/learning-product/screens/products-page.tsx"),
     route("/learning-products/:productId", "features/learning-product/screens/product-detail-page.tsx"),
 
-    route("/user-sns-settings", "features/user-sns-connection/screens/sns-settings-page.tsx"),
     route("/welcome", "features/users/screens/welcome-page.tsx"),
-    
+    route("/cards/simulation", "features/learning-card/screens/simulation.tsx"),
+    route("/cards/simulation-page", "features/learning-card/screens/simulation-page.tsx"),
   ]),
 
   layout("core/layouts/private.layout.tsx", { id: "private-dashboard" }, [
     layout("features/users/layouts/dashboard.layout.tsx", [
-      ...prefix("/dashboard", [
-        index("features/users/screens/dashboard.tsx"),
-        route("/payments", "features/payments/screens/payments.tsx"),
-      ]),
+      // ...prefix("/dashboard", [
+      //   index("features/users/screens/dashboard.tsx"),
+      //   route("/payments", "features/payments/screens/payments.tsx"),
+      // ]),
       route("/account/edit", "features/users/screens/account.tsx"),
     ]),
   ]),
@@ -126,7 +127,4 @@ export default [
   layout("core/layouts/private.layout.tsx", [
     route("/cards/:cardId", "features/learning-card/screens/learning-card.tsx"),
   ]),
-
-  route("/cards/simulation", "features/learning-card/screens/simulation.tsx"),
-  route("/cards/simulation-page", "features/learning-card/screens/simulation-page.tsx"),
 ] satisfies RouteConfig;

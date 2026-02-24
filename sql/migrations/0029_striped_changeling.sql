@@ -1,0 +1,1 @@
+ALTER POLICY "learning_content_progress_user_manage" ON "learning_content_progress" TO authenticated USING ("learning_content_progress"."user_id" = (select auth.uid())) WITH CHECK  ("learning_content_progress"."user_id" = (select auth.uid()));

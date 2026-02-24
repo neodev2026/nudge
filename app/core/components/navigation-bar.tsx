@@ -88,14 +88,14 @@ function UserMenu({
         <DropdownMenuSeparator />
         
         {/* Dashboard link */}
-        <DropdownMenuItem asChild>
+        {/* <DropdownMenuItem asChild>
           <SheetClose asChild>
             <Link to="/dashboard" viewTransition>
               <HomeIcon className="size-4" />
               Dashboard
             </Link>
           </SheetClose>
-        </DropdownMenuItem>
+        </DropdownMenuItem> */}
         
         {/* Logout link */}
         <DropdownMenuItem asChild>
@@ -167,14 +167,13 @@ function Actions() {
   return (
     <>
       {/* Settings/debug dropdown menu */}
-      <DropdownMenu>
+      {/* <DropdownMenu>
         <DropdownMenuTrigger asChild className="cursor-pointer">
           <Button variant="ghost" size="icon">
             <CogIcon className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {/* Sentry monitoring link */}
           <DropdownMenuItem asChild>
             <SheetClose asChild>
               <Link to="/debug/sentry" viewTransition>
@@ -182,7 +181,6 @@ function Actions() {
               </Link>
             </SheetClose>
           </DropdownMenuItem>
-          {/* Google Analytics link */}
           <DropdownMenuItem asChild>
             <SheetClose asChild>
               <Link to="/debug/analytics" viewTransition>
@@ -191,7 +189,7 @@ function Actions() {
             </SheetClose>
           </DropdownMenuItem>
         </DropdownMenuContent>
-      </DropdownMenu>
+      </DropdownMenu> */}
       
       {/* Theme switcher component (light/dark mode) */}
       <ThemeSwitcher />
@@ -254,6 +252,28 @@ export function NavigationBar({
         <div className="hidden h-full items-center gap-5 md:flex">
           {/* Main navigation links */}
           <Link
+            to="/learning-products"
+            viewTransition
+            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+          >
+            Products
+          </Link>
+          <Link
+            to="/user-sns-settings"
+            viewTransition
+            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+          >
+            SNS Connection
+          </Link>
+          <Link
+            to="/cards/simulation-page"
+            viewTransition
+            className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+          >
+            Card Simulation
+          </Link>
+
+          {/* <Link
             to="/blog"
             viewTransition
             className="text-muted-foreground hover:text-foreground text-sm transition-colors"
@@ -273,7 +293,7 @@ export function NavigationBar({
             className="text-muted-foreground hover:text-foreground text-sm transition-colors"
           >
             Payments
-          </Link>
+          </Link> */}
           
           <Separator orientation="vertical" />
           

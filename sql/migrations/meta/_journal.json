@@ -204,6 +204,13 @@
       "when": 1771669804430,
       "tag": "0028_left_blizzard",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1771843287871,
+      "tag": "0029_striped_changeling",
+      "breakpoints": true
     }
   ]
 }
