@@ -87,6 +87,7 @@ export default [
     ]),
     route("/contact", "features/contact/screens/contact-us.tsx"),
     ...prefix("/payments", [
+      index("features/payments/screens/payments.tsx"),
       route("/checkout", "features/payments/screens/checkout.tsx"),
       layout("core/layouts/private.layout.tsx", { id: "private-payments" }, [
         route("/success", "features/payments/screens/success.tsx"),
@@ -107,10 +108,9 @@ export default [
 
   layout("core/layouts/private.layout.tsx", { id: "private-dashboard" }, [
     layout("features/users/layouts/dashboard.layout.tsx", [
-      // ...prefix("/dashboard", [
-      //   index("features/users/screens/dashboard.tsx"),
-      //   route("/payments", "features/payments/screens/payments.tsx"),
-      // ]),
+      ...prefix("/dashboard", [
+        index("features/users/screens/dashboard.tsx"),
+      ]),
       route("/account/edit", "features/users/screens/account.tsx"),
     ]),
   ]),
