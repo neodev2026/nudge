@@ -162,7 +162,7 @@ export default function MagicLink({ actionData }: Route.ComponentProps) {
                 name="email"
                 required
                 type="email"
-                placeholder="nico@supaplate.com"
+                placeholder="neo@neowithai.com"
               />
             </div>
             <FormButton label="Send magic link" className="w-full" />

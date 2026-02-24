@@ -208,7 +208,7 @@ export default function Join({ actionData }: Route.ComponentProps) {
                 name="name"
                 required
                 type="text"
-                placeholder="Nico"
+                placeholder="Neo"
               />
               {actionData &&
               "fieldErrors" in actionData &&
@@ -228,7 +228,7 @@ export default function Join({ actionData }: Route.ComponentProps) {
                 name="email"
                 required
                 type="email"
-                placeholder="nico@supaplate.com"
+                placeholder="neo@neowithai.com"
               />
               {actionData &&
               "fieldErrors" in actionData &&

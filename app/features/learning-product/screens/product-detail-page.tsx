@@ -100,7 +100,7 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
   const validConnections = snsConnections.filter(c => c.is_active && c.verified_at);
   
   if (validConnections.length === 0) {
-    return redirect("/my/settings/sns?error=sns_required", { headers });
+    return redirect("/user-sns-settings?error=sns_required", { headers });
   }
 
   const targetSns = validConnections.find(c => c.is_primary) || validConnections[0];
@@ -256,7 +256,7 @@ export default function ProductDetailPage({ loaderData }: Route.ComponentProps) 
               </div>
             </div>
             <Button variant="destructive" asChild className="rounded-full px-8 font-black text-xs uppercase shadow-xl">
-              <a href="/my/settings/sns">
+              <a href="/user-sns-settings">
                 Go to Settings <ChevronRightIcon className="size-4 ml-2" />
               </a>
             </Button>

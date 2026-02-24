@@ -2,8 +2,8 @@ import type { Translation } from "./types";
 
 const ko: Translation = {
   home: {
-    title: "슈파플레이트",
-    subtitle: "빌드하는 시간이야!",
+    title: "Nudge",
+    subtitle: "바쁜 당신을 위한 무지성 암기 학습!",
   },
   navigation: {
     kr: "한국어",

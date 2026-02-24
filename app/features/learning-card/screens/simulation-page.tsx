@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { useSearchParams, useNavigation } from "react-router";
-import { data } from "react-router";
+import { useState, useEffect } from "react";
+import { useSearchParams, useNavigation, data } from "react-router";
 import { z } from "zod";
 import { toast } from "sonner";
 import { 
@@ -11,11 +10,15 @@ import {
   InfoIcon 
 } from "lucide-react";
 
-// 서버 전용 모듈 (Server-only)
+/**
+ * Server-only modules
+ */
 import makeServerClient from "~/core/lib/supa-client.server";
 import { getCardsByContentId } from "../queries";
 
-// 공용 컴포넌트 및 UI
+/**
+ * Shared UI Components
+ */
 import { FlashCard } from "../components/flash-card";
 import { type StandardizedCardData } from "../types";
 import { Input } from "~/core/components/ui/input";
@@ -39,21 +42,19 @@ import { Label } from "~/core/components/ui/label";
 import type { Route } from "./+types/simulation-page";
 
 /**
- * [wemake Style] Zod를 이용한 파라미터 검증 스키마
+ * Parameter validation schema using Zod
  */
 const searchSchema = z.object({
-  contentId: z.string().uuid("올바른 UUID 형식이 아닙니다.").optional().nullable(),
+  contentId: z.string().uuid("Invalid UUID format.").optional().nullable(),
 });
 
 /**
- * [wemake Style] Server-Side Loader
- * 이 함수는 서버에서만 실행되므로 보안이 필요한 서버 클라이언트를 안전하게 사용합니다.
+ * Server-Side Loader: Runs only on the server to securely fetch data.
  */
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
   const searchParams = Object.fromEntries(url.searchParams.entries());
   
-  // Zod 검증
   const parsed = searchSchema.safeParse(searchParams);
   const contentId = parsed.success ? parsed.data.contentId : null;
 
@@ -62,48 +63,63 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   let cards: any[] = [];
   if (contentId) {
     try {
-      // 쿼리 함수 호출
       cards = await getCardsByContentId(client, { contentId });
     } catch (e) {
-      console.error("데이터 조회 실패:", e);
+      console.error("Data fetch failed:", e);
     }
   }
 
-  // 데이터와 함께 인증 헤더를 반환하여 세션을 유지합니다.
   return data({ cards, contentId }, { headers });
 };
 
 /**
- * [wemake Style] Inspector Component
+ * Inspector Component: Verification tool for AI-generated cards.
  */
 export default function SimulationPage({ loaderData }: Route.ComponentProps) {
-    debugger;
   const [searchParams, setSearchParams] = useSearchParams();
   const navigation = useNavigation();
   const isLoading = navigation.state === "loading";
   
-  // 상태 관리
+  // Local state for input and UI interaction
   const [queryInput, setQueryInput] = useState(loaderData.contentId || "");
   const [isFlipped, setIsFlipped] = useState(false);
 
-  // 로더 데이터를 카드 타입별 Map으로 가공
+  // Transform loader data into a Map indexed by card type
   const cardsMap: Record<string, StandardizedCardData> = {};
   loaderData.cards.forEach((row: any) => {
     cardsMap[row.card_type] = row.card_data as StandardizedCardData;
   });
 
   const cardTypes = Object.keys(cardsMap);
+  
+  // State for the currently selected card type
   const [selectedType, setSelectedType] = useState<string>(cardTypes[0] || "");
+
+  /**
+   * [CRITICAL FIX] Sync selectedType with new loaderData
+   * Ensures the UI updates when new cards are fetched via search.
+   */
+  useEffect(() => {
+    if (loaderData.cards.length > 0) {
+      const newCardTypes = Object.keys(cardsMap);
+      // Automatically select the first available card type if none is selected or current selection is invalid
+      if (!selectedType || !newCardTypes.includes(selectedType)) {
+        setSelectedType(newCardTypes[0]);
+      }
+    } else {
+      setSelectedType("");
+    }
+  }, [loaderData.cards]); // Re-run when cards from loader change
+
   const currentCard = cardsMap[selectedType];
 
   /**
-   * [wemake Style] URL 파라미터를 업데이트하여 서버 로더를 트리거합니다.
+   * Triggers the server loader by updating the URL search parameters.
    */
   const handleSearch = () => {
-    debugger;
     const trimmedId = queryInput.trim();
     if (!trimmedId) {
-      toast.error("ID를 입력해주세요.");
+      toast.error("Please enter a valid Content UUID.");
       return;
     }
 
@@ -114,7 +130,7 @@ export default function SimulationPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="container mx-auto py-10 space-y-10 font-bold">
-      {/* 검색 헤더 섹션 */}
+      {/* Search Header Section */}
       <section className="flex flex-col md:flex-row items-center justify-between gap-6 border-b pb-8">
         <div className="space-y-1">
           <h1 className="text-4xl font-black tracking-tighter text-primary italic">INSPECTOR v1</h1>
@@ -129,7 +145,7 @@ export default function SimulationPage({ loaderData }: Route.ComponentProps) {
             <Input
               value={queryInput}
               onChange={(e) => setQueryInput(e.target.value)}
-              placeholder="Content UUID를 입력하세요"
+              placeholder="Enter Content UUID"
               className="pl-10 font-mono text-[10px] h-12 border-2 focus-visible:ring-primary shadow-sm"
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             />
@@ -146,7 +162,7 @@ export default function SimulationPage({ loaderData }: Route.ComponentProps) {
 
       {currentCard ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
-          {/* 왼쪽: 메타데이터 및 상세 정보 */}
+          {/* Left: Metadata & Details Inspector */}
           <div className="space-y-6">
             <Card className="border-2 shadow-none rounded-[2rem] overflow-hidden">
               <CardHeader className="border-b bg-muted/30 py-6 px-8">
@@ -159,7 +175,7 @@ export default function SimulationPage({ loaderData }: Route.ComponentProps) {
                   </div>
                   <Select value={selectedType} onValueChange={(val) => { setSelectedType(val); setIsFlipped(false); }}>
                     <SelectTrigger className="w-44 h-9 font-black text-[10px] uppercase border-2 rounded-full">
-                      <SelectValue />
+                      <SelectValue placeholder="Select Card Type" />
                     </SelectTrigger>
                     <SelectContent>
                       {cardTypes.map((type) => (
@@ -206,7 +222,7 @@ export default function SimulationPage({ loaderData }: Route.ComponentProps) {
             </Card>
           </div>
 
-          {/* 오른쪽: 컴포넌트 프리뷰 */}
+          {/* Right: Component Live Preview */}
           <div className="flex flex-col items-center py-8 sticky top-10">
             <div className="mb-10 flex items-center gap-4">
               <Badge className="px-8 py-2 text-[10px] font-black tracking-widest uppercase rounded-full shadow-md">
@@ -222,17 +238,18 @@ export default function SimulationPage({ loaderData }: Route.ComponentProps) {
               </Button>
             </div>
             
-            {/* 공용 플래시카드 컴포넌트 */}
+            {/* Shared FlashCard Component */}
             <FlashCard 
               cardType={selectedType} 
               data={currentCard} 
               isFlippedExternal={isFlipped}
               onFlipChange={setIsFlipped}
-              onFeedback={(score) => toast.success(`DB 연동 시뮬레이션 성공: ${score}점 기록`)} 
+              onFeedback={(score) => toast.success(`Simulation Successful: Score ${score} recorded.`)} 
             />
           </div>
         </div>
       ) : (
+        // Empty State: Waiting for Input
         <div className="h-[500px] flex flex-col items-center justify-center border-4 border-dashed rounded-[3rem] bg-muted/5 group transition-all hover:bg-muted/10">
           <DatabaseIcon className="size-20 text-muted-foreground/10 mb-6 group-hover:scale-110 transition-transform" />
           <p className="text-muted-foreground text-xl font-black italic tracking-tight opacity-40">
