@@ -557,6 +557,301 @@ export type Database = {
         }
         Relationships: []
       }
+      nv2_cards: {
+        Row: {
+          card_data: Json
+          card_type: Database["public"]["Enums"]["nv2_card_type"]
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          stage_id: string
+          updated_at: string
+        }
+        Insert: {
+          card_data: Json
+          card_type: Database["public"]["Enums"]["nv2_card_type"]
+          created_at?: string
+          display_order: number
+          id?: string
+          is_active?: boolean
+          stage_id: string
+          updated_at?: string
+        }
+        Update: {
+          card_data?: Json
+          card_type?: Database["public"]["Enums"]["nv2_card_type"]
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          stage_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nv2_cards_stage_id_nv2_stages_id_fk"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "nv2_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nv2_profiles: {
+        Row: {
+          auth_user_id: string | null
+          avatar_url: string | null
+          created_at: string
+          daily_goal_new: number
+          daily_goal_review: number
+          display_name: string | null
+          is_active: boolean
+          sns_id: string
+          sns_type: Database["public"]["Enums"]["nv2_sns_type"]
+          today_new_count: number
+          today_review_count: number
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          daily_goal_new?: number
+          daily_goal_review?: number
+          display_name?: string | null
+          is_active?: boolean
+          sns_id: string
+          sns_type: Database["public"]["Enums"]["nv2_sns_type"]
+          today_new_count?: number
+          today_review_count?: number
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          daily_goal_new?: number
+          daily_goal_review?: number
+          display_name?: string | null
+          is_active?: boolean
+          sns_id?: string
+          sns_type?: Database["public"]["Enums"]["nv2_sns_type"]
+          today_new_count?: number
+          today_review_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      nv2_quiz_results: {
+        Row: {
+          completed_at: string | null
+          covered_stage_ids: string[]
+          created_at: string
+          matched_pairs_count: number
+          quiz_result_id: number
+          quiz_type: Database["public"]["Enums"]["nv2_quiz_type"]
+          result_snapshot: Json | null
+          sns_id: string
+          sns_type: string
+          started_at: string
+          trigger_at_count: number
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          covered_stage_ids: string[]
+          created_at?: string
+          matched_pairs_count?: number
+          quiz_result_id?: number
+          quiz_type: Database["public"]["Enums"]["nv2_quiz_type"]
+          result_snapshot?: Json | null
+          sns_id: string
+          sns_type: string
+          started_at?: string
+          trigger_at_count: number
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          covered_stage_ids?: string[]
+          created_at?: string
+          matched_pairs_count?: number
+          quiz_result_id?: number
+          quiz_type?: Database["public"]["Enums"]["nv2_quiz_type"]
+          result_snapshot?: Json | null
+          sns_id?: string
+          sns_type?: string
+          started_at?: string
+          trigger_at_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      nv2_schedules: {
+        Row: {
+          created_at: string
+          delivery_url: string
+          error_message: string | null
+          max_retries: number
+          message_body: string | null
+          opened_at: string | null
+          parent_schedule_id: number | null
+          retry_count: number
+          review_round: number | null
+          schedule_id: number
+          schedule_type: Database["public"]["Enums"]["nv2_schedule_type"]
+          scheduled_at: string
+          sent_at: string | null
+          sns_id: string
+          sns_type: string
+          stage_id: string | null
+          status: Database["public"]["Enums"]["nv2_schedule_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_url: string
+          error_message?: string | null
+          max_retries?: number
+          message_body?: string | null
+          opened_at?: string | null
+          parent_schedule_id?: number | null
+          retry_count?: number
+          review_round?: number | null
+          schedule_id?: number
+          schedule_type: Database["public"]["Enums"]["nv2_schedule_type"]
+          scheduled_at: string
+          sent_at?: string | null
+          sns_id: string
+          sns_type: string
+          stage_id?: string | null
+          status?: Database["public"]["Enums"]["nv2_schedule_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_url?: string
+          error_message?: string | null
+          max_retries?: number
+          message_body?: string | null
+          opened_at?: string | null
+          parent_schedule_id?: number | null
+          retry_count?: number
+          review_round?: number | null
+          schedule_id?: number
+          schedule_type?: Database["public"]["Enums"]["nv2_schedule_type"]
+          scheduled_at?: string
+          sent_at?: string | null
+          sns_id?: string
+          sns_type?: string
+          stage_id?: string | null
+          status?: Database["public"]["Enums"]["nv2_schedule_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nv2_schedules_parent_schedule_id_nv2_schedules_schedule_id_fk"
+            columns: ["parent_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "nv2_schedules"
+            referencedColumns: ["schedule_id"]
+          },
+          {
+            foreignKeyName: "nv2_schedules_stage_id_nv2_stages_id_fk"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "nv2_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nv2_stage_progress: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          last_review_completed_at: string | null
+          next_review_at: string | null
+          progress_id: number
+          retry_count: number
+          review_round: number | null
+          review_status: Database["public"]["Enums"]["nv2_review_status"]
+          sns_id: string
+          sns_type: string
+          stage_id: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          last_review_completed_at?: string | null
+          next_review_at?: string | null
+          progress_id?: number
+          retry_count?: number
+          review_round?: number | null
+          review_status?: Database["public"]["Enums"]["nv2_review_status"]
+          sns_id: string
+          sns_type: string
+          stage_id: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          last_review_completed_at?: string | null
+          next_review_at?: string | null
+          progress_id?: number
+          retry_count?: number
+          review_round?: number | null
+          review_status?: Database["public"]["Enums"]["nv2_review_status"]
+          sns_id?: string
+          sns_type?: string
+          stage_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nv2_stage_progress_stage_id_nv2_stages_id_fk"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "nv2_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nv2_stages: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          is_welcome: boolean
+          learning_product_id: string
+          stage_number: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_welcome?: boolean
+          learning_product_id: string
+          stage_number: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_welcome?: boolean
+          learning_product_id?: string
+          stage_number?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           approved_at: string
@@ -846,6 +1141,24 @@ export type Database = {
         | "cancelled"
         | "opened"
         | "feedback_received"
+      nv2_card_type:
+        | "title"
+        | "description"
+        | "image"
+        | "etymology"
+        | "example"
+        | "option"
+      nv2_quiz_type: "quiz_5" | "quiz_10"
+      nv2_review_status:
+        | "none"
+        | "r1_pending"
+        | "r2_pending"
+        | "r3_pending"
+        | "r4_pending"
+        | "mastered"
+      nv2_schedule_status: "pending" | "sent" | "failed" | "opened"
+      nv2_schedule_type: "new" | "review" | "quiz" | "cheer" | "welcome"
+      nv2_sns_type: "discord" | "kakao" | "telegram" | "email"
       push_channel: "discord" | "kakao" | "email" | "telegram"
       sns_type: "discord" | "kakao" | "email" | "telegram"
       subscription_tier: "basic" | "premium" | "vip"
@@ -1015,6 +1328,26 @@ export const Constants = {
         "opened",
         "feedback_received",
       ],
+      nv2_card_type: [
+        "title",
+        "description",
+        "image",
+        "etymology",
+        "example",
+        "option",
+      ],
+      nv2_quiz_type: ["quiz_5", "quiz_10"],
+      nv2_review_status: [
+        "none",
+        "r1_pending",
+        "r2_pending",
+        "r3_pending",
+        "r4_pending",
+        "mastered",
+      ],
+      nv2_schedule_status: ["pending", "sent", "failed", "opened"],
+      nv2_schedule_type: ["new", "review", "quiz", "cheer", "welcome"],
+      nv2_sns_type: ["discord", "kakao", "telegram", "email"],
       push_channel: ["discord", "kakao", "email", "telegram"],
       sns_type: ["discord", "kakao", "email", "telegram"],
       subscription_tier: ["basic", "premium", "vip"],
