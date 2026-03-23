@@ -225,6 +225,13 @@
       "when": 1772750589015,
       "tag": "0031_thankful_bloodstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1774282679322,
+      "tag": "0032_absent_impossible_man",
+      "breakpoints": true
     }
   ]
 }
