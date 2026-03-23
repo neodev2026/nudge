@@ -127,4 +127,27 @@ export default [
   layout("core/layouts/private.layout.tsx", [
     route("/cards/:cardId", "features/learning-card/screens/learning-card.tsx"),
   ]),
+
+  /**
+   * [Nudge Lite Route Group]
+   * Uses a dedicated lite.layout.tsx to ensure a stateless, 
+   * high-contrast UI as per the new design policy.
+   * This group bypasses existing auth-based layouts.
+   */
+  layout("core/layouts/lite.layout.tsx", [
+    ...prefix("/lite", [
+      // Landing page: Service introduction & product exhibition
+      index("features/lite/screens/home-page.tsx"),
+      
+      // Product detail page
+      route("products/:id", "features/lite/screens/product-detail-page.tsx"),
+      
+      // Success page after SNS connection
+      route("success", "features/lite/screens/sns-conn-success-page.tsx"),
+
+      route("cards/:delivery_id", "features/lite/screens/learning-card-page.tsx"),
+
+      route("auth/discord/callback", "features/lite/callback/auth-discord-callback.tsx"),
+    ]),
+  ]),  
 ] satisfies RouteConfig;
