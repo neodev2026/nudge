@@ -18,6 +18,15 @@ export const timestamps = {
   created_at: timestamp().defaultNow().notNull(),
 };
 
+export const tstz = {
+  updated_at: timestamp("updated_at", { withTimezone: true, mode: "date" })
+    .defaultNow()
+    .notNull(),
+  created_at: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .defaultNow()
+    .notNull(),
+};
+
 /**
  * Creates an auto-incrementing primary key column
  * 

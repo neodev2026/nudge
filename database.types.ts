@@ -429,6 +429,134 @@ export type Database = {
         }
         Relationships: []
       }
+      lite_card_deliveries: {
+        Row: {
+          card_id: string
+          created_at: string
+          delivery_id: string
+          last_error: string | null
+          learning_product_id: string
+          next_retry_at: string | null
+          opened_at: string | null
+          previous_delivery_id: string | null
+          retry_count: number
+          scheduled_at: string
+          sent_at: string | null
+          sns_id: string
+          sns_type: string
+          status: Database["public"]["Enums"]["lite_card_delivery_status"]
+          updated_at: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          delivery_id?: string
+          last_error?: string | null
+          learning_product_id: string
+          next_retry_at?: string | null
+          opened_at?: string | null
+          previous_delivery_id?: string | null
+          retry_count?: number
+          scheduled_at: string
+          sent_at?: string | null
+          sns_id: string
+          sns_type: string
+          status?: Database["public"]["Enums"]["lite_card_delivery_status"]
+          updated_at?: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          delivery_id?: string
+          last_error?: string | null
+          learning_product_id?: string
+          next_retry_at?: string | null
+          opened_at?: string | null
+          previous_delivery_id?: string | null
+          retry_count?: number
+          scheduled_at?: string
+          sent_at?: string | null
+          sns_id?: string
+          sns_type?: string
+          status?: Database["public"]["Enums"]["lite_card_delivery_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lite_content_progress: {
+        Row: {
+          completed_cards_count: number
+          created_at: string
+          current_content_id: string | null
+          last_card_id: string | null
+          last_feedback_score: number | null
+          learning_product_id: string
+          progress_id: number
+          sns_id: string
+          sns_type: Database["public"]["Enums"]["sns_type"]
+          total_cards_count: number
+          updated_at: string
+        }
+        Insert: {
+          completed_cards_count?: number
+          created_at?: string
+          current_content_id?: string | null
+          last_card_id?: string | null
+          last_feedback_score?: number | null
+          learning_product_id: string
+          progress_id?: never
+          sns_id: string
+          sns_type: Database["public"]["Enums"]["sns_type"]
+          total_cards_count?: number
+          updated_at?: string
+        }
+        Update: {
+          completed_cards_count?: number
+          created_at?: string
+          current_content_id?: string | null
+          last_card_id?: string | null
+          last_feedback_score?: number | null
+          learning_product_id?: string
+          progress_id?: never
+          sns_id?: string
+          sns_type?: Database["public"]["Enums"]["sns_type"]
+          total_cards_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lite_content_progress_sns_type_sns_id_lite_profiles_sns_type_sn"
+            columns: ["sns_type", "sns_id"]
+            isOneToOne: false
+            referencedRelation: "lite_profiles"
+            referencedColumns: ["sns_type", "sns_id"]
+          },
+        ]
+      }
+      lite_profiles: {
+        Row: {
+          created_at: string
+          sns_id: string
+          sns_type: Database["public"]["Enums"]["sns_type"]
+          subscription_status: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          sns_id: string
+          sns_type: Database["public"]["Enums"]["sns_type"]
+          subscription_status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          sns_id?: string
+          sns_type?: Database["public"]["Enums"]["sns_type"]
+          subscription_status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           approved_at: string
@@ -710,6 +838,14 @@ export type Database = {
         | "failed"
         | "opened"
         | "feedback_received"
+      lite_card_delivery_status:
+        | "pending"
+        | "sent"
+        | "retry_required"
+        | "failed"
+        | "cancelled"
+        | "opened"
+        | "feedback_received"
       push_channel: "discord" | "kakao" | "email" | "telegram"
       sns_type: "discord" | "kakao" | "email" | "telegram"
       subscription_tier: "basic" | "premium" | "vip"
@@ -867,6 +1003,15 @@ export const Constants = {
         "pending",
         "sent",
         "failed",
+        "opened",
+        "feedback_received",
+      ],
+      lite_card_delivery_status: [
+        "pending",
+        "sent",
+        "retry_required",
+        "failed",
+        "cancelled",
         "opened",
         "feedback_received",
       ],

@@ -1,0 +1,44 @@
+---
+description: Rules and policies for "Nudge Lite" (Non-signup, SNS-only subscription version)
+globs: ["app/features/lite/**", "**/lite_*"]
+alwaysApply: true
+---
+
+# Nudge Lite Policy
+
+This document defines the architecture and business logic for the "Nudge Lite" version, which allows users to subscribe via SNS without a traditional signup process.
+
+## 1. Core Philosophy & Architecture
+- **No-Signup Policy**: Users must be able to use the service using only SNS identification. [cite_start]Do NOT depend on `auth.users`. 
+- **No-n8n Policy**: All Lite version features must be implemented within the app's server-side logic. [cite_start]Do NOT use n8n workflows for this feature set. 
+- [cite_start]**Directory Structure**: All Lite-specific schemas and logic must be located in `app/features/lite/`. 
+- [cite_start]**Coding Standard**: All code comments MUST be written in English. 
+
+## 2. Data Modeling & Identity
+- [cite_start]**Composite Primary Key**: `lite_profiles` uses a composite primary key consisting of `(sns_type, sns_id)` to prevent ID collisions across different platforms. 
+- [cite_start]**Snake Case Convention**: All database column names must follow the `snake_case` convention (e.g., `sns_id`, `progress_id`). 
+- [cite_start]**Specific PK Naming**: The primary key for the progress table must be named `progress_id` (derived from the table name suffix). 
+- [cite_start]**Timestamp Helper**: Always use the `tstz` (Timestamp with Timezone) helper from `~/core/db/helpers.server` for `created_at` and `updated_at`. 
+
+## 3. Required Features (In-App Implementation)
+The following features must be implemented without external automation tools:
+1. **Product Exhibition**: Display subscribable products to non-logged-in users.
+2. **SNS Connection**: Link a selected product to an SNS account (Discord priority).
+3. **Notification**: Send learning card delivery guidance via the connected SNS.
+4. **Daily Goals**: Send "Today's Learning Goal" to the user's SNS.
+5. **Scheduled Delivery**: Send the first learning card URL at the user's reserved time.
+6. **Feedback Storage**: Save user feedback (1-5 scores) directly to the DB.
+7. **Progress Update**: Send a summary of today's progress (average scores per content) via SNS.
+8. **Next Card Selection**: Determine and immediately send the next card URL after feedback.
+9. [cite_start]**Priority Logic**: Always deliver the first card of the "Today's Goal" content first. [cite: 1, 2]
+
+## 4. Schema Definitions
+- **lite_profiles**:
+    - `sns_type` & `sns_id` (Composite PK)
+    - `subscription_status` (Default: 'active')
+- **lite_content_progress**:
+    - `progress_id` (BigInt, Identity PK)
+    - `sns_type` & `sns_id` (Composite FK referencing `lite_profiles`)
+    - `learning_product_id`, `current_content_id`, `last_card_id` (UUIDs)
+    - `completed_cards_count`, `total_cards_count` (Integer, for progress tracking)
+    - [cite_start]`last_feedback_score` (Integer) [cite: 1, 2]
