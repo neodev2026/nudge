@@ -598,6 +598,51 @@ export type Database = {
           },
         ]
       }
+      nv2_learning_products: {
+        Row: {
+          category: Database["public"]["Enums"]["nv2_product_category"]
+          created_at: string
+          description: string | null
+          display_order: number
+          icon: string | null
+          id: string
+          is_active: boolean
+          meta: Json | null
+          name: string
+          slug: string
+          total_stages: number
+          updated_at: string
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["nv2_product_category"]
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          meta?: Json | null
+          name: string
+          slug: string
+          total_stages?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["nv2_product_category"]
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          meta?: Json | null
+          name?: string
+          slug?: string
+          total_stages?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       nv2_profiles: {
         Row: {
           auth_user_id: string | null
@@ -1148,6 +1193,12 @@ export type Database = {
         | "etymology"
         | "example"
         | "option"
+      nv2_product_category:
+        | "language"
+        | "medical"
+        | "exam"
+        | "business"
+        | "general"
       nv2_quiz_type: "quiz_5" | "quiz_10"
       nv2_review_status:
         | "none"
@@ -1335,6 +1386,13 @@ export const Constants = {
         "etymology",
         "example",
         "option",
+      ],
+      nv2_product_category: [
+        "language",
+        "medical",
+        "exam",
+        "business",
+        "general",
       ],
       nv2_quiz_type: ["quiz_5", "quiz_10"],
       nv2_review_status: [
