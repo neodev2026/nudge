@@ -3,26 +3,62 @@
  *
  * Landing page for Nudge v2.
  * - Accessible by all users (no auth required)
- * - Displays service introduction, Leni character, and product list
+ * - Fetches active products from nv2_learning_products table
  * - Discord CTA triggers the OAuth flow at /auth/discord/start
- *
- * Design reference: nudge-landing.html (HTML prototype)
  */
 import type { Route } from "./+types/home-page";
 
 import { Link, useLoaderData } from "react-router";
 
 import makeServerClient from "~/core/lib/supa-client.server";
+import { getNv2ActiveProducts } from "~/features/v2/products/queries";
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-interface Product {
+type Product = {
   id: string;
+  category: "language" | "medical" | "exam" | "business" | "general";
   name: string;
   description: string | null;
-  language: string;
-  level: string;
-  is_active: boolean;
+  slug: string;
+  icon: string | null;
+  meta: unknown | null;
+  total_stages: number;
+  display_order: number;
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Fallback icon per category when product.icon is not set */
+const CATEGORY_ICONS: Record<string, string> = {
+  language: "📚",
+  medical:  "🩺",
+  exam:     "📝",
+  business: "💼",
+  general:  "🎯",
+};
+
+/**
+ * Extracts a short display label from product.meta for the card subtitle.
+ * Language: "EN · B1"   Medical: "Terminology"   Exam: "정보처리기사"
+ */
+function getProductSubtitle(product: Product): string {
+  const m =
+    product.meta && typeof product.meta === "object" && !Array.isArray(product.meta)
+      ? (product.meta as Record<string, unknown>)
+      : {};
+  if (product.category === "language") {
+    const lang = typeof m.language === "string" ? m.language.toUpperCase() : "";
+    const level = typeof m.level === "string" ? m.level : "";
+    return [lang, level].filter(Boolean).join(" · ");
+  }
+  if (product.category === "exam") {
+    return typeof m.exam_name === "string" ? m.exam_name : "";
+  }
+  if (product.category === "medical") {
+    return typeof m.domain === "string" ? m.domain : "Medical";
+  }
+  return "";
 }
 
 // ─── Meta ────────────────────────────────────────────────────────────────────
@@ -40,22 +76,14 @@ export const meta: Route.MetaFunction = () => [
 
 export async function loader({ request }: Route.LoaderArgs) {
   const [client] = makeServerClient(request);
-
-  // Fetch active learning products for the product showcase section
-  const { data: products } = await client
-    .from("learning_product")
-    .select("id, name, description, language, level, is_active")
-    .eq("is_active", true)
-    .order("language")
-    .order("level");
-
-  return { products: products ?? [] };
+  const products = await getNv2ActiveProducts(client);
+  return { products };
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function HomePage({ loaderData }: Route.ComponentProps) {
-  const { products } = loaderData;
+export default function HomePage() {
+  const { products } = useLoaderData<typeof loader>();
 
   return (
     <div className="overflow-x-hidden">
@@ -93,16 +121,15 @@ export default function HomePage({ loaderData }: Route.ComponentProps) {
 
       {/* ── HERO ── */}
       <section className="relative min-h-[calc(100vh-64px)] overflow-hidden px-6 pb-0 pt-8 md:px-10">
-        {/* background glows — section 전체에 걸쳐 표시 */}
+        {/* Background glows */}
         <div className="pointer-events-none absolute -right-32 -top-32 h-[680px] w-[680px] rounded-full bg-[radial-gradient(circle,rgba(76,175,114,0.13)_0%,transparent_70%)]" />
         <div className="pointer-events-none absolute -bottom-20 -left-20 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(245,166,35,0.10)_0%,transparent_70%)]" />
 
-        {/* 콘텐츠 영역 — 가운데 정렬, 최대 너비 제한 */}
+        {/* Content grid — centered with max-width */}
         <div className="relative z-10 mx-auto grid max-w-5xl grid-cols-1 items-center gap-12 md:min-h-[calc(100vh-80px)] md:grid-cols-2 md:gap-8">
 
-          {/* Left — 텍스트 */}
+          {/* Left — copy */}
           <div className="animate-slide-up">
-            {/* badge */}
             <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-[#1a2744] px-4 py-1.5">
               <span className="inline-block h-[7px] w-[7px] animate-pulse rounded-full bg-[#5ecb87]" />
               <span className="text-xs font-bold tracking-wide text-white">
@@ -126,7 +153,6 @@ export default function HomePage({ loaderData }: Route.ComponentProps) {
               Discord 연결 하나로 지금 바로 시작하세요.
             </p>
 
-            {/* stats */}
             <div className="mb-10 flex gap-8">
               {[
                 { num: "20", unit: "초", label: "카드 1장 학습 시간" },
@@ -143,7 +169,6 @@ export default function HomePage({ loaderData }: Route.ComponentProps) {
               ))}
             </div>
 
-            {/* CTA */}
             <div className="flex flex-wrap items-center gap-4">
               <Link
                 to="/auth/discord/start"
@@ -158,10 +183,10 @@ export default function HomePage({ loaderData }: Route.ComponentProps) {
             </div>
           </div>
 
-          {/* Right — Leni (모바일: 텍스트 아래 세로 배치, PC: 오른쪽 열) */}
+          {/* Right — Leni character (stacks below on mobile) */}
           <div className="flex items-end justify-center md:h-[calc(100vh-80px)]">
             <div className="relative w-full max-w-[420px]">
-              {/* speech bubbles */}
+              {/* Speech bubbles */}
               <div className="absolute right-[-20px] top-[20%] z-20 animate-bubble-1 rounded-[18px_18px_18px_4px] bg-white px-4 py-2.5 shadow-[0_8px_32px_rgba(26,39,68,0.10)] md:right-[-30px]">
                 <span className="font-display font-bold text-[#4caf72]">Guten Tag!</span>
                 <span className="ml-1 inline-block rounded bg-[#1a2744] px-1.5 py-0.5 align-middle text-[0.68rem] font-black tracking-wide text-white">
@@ -172,19 +197,19 @@ export default function HomePage({ loaderData }: Route.ComponentProps) {
                 <span className="text-sm font-bold text-[#1a2744]">오늘의 단어가 도착했어요 ✉️</span>
               </div>
 
-              {/* Leni 이미지 */}
+              {/* Leni image — PNG with transparent background */}
               <div
-                className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#e8f5ee] to-[#f0e8d8]"
+                className="relative"
                 style={{ animation: "leniFloat 5s ease-in-out infinite" }}
               >
                 <img
-                  src="/images/leni/leni-hero-nobg.png"
+                  src="/images/leni/leni-hero.png"
                   alt="Leni"
-                  className="relative z-10 mx-auto block w-[90%] object-contain"
+                  className="mx-auto block w-full object-contain drop-shadow-[0_20px_60px_rgba(26,39,68,0.15)]"
                 />
               </div>
 
-              {/* floating badges */}
+              {/* Floating badges */}
               <div className="absolute bottom-[28%] right-[-20px] animate-float-1 rounded-xl bg-white px-3.5 py-2.5 shadow-[0_8px_32px_rgba(26,39,68,0.10)] md:right-[-50px]">
                 <span className="mr-1.5 text-lg">⚡</span>
                 <span className="text-sm font-bold text-[#1a2744]">암기 완료!</span>
@@ -196,7 +221,7 @@ export default function HomePage({ loaderData }: Route.ComponentProps) {
             </div>
           </div>
 
-        </div>{/* end 콘텐츠 grid */}
+        </div>
       </section>
 
       {/* ── HOW IT WORKS ── */}
@@ -250,72 +275,7 @@ export default function HomePage({ loaderData }: Route.ComponentProps) {
             가입 없이 Discord 연결만으로 학습을 시작할 수 있습니다.
           </p>
 
-          {products.length > 0 ? (
-            <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-5">
-              {products.map((product, i) => (
-                <Link
-                  key={product.id}
-                  to={`/products/${product.id}`}
-                  className={[
-                    "group relative overflow-hidden rounded-2xl border px-6 py-7 transition-all hover:-translate-y-1",
-                    i === 0
-                      ? "border-[#4caf72] bg-[#4caf72] hover:bg-[#5ecb87]"
-                      : "border-white/10 bg-white/5 hover:border-[#5ecb87] hover:bg-white/10",
-                  ].join(" ")}
-                >
-                  {i === 0 && (
-                    <span className="absolute right-3 top-3 rounded bg-[#f5a623] px-2 py-0.5 text-[0.65rem] font-black text-[#1a2744]">
-                      추천
-                    </span>
-                  )}
-                  <span className="mb-4 block text-3xl">
-                    {product.language === "en" ? "🇬🇧" : "🇩🇪"}
-                  </span>
-                  <div className="mb-1 text-[0.7rem] font-extrabold uppercase tracking-wider text-white/50">
-                    {product.language === "en" ? "English" : "Deutsch"}
-                  </div>
-                  <div className="mb-2 font-display text-2xl font-black text-white">{product.level}</div>
-                  <p className="mb-4 line-clamp-2 text-xs leading-[1.6] text-white/55">{product.description}</p>
-                  <span className="text-xs font-bold text-white/50 transition-colors group-hover:text-white">
-                    시작하기 →
-                  </span>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            // Fallback when DB has no products yet (development)
-            <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-5">
-              {[
-                { lang: "en", level: "B1", desc: "직장인을 위한 핵심 703단어", featured: true },
-                { lang: "en", level: "A1", desc: "900개 필수 기초 단어로 시작하세요." },
-                { lang: "en", level: "A2", desc: "801개 단어로 자신감을 높이세요." },
-                { lang: "de", level: "A1", desc: "독일어 입문. 생활 기초 단어부터." },
-                { lang: "de", level: "B1", desc: "독일 이민 필수 레벨." },
-              ].map(({ lang, level, desc, featured }, i) => (
-                <div
-                  key={`${lang}-${level}`}
-                  className={[
-                    "relative overflow-hidden rounded-2xl border px-6 py-7",
-                    featured
-                      ? "border-[#4caf72] bg-[#4caf72]"
-                      : "border-white/10 bg-white/5",
-                  ].join(" ")}
-                >
-                  {featured && (
-                    <span className="absolute right-3 top-3 rounded bg-[#f5a623] px-2 py-0.5 text-[0.65rem] font-black text-[#1a2744]">
-                      추천
-                    </span>
-                  )}
-                  <span className="mb-4 block text-3xl">{lang === "en" ? "🇬🇧" : "🇩🇪"}</span>
-                  <div className="mb-1 text-[0.7rem] font-extrabold uppercase tracking-wider text-white/50">
-                    {lang === "en" ? "English" : "Deutsch"}
-                  </div>
-                  <div className="mb-2 font-display text-2xl font-black text-white">{level}</div>
-                  <p className="text-xs leading-[1.6] text-white/55">{desc}</p>
-                </div>
-              ))}
-            </div>
-          )}
+          <ProductGrid products={products} />
         </div>
       </section>
 
@@ -414,7 +374,7 @@ export default function HomePage({ loaderData }: Route.ComponentProps) {
         <strong className="text-white/70">Nudge</strong> · 하루 20초 언어 학습 서비스 · 가입 없이 시작하세요
       </footer>
 
-      {/* Animations */}
+      {/* Animation keyframes */}
       <style>{`
         @keyframes leniFloat {
           0%, 100% { transform: translateY(0) rotate(0deg); }
@@ -428,29 +388,140 @@ export default function HomePage({ loaderData }: Route.ComponentProps) {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-12px); }
         }
-        .animate-slide-up {
-          animation: slideUp .8s ease both;
-        }
+        .animate-slide-up { animation: slideUp .8s ease both; }
         @keyframes slideUp {
           from { opacity: 0; transform: translateY(32px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        .animate-bubble-1 {
-          animation: bubblePop .6s cubic-bezier(.34,1.56,.64,1) 1s both;
-        }
-        .animate-bubble-2 {
-          animation: bubblePop .6s cubic-bezier(.34,1.56,.64,1) 2.2s both;
-        }
-        .animate-float-1 {
-          animation: floatBadge 5s ease-in-out .5s infinite;
-        }
-        .animate-float-2 {
-          animation: floatBadge 5.5s ease-in-out 1.8s infinite;
-        }
-        .font-display {
-          font-family: 'Nunito', 'Noto Sans KR', sans-serif;
-        }
+        .animate-bubble-1 { animation: bubblePop .6s cubic-bezier(.34,1.56,.64,1) 1s both; }
+        .animate-bubble-2 { animation: bubblePop .6s cubic-bezier(.34,1.56,.64,1) 2.2s both; }
+        .animate-float-1  { animation: floatBadge 5s ease-in-out .5s infinite; }
+        .animate-float-2  { animation: floatBadge 5.5s ease-in-out 1.8s infinite; }
+        .font-display { font-family: 'Nunito', 'Noto Sans KR', sans-serif; }
       `}</style>
+    </div>
+  );
+}
+
+// ─── Product Grid ─────────────────────────────────────────────────────────────
+
+/**
+ * Renders the product showcase grid.
+ * Shows real DB products when available; falls back to placeholder cards during development.
+ */
+function ProductGrid({ products }: { products: Product[] }) {
+  if (products.length === 0) {
+    return <ProductGridEmpty />;
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      {products.map((product, i) => (
+        <ProductCard key={product.id} product={product} featured={i === 0} />
+      ))}
+    </div>
+  );
+}
+
+function ProductCard({
+  product,
+  featured,
+}: {
+  product: Product;
+  featured: boolean;
+}) {
+  const icon = product.icon ?? CATEGORY_ICONS[product.category] ?? "📚";
+  const subtitle = getProductSubtitle(product);
+
+  return (
+    <Link
+      to={`/products/${product.slug}`}
+      className={[
+        "group relative overflow-hidden rounded-2xl border px-6 py-7 transition-all hover:-translate-y-1",
+        featured
+          ? "border-[#4caf72] bg-[#4caf72] hover:bg-[#5ecb87]"
+          : "border-white/10 bg-white/5 hover:border-[#5ecb87] hover:bg-white/10",
+      ].join(" ")}
+    >
+      {/* Featured badge */}
+      {featured && (
+        <span className="absolute right-3 top-3 rounded bg-[#f5a623] px-2 py-0.5 text-[0.65rem] font-black text-[#1a2744]">
+          추천
+        </span>
+      )}
+
+      {/* Icon (emoji or flag) */}
+      <span className="mb-4 block text-3xl">{icon}</span>
+
+      {/* Category subtitle — language: "EN · B1", exam: "정보처리기사" */}
+      {subtitle && (
+        <div className="mb-1 text-[0.7rem] font-extrabold uppercase tracking-wider text-white/50">
+          {subtitle}
+        </div>
+      )}
+
+      {/* Product name */}
+      <div className="mb-2 font-display text-lg font-black leading-tight text-white">
+        {product.name}
+      </div>
+
+      {/* Description */}
+      {product.description && (
+        <p className="mb-4 line-clamp-2 text-xs leading-[1.6] text-white/55">
+          {product.description}
+        </p>
+      )}
+
+      {/* Stage count */}
+      {product.total_stages > 0 && (
+        <p className="mb-3 text-[0.65rem] text-white/40">
+          {product.total_stages.toLocaleString()}개 항목
+        </p>
+      )}
+
+      <span className="text-xs font-bold text-white/50 transition-colors group-hover:text-white">
+        시작하기 →
+      </span>
+    </Link>
+  );
+}
+
+/**
+ * Shown only when nv2_learning_products has no active rows yet (dev environment).
+ * Mirrors the final product lineup as placeholder cards.
+ */
+function ProductGridEmpty() {
+  const placeholders = [
+    { icon: "🇬🇧", subtitle: "EN · B1", name: "English B1", desc: "직장인을 위한 핵심 703단어", featured: true },
+    { icon: "🇬🇧", subtitle: "EN · A1", name: "English A1", desc: "900개 필수 기초 단어로 시작하세요." },
+    { icon: "🇬🇧", subtitle: "EN · A2", name: "English A2", desc: "801개 단어로 자신감을 높이세요." },
+    { icon: "🇩🇪", subtitle: "DE · A1", name: "Deutsch A1", desc: "독일어 입문. 생활 기초 단어부터." },
+    { icon: "🇩🇪", subtitle: "DE · B1", name: "Deutsch B1", desc: "독일 이민 필수 레벨." },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      {placeholders.map(({ icon, subtitle, name, desc, featured }) => (
+        <div
+          key={name}
+          className={[
+            "relative overflow-hidden rounded-2xl border px-6 py-7",
+            featured ? "border-[#4caf72] bg-[#4caf72]" : "border-white/10 bg-white/5",
+          ].join(" ")}
+        >
+          {featured && (
+            <span className="absolute right-3 top-3 rounded bg-[#f5a623] px-2 py-0.5 text-[0.65rem] font-black text-[#1a2744]">
+              추천
+            </span>
+          )}
+          <span className="mb-4 block text-3xl">{icon}</span>
+          <div className="mb-1 text-[0.7rem] font-extrabold uppercase tracking-wider text-white/50">
+            {subtitle}
+          </div>
+          <div className="mb-2 font-display text-lg font-black leading-tight text-white">{name}</div>
+          <p className="text-xs leading-[1.6] text-white/55">{desc}</p>
+        </div>
+      ))}
     </div>
   );
 }
