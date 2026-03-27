@@ -9,7 +9,7 @@
  */
 import type { Route } from "./+types/product-detail-page";
 
-import { Link, useLoaderData, redirect } from "react-router";
+import { Link, useLoaderData, useFetcher } from "react-router";
 
 import makeServerClient from "~/core/lib/supa-client.server";
 import { getNv2ProductBySlug } from "~/features/v2/products/queries";
@@ -167,6 +167,7 @@ export default function ProductDetailPage() {
 
           {/* CTA */}
           <StartButton
+            product_slug={product.slug}
             first_stage={first_stage}
             is_authenticated={is_authenticated}
           />
@@ -219,12 +220,19 @@ export default function ProductDetailPage() {
 // ---------------------------------------------------------------------------
 
 function StartButton({
+  product_slug,
   first_stage,
   is_authenticated,
 }: {
+  product_slug: string;
   first_stage: { id: string } | null;
   is_authenticated: boolean;
 }) {
+  const fetcher = useFetcher<{ ok?: boolean; error?: string }>();
+  const is_sending = fetcher.state !== "idle";
+  const is_sent = fetcher.data?.ok === true;
+  const send_failed = !!fetcher.data?.error;
+
   // No stages yet
   if (!first_stage) {
     return (
@@ -260,14 +268,57 @@ function StartButton({
     );
   }
 
-  // Logged in — go directly to first stage
+  // DM sent successfully
+  if (is_sent) {
+    return (
+      <div className="rounded-2xl bg-[#4caf72]/10 px-5 py-5 text-center">
+        <div className="mb-1 text-2xl">✉️</div>
+        <p className="font-bold text-[#1a2744]">Discord로 첫 번째 카드를 보냈어요!</p>
+        <p className="mt-1 text-sm text-[#6b7a99]">
+          Discord 알림을 확인해주세요.
+        </p>
+      </div>
+    );
+  }
+
+  // DM failed
+  if (send_failed) {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-2xl bg-red-50 px-5 py-4 text-center">
+          <p className="text-sm font-bold text-red-600">
+            Discord 메시지 발송에 실패했어요. 잠시 후 다시 시도해주세요.
+          </p>
+        </div>
+        <button
+          onClick={() =>
+            fetcher.submit(
+              {},
+              { method: "POST", action: `/api/v2/products/${product_slug}/start` }
+            )
+          }
+          className="w-full rounded-2xl bg-[#4caf72] py-4 text-base font-extrabold text-white transition-all hover:bg-[#5ecb87]"
+        >
+          다시 시도
+        </button>
+      </div>
+    );
+  }
+
+  // Logged in — send first stage DM
   return (
-    <Link
-      to={`/stages/${first_stage.id}`}
-      className="flex w-full items-center justify-center rounded-2xl bg-[#4caf72] py-4 text-base font-extrabold text-white shadow-[0_4px_16px_rgba(76,175,114,0.30)] transition-all hover:-translate-y-px hover:bg-[#5ecb87]"
+    <button
+      disabled={is_sending}
+      onClick={() =>
+        fetcher.submit(
+          {},
+          { method: "POST", action: `/api/v2/products/${product_slug}/start` }
+        )
+      }
+      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4caf72] py-4 text-base font-extrabold text-white shadow-[0_4px_16px_rgba(76,175,114,0.30)] transition-all hover:-translate-y-px hover:bg-[#5ecb87] disabled:opacity-60"
     >
-      학습 시작 →
-    </Link>
+      {is_sending ? "발송 중..." : "학습 시작 — Discord로 카드 받기 📬"}
+    </button>
   );
 }
 
