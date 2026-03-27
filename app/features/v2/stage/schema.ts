@@ -13,37 +13,65 @@ import {
 import { authenticatedRole } from "drizzle-orm/supabase";
 import { tstz } from "~/core/db/helpers.server";
 import { isAdmin } from "~/core/db/helpers.rls";
-import { V2_CARD_TYPES } from "~/features/v2/shared/constants";
+import { V2_CARD_TYPES, V2_STAGE_TYPES } from "~/features/v2/shared/constants";
 import type { V2CardData } from "~/features/v2/shared/types";
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
 
 export const nv2CardType = pgEnum("nv2_card_type", V2_CARD_TYPES);
 
 /**
+ * Stage type enum for nv2_stages.
+ *
+ * welcome        — onboarding stage, delivered once before learning begins
+ * learning       — standard vocabulary/content stage
+ * quiz_5         — matching quiz at every 5th completion (5, 15, 25, ...)
+ * quiz_10        — matching quiz at every 10th completion (10, 20, 30, ...)
+ * quiz_daily     — quiz triggered when daily new-stage goal is reached
+ * quiz_final     — comprehensive quiz on full product completion
+ * congratulations— celebration stage after all stages are mastered
+ */
+export const nv2StageType = pgEnum("nv2_stage_type", V2_STAGE_TYPES);
+
+// ---------------------------------------------------------------------------
+// nv2_stages
+// ---------------------------------------------------------------------------
+
+/**
  * nv2_stages
  *
- * One row per learning content item (word / phrase).
+ * One row per learning content item (word / phrase / quiz / event).
  * Each stage belongs to a learning product and has an ordered set of cards.
  * stage_number determines delivery sequence within a product (1-based).
  *
- * is_welcome = true marks the onboarding welcome stage, which is always
- * delivered before stage_number ordering begins.
+ * stage_type controls rendering and delivery logic:
+ *   - "learning"        : standard card viewer + self-evaluation
+ *   - "welcome"         : service intro cards, no self-evaluation
+ *   - "quiz_*"          : matching quiz UI, no card viewer
+ *   - "congratulations" : celebration screen, no card viewer
+ *
+ * The stage page is accessed via a public SNS link (no login required).
+ * Active stages are therefore readable without authentication.
  */
 export const nv2_stages = pgTable(
   "nv2_stages",
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    // References v1 learning_product — v2 reuses existing product definitions
+    // FK → nv2_learning_products.id
     learning_product_id: uuid("learning_product_id").notNull(),
 
-    // Sequence number within the product (e.g. 1~703 for English B1)
+    // Delivery sequence within the product (1-based).
+    // welcome stage uses stage_number = 0 by convention.
     stage_number: integer("stage_number").notNull(),
+
+    // Determines UI rendering and cron delivery logic
+    stage_type: nv2StageType("stage_type").notNull().default("learning"),
 
     // Human-readable label used as page title and SNS link preview text
     title: text("title").notNull(),
-
-    // Marks the onboarding welcome stage — delivered once before stage 1
-    is_welcome: boolean("is_welcome").notNull().default(false),
 
     is_active: boolean("is_active").notNull().default(false),
 
@@ -55,6 +83,7 @@ export const nv2_stages = pgTable(
       table.learning_product_id,
       table.stage_number
     ),
+    index("nv2_stages_type_idx").on(table.stage_type),
 
     // RLS: Any authenticated user can view active stages
     pgPolicy("nv2_stages_select_active", {
@@ -70,7 +99,7 @@ export const nv2_stages = pgTable(
       using: isAdmin,
     }),
 
-    // RLS: Service role for Cron-triggered API handlers
+    // RLS: Service role for cron-triggered API handlers
     pgPolicy("nv2_stages_service_all", {
       for: "all",
       to: "service_role",
@@ -79,6 +108,13 @@ export const nv2_stages = pgTable(
   ]
 );
 
+export type NV2Stage = typeof nv2_stages.$inferSelect;
+export type NV2NewStage = typeof nv2_stages.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// nv2_cards
+// ---------------------------------------------------------------------------
+
 /**
  * nv2_cards
  *
@@ -86,9 +122,9 @@ export const nv2_stages = pgTable(
  * Cards are displayed in ascending display_order.
  *
  * Constraints enforced at application level:
- * - Every stage must have exactly one "title" card (display_order = 1)
- * - Every stage must have exactly one "description" card (display_order = 2)
- * - Remaining card types are optional and follow in display_order >= 3
+ *   - Every "learning" stage must have exactly one "title" card (display_order = 1)
+ *   - Every "learning" stage must have exactly one "description" card (display_order = 2)
+ *   - Remaining card types are optional and follow in display_order >= 3
  *
  * The stage page is accessed via a public link (no login required),
  * so active cards are readable without authentication.
@@ -140,3 +176,6 @@ export const nv2_cards = pgTable(
     }),
   ]
 );
+
+export type NV2Card = typeof nv2_cards.$inferSelect;
+export type NV2NewCard = typeof nv2_cards.$inferInsert;

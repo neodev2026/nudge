@@ -70,6 +70,14 @@ export const nv2_profiles = pgTable(
       using: sql`${table.auth_user_id} = auth.uid()::text`,
     }),
 
+    // RLS: Authenticated users can insert their own profile.
+    // Called during Discord OAuth callback after session is established.
+    pgPolicy("nv2_profiles_insert_own", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: sql`${table.auth_user_id} = auth.uid()::text`,
+    }),
+
     // RLS: Authenticated users can update their own profile (goal settings etc.)
     pgPolicy("nv2_profiles_update_own", {
       for: "update",

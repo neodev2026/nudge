@@ -37,12 +37,12 @@ export default [
     //   route("/daily-reset",     "features/v2/cron/api/daily-reset.tsx"),
     // ]),
 
-    // v2 Stage / Quiz action endpoints — uncomment as each file is created
-    // ...prefix("/v2", [
-    //   route("/stage/:stageId/complete", "features/v2/stage/api/complete.tsx"),
-    //   route("/stage/:stageId/retry",    "features/v2/stage/api/retry.tsx"),
-    //   route("/quiz/:quizId/result",     "features/v2/quiz/api/result.tsx"),
-    // ]),
+    // ✅ 구현 완료
+    ...prefix("/v2", [
+      route("/stage/:stageId/complete", "features/v2/stage/api/complete.tsx"),
+      route("/stage/:stageId/retry",    "features/v2/stage/api/retry.tsx"),
+      // route("/quiz/:quizId/result",  "features/v2/quiz/api/result.tsx"),
+    ]),
   ]),
 
   // ── v2 Public layout (로그인/비로그인 모두 접근 가능) ──────────────────────
@@ -51,21 +51,21 @@ export default [
     // ✅ 구현 완료
     index("features/v2/home/screens/home-page.tsx"),
 
-    // 🔜 파일 생성 후 주석 해제
-    // route("/products",     "features/v2/products/screens/products-page.tsx"),
-    // route("/products/:id", "features/v2/products/screens/product-detail-page.tsx"),
+    // ✅ 구현 완료
+    route("/products",     "features/v2/products/screens/products-page.tsx"),
+    route("/products/:slug", "features/v2/products/screens/product-detail-page.tsx"),
 
-    // 🔜 파일 생성 후 주석 해제
-    // route("/stages/:stageId", "features/v2/stage/screens/stage-page.tsx"),
+    // ✅ 구현 완료
+    route("/stages/:stageId", "features/v2/stage/screens/stage-page.tsx"),
 
     // 🔜 파일 생성 후 주석 해제
     // route("/quiz/:quizId", "features/v2/quiz/screens/quiz-page.tsx"),
 
-    // 🔜 파일 생성 후 주석 해제
-    // ...prefix("/auth", [
-    //   route("/discord/start",    "features/v2/auth/screens/discord-start.tsx"),
-    //   route("/discord/callback", "features/v2/auth/screens/discord-callback.tsx"),
-    // ]),
+    // ✅ 구현 완료
+    ...prefix("/auth", [
+      route("/discord/start",    "features/v2/auth/screens/discord-start.tsx"),
+      route("/discord/callback", "features/v2/auth/screens/discord-callback.tsx"),
+    ]),
 
     // Legal — always needed for deployment
     ...prefix("/legal", [
