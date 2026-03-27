@@ -869,9 +869,9 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
-          is_welcome: boolean
           learning_product_id: string
           stage_number: number
+          stage_type: Database["public"]["Enums"]["nv2_stage_type"]
           title: string
           updated_at: string
         }
@@ -879,9 +879,9 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
-          is_welcome?: boolean
           learning_product_id: string
           stage_number: number
+          stage_type?: Database["public"]["Enums"]["nv2_stage_type"]
           title: string
           updated_at?: string
         }
@@ -889,9 +889,9 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
-          is_welcome?: boolean
           learning_product_id?: string
           stage_number?: number
+          stage_type?: Database["public"]["Enums"]["nv2_stage_type"]
           title?: string
           updated_at?: string
         }
@@ -1210,6 +1210,14 @@ export type Database = {
       nv2_schedule_status: "pending" | "sent" | "failed" | "opened"
       nv2_schedule_type: "new" | "review" | "quiz" | "cheer" | "welcome"
       nv2_sns_type: "discord" | "kakao" | "telegram" | "email"
+      nv2_stage_type:
+        | "welcome"
+        | "learning"
+        | "quiz_5"
+        | "quiz_10"
+        | "quiz_daily"
+        | "quiz_final"
+        | "congratulations"
       push_channel: "discord" | "kakao" | "email" | "telegram"
       sns_type: "discord" | "kakao" | "email" | "telegram"
       subscription_tier: "basic" | "premium" | "vip"
@@ -1406,6 +1414,15 @@ export const Constants = {
       nv2_schedule_status: ["pending", "sent", "failed", "opened"],
       nv2_schedule_type: ["new", "review", "quiz", "cheer", "welcome"],
       nv2_sns_type: ["discord", "kakao", "telegram", "email"],
+      nv2_stage_type: [
+        "welcome",
+        "learning",
+        "quiz_5",
+        "quiz_10",
+        "quiz_daily",
+        "quiz_final",
+        "congratulations",
+      ],
       push_channel: ["discord", "kakao", "email", "telegram"],
       sns_type: ["discord", "kakao", "email", "telegram"],
       subscription_tier: ["basic", "premium", "vip"],
