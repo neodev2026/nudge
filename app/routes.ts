@@ -41,6 +41,7 @@ export default [
     ...prefix("/v2", [
       route("/stage/:stageId/complete", "features/v2/stage/api/complete.tsx"),
       route("/stage/:stageId/retry",    "features/v2/stage/api/retry.tsx"),
+      route("/products/:slug/start",    "features/v2/products/api/start-learning.tsx"),
       // route("/quiz/:quizId/result",  "features/v2/quiz/api/result.tsx"),
     ]),
   ]),

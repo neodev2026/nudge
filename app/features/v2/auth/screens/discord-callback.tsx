@@ -21,6 +21,7 @@ import type { Route } from "./+types/discord-callback";
 import makeServerClient from "~/core/lib/supa-client.server";
 import { upsertNv2Profile, getNv2ProfileByAuthUserId } from "../lib/queries.server";
 import { sendWelcomeDm } from "../lib/discord.server";
+import { getNv2WelcomeStage } from "~/features/v2/stage/lib/queries.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
@@ -100,9 +101,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   // ── Step 5: Send welcome DM (new users only) ──────────────────────────────
   if (is_new_user) {
     const origin = new URL(request.url).origin;
-    // Welcome stage page — will be implemented as /stages/welcome
-    // For now we link to /products as a fallback until the welcome stage exists
-    const welcome_url = `${origin}/products`;
+
+    // Resolve the welcome stage for the user's first product.
+    // Falls back to /products if no welcome stage exists yet.
+    const welcome_stage = await getNv2WelcomeStage(client).catch(() => null);
+    const welcome_url = welcome_stage
+      ? `${origin}/stages/${welcome_stage.id}`
+      : `${origin}/products`;
 
     sendWelcomeDm(sns_id, display_name, welcome_url).catch((err) => {
       // DM failure is non-fatal — log and continue

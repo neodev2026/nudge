@@ -52,6 +52,25 @@ export async function getNv2StageWithCards(
 }
 
 /**
+ * Fetches the first active welcome stage across all products.
+ * Used by discord-callback to resolve the welcome DM link.
+ * Returns null when no welcome stage exists yet.
+ */
+export async function getNv2WelcomeStage(client: SupabaseClient<Database>) {
+  const { data, error } = await client
+    .from("nv2_stages")
+    .select("id, title")
+    .eq("stage_type", "welcome")
+    .eq("is_active", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
  * Fetches the first active learning stage for a product.
  * Used by product-detail-page to redirect directly to stage 1.
  */
