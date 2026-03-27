@@ -1,0 +1,1 @@
+CREATE POLICY "nv2_profiles_insert_own" ON "nv2_profiles" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ("nv2_profiles"."auth_user_id" = auth.uid()::text);
