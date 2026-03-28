@@ -58,8 +58,8 @@ export default [
       route("/products/:id",                        "features/admin/screens/product-detail.tsx"),
       route("/products/:id/stages/new",             "features/admin/screens/stage-new.tsx"),
       route("/products/:id/stages/:stageId",        "features/admin/screens/stage-edit.tsx"),
-      // route("/products/:id/sessions/new",          "features/admin/screens/session-new.tsx"),
-      // route("/products/:id/sessions/:sessionId",   "features/admin/screens/session-edit.tsx"),
+      // /new is handled as sessionId="new" inside session-edit.tsx
+      route("/products/:id/sessions/:sessionId",    "features/admin/screens/session-edit.tsx"),
     ]),
   ]),
 
@@ -69,6 +69,7 @@ export default [
     route("/stages/:id/delete",   "features/admin/api/stage-delete.tsx"),
     route("/cards/upsert",        "features/admin/api/cards.tsx"),
     route("/cards/:id/delete",    "features/admin/api/card-delete.tsx"),
+    route("/sessions/:id/delete", "features/admin/api/session-delete.tsx"),
   ]),
 
   // ── v2 Public layout ──────────────────────────────────────────────────

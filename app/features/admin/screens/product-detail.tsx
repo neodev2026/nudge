@@ -240,6 +240,7 @@ function SessionCard({
   all_stages: any[];
 }) {
   const [is_open, set_is_open] = useState(false);
+  const delete_fetcher = useFetcher();
   const stages = session.nv2_product_session_stages ?? [];
 
   return (
@@ -306,6 +307,22 @@ function SessionCard({
             >
               세션 편집
             </Link>
+            <delete_fetcher.Form
+              method="post"
+              action={`/admin/api/sessions/${session.id}/delete`}
+              onSubmit={(e) => {
+                if (!confirm("이 세션을 삭제할까요? 스테이지 배정 정보도 함께 삭제됩니다.")) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              <button
+                type="submit"
+                className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-50"
+              >
+                삭제
+              </button>
+            </delete_fetcher.Form>
           </div>
         </div>
       )}
