@@ -643,6 +643,86 @@ export type Database = {
         }
         Relationships: []
       }
+      nv2_product_session_stages: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: number
+          product_session_id: string
+          stage_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order: number
+          id?: number
+          product_session_id: string
+          stage_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: number
+          product_session_id?: string
+          stage_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nv2_product_session_stages_product_session_id_nv2_product_sessi"
+            columns: ["product_session_id"]
+            isOneToOne: false
+            referencedRelation: "nv2_product_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nv2_product_session_stages_stage_id_nv2_stages_id_fk"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "nv2_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nv2_product_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          product_id: string
+          session_number: number
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          product_id: string
+          session_number: number
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          product_id?: string
+          session_number?: number
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nv2_product_sessions_product_id_nv2_learning_products_id_fk"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "nv2_learning_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nv2_profiles: {
         Row: {
           auth_user_id: string | null
@@ -807,6 +887,53 @@ export type Database = {
             columns: ["stage_id"]
             isOneToOne: false
             referencedRelation: "nv2_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nv2_sessions: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          dm_sent_at: string | null
+          product_session_id: string
+          session_id: number
+          sns_id: string
+          sns_type: string
+          started_at: string | null
+          status: Database["public"]["Enums"]["nv2_session_status"]
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          dm_sent_at?: string | null
+          product_session_id: string
+          session_id?: number
+          sns_id: string
+          sns_type: string
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["nv2_session_status"]
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          dm_sent_at?: string | null
+          product_session_id?: string
+          session_id?: number
+          sns_id?: string
+          sns_type?: string
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["nv2_session_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nv2_sessions_product_session_id_nv2_product_sessions_id_fk"
+            columns: ["product_session_id"]
+            isOneToOne: false
+            referencedRelation: "nv2_product_sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -1209,6 +1336,7 @@ export type Database = {
         | "mastered"
       nv2_schedule_status: "pending" | "sent" | "failed" | "opened"
       nv2_schedule_type: "new" | "review" | "quiz" | "cheer" | "welcome"
+      nv2_session_status: "pending" | "in_progress" | "completed"
       nv2_sns_type: "discord" | "kakao" | "telegram" | "email"
       nv2_stage_type:
         | "welcome"
@@ -1413,6 +1541,7 @@ export const Constants = {
       ],
       nv2_schedule_status: ["pending", "sent", "failed", "opened"],
       nv2_schedule_type: ["new", "review", "quiz", "cheer", "welcome"],
+      nv2_session_status: ["pending", "in_progress", "completed"],
       nv2_sns_type: ["discord", "kakao", "telegram", "email"],
       nv2_stage_type: [
         "welcome",

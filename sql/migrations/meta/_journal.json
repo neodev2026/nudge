@@ -260,6 +260,20 @@
       "when": 1774591423693,
       "tag": "0036_open_proudstar",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1774616391064,
+      "tag": "0037_tiny_mister_sinister",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1774638625354,
+      "tag": "0038_special_baron_zemo",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { authenticatedRole } from "drizzle-orm/supabase";
@@ -88,8 +89,8 @@ export const nv2_stage_progress = pgTable(
       .on(table.next_review_at)
       .where(sql`${table.next_review_at} IS NOT NULL`),
 
-    // Logical unique constraint — one progress row per (user, stage)
-    index("nv2_stage_progress_user_stage_uidx").on(
+    // Unique constraint — one progress row per (user, stage)
+    uniqueIndex("nv2_stage_progress_user_stage_uidx").on(
       table.sns_type,
       table.sns_id,
       table.stage_id

@@ -152,29 +152,69 @@ export async function sendWelcomeDm(
 }
 
 /**
- * Sends a stage link DM to a user.
+ * Sends a session link DM to a user.
  *
- * Used by the cron dispatcher to deliver new / review stage links.
+ * Used by start-learning.tsx and cron/dispatch to deliver a session link.
+ * A session contains multiple stages — the link points to the session page.
  *
- * @param sns_id    - Discord user ID
- * @param stage_url - Full URL to the stage page
- * @param title     - Stage title used as the embed heading
+ * @param sns_id      - Discord user ID
+ * @param session_url - Full URL to the session page (/sessions/:sessionId)
+ * @param title       - Session title shown as the embed heading
+ * @param stage_count - Number of stages in the session (shown in description)
  */
-export async function sendStageDm(
+export async function sendSessionDm(
   sns_id: string,
-  stage_url: string,
-  title: string
+  session_url: string,
+  title: string,
+  stage_count: number
 ): Promise<void> {
   const channel_id = await openDmChannel(sns_id);
 
   await postEmbedWithButton(channel_id, {
-    content: "📖 새 학습 카드가 도착했어요!",
+    content: "📚 새 학습 세션이 준비됐어요!",
     embed: {
       title,
-      description: "아래 버튼을 눌러 20초 학습을 시작하세요.",
+      description: `총 ${stage_count}개 단계로 구성되어 있어요. 아래 버튼을 눌러 시작하세요!`,
       color: 0x5865f2, // Discord blurple
     },
     button_label: "학습 시작 →",
-    button_url: stage_url,
+    button_url: session_url,
   });
+}
+
+/**
+ * Sends a session completion congratulation DM.
+ *
+ * Sent after a user completes all stages in a session.
+ * Includes a link to the next session if one exists.
+ *
+ * @param sns_id           - Discord user ID
+ * @param next_session_url - Full URL to the next session (null if last session)
+ */
+export async function sendSessionCompleteDm(
+  sns_id: string,
+  next_session_url: string | null
+): Promise<void> {
+  const channel_id = await openDmChannel(sns_id);
+
+  if (next_session_url) {
+    await postEmbedWithButton(channel_id, {
+      content: "🎉 세션 완료! 정말 잘하셨어요!",
+      embed: {
+        title: "다음 세션도 도전해볼까요?",
+        description:
+          "내일 아침에 자동으로 발송되지만,\n지금 바로 시작하고 싶다면 아래 버튼을 눌러보세요!",
+        color: 0x4caf72, // Nudge green
+      },
+      button_label: "다음 세션 시작 →",
+      button_url: next_session_url,
+    });
+  } else {
+    // Last session — no next session link
+    const channel_id_final = await openDmChannel(sns_id);
+    await postMessage(
+      channel_id_final,
+      "🏆 모든 학습을 완료했습니다! 정말 대단해요!\n복습 일정이 자동으로 진행됩니다. 수고하셨습니다!"
+    );
+  }
 }
