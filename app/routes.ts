@@ -55,10 +55,20 @@ export default [
       index("features/admin/screens/dashboard.tsx"),
       // 🔜 파일 생성 후 주석 해제
       // route("/products/new",                        "features/admin/screens/product-new.tsx"),
-      // route("/products/:id",                        "features/admin/screens/product-detail.tsx"),
-      // route("/products/:id/stages/new",             "features/admin/screens/stage-new.tsx"),
-      // route("/products/:id/stages/:stageId",        "features/admin/screens/stage-edit.tsx"),
+      route("/products/:id",                        "features/admin/screens/product-detail.tsx"),
+      route("/products/:id/stages/new",             "features/admin/screens/stage-new.tsx"),
+      route("/products/:id/stages/:stageId",        "features/admin/screens/stage-edit.tsx"),
+      // route("/products/:id/sessions/new",          "features/admin/screens/session-new.tsx"),
+      // route("/products/:id/sessions/:sessionId",   "features/admin/screens/session-edit.tsx"),
     ]),
+  ]),
+
+  // Admin API actions (outside layout — no sidebar needed)
+  ...prefix("/admin/api", [
+    route("/stages/upsert",       "features/admin/api/stages.tsx"),
+    route("/stages/:id/delete",   "features/admin/api/stage-delete.tsx"),
+    route("/cards/upsert",        "features/admin/api/cards.tsx"),
+    route("/cards/:id/delete",    "features/admin/api/card-delete.tsx"),
   ]),
 
   // ── v2 Public layout ──────────────────────────────────────────────────
