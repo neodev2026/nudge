@@ -47,6 +47,20 @@ export default [
     ]),
   ]),
 
+  // ── Admin (이메일 로그인 필요) ────────────────────────────────────────────
+  route("/admin/login",  "features/admin/screens/login.tsx"),
+  route("/admin/logout", "features/admin/screens/logout.tsx"),
+  layout("core/layouts/admin.layout.tsx", [
+    ...prefix("/admin", [
+      index("features/admin/screens/dashboard.tsx"),
+      // 🔜 파일 생성 후 주석 해제
+      // route("/products/new",                        "features/admin/screens/product-new.tsx"),
+      // route("/products/:id",                        "features/admin/screens/product-detail.tsx"),
+      // route("/products/:id/stages/new",             "features/admin/screens/stage-new.tsx"),
+      // route("/products/:id/stages/:stageId",        "features/admin/screens/stage-edit.tsx"),
+    ]),
+  ]),
+
   // ── v2 Public layout ──────────────────────────────────────────────────
   layout("core/layouts/v2.layout.tsx", [
 
