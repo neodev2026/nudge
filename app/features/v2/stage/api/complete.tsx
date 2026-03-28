@@ -8,12 +8,6 @@
  *
  * Response (JSON):
  *   { ok: true, next_stage_id: string | null }
- *
- * Error responses:
- *   401 — not authenticated
- *   400 — missing sns_type / sns_id
- *   404 — stage not found
- *   409 — already completed (idempotent — returns ok: true)
  */
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/complete";
@@ -26,6 +20,7 @@ import {
   incrementNv2TodayNewCount,
   initNv2StageProgress,
 } from "../lib/queries.server";
+import type { SnsType } from "~/features/v2/shared/types";
 
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -56,6 +51,8 @@ export async function action({ request, params }: Route.ActionArgs) {
     );
   }
 
+  // Cast to SnsType — required for Supabase typed queries
+  const typed_sns_type = sns_type as SnsType;
   const stage_id = params.stageId;
 
   // ── Fetch stage ───────────────────────────────────────────────────────────
@@ -65,17 +62,34 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   // ── Ensure progress row exists ────────────────────────────────────────────
-  await initNv2StageProgress(client, sns_type, sns_id, stage_id).catch(
-    () => null // non-fatal if already exists
-  );
+  try {
+    await initNv2StageProgress(client, typed_sns_type, sns_id, stage_id);
+  } catch (err) {
+    console.error("[stage-complete] initNv2StageProgress failed:", err);
+    return routeData(
+      { error: "Failed to initialize progress" },
+      { status: 500, headers }
+    );
+  }
 
   // ── Mark complete ─────────────────────────────────────────────────────────
-  const result = await completeNv2Stage(client, sns_type, sns_id, stage_id);
+  let result;
+  try {
+    result = await completeNv2Stage(client, typed_sns_type, sns_id, stage_id);
+  } catch (err) {
+    console.error("[stage-complete] completeNv2Stage failed:", err);
+    return routeData(
+      { error: "Failed to complete stage" },
+      { status: 500, headers }
+    );
+  }
 
   // result is null when already completed — treat as idempotent success
   if (result !== null) {
-    // Increment today's new count on the profile (non-fatal on error)
-    await incrementNv2TodayNewCount(client, sns_type, sns_id).catch(() => null);
+    await incrementNv2TodayNewCount(client, typed_sns_type, sns_id).catch(
+      (err) =>
+        console.error("[stage-complete] incrementTodayNewCount failed:", err)
+    );
   }
 
   // ── Find next stage ───────────────────────────────────────────────────────

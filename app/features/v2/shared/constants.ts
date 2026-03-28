@@ -113,3 +113,16 @@ export const DAILY_GOAL_PRESETS = {
   standard:  { new: 5, review: 3 },
   intensive: { new: 10, review: 5 },
 } as const;
+
+/**
+ * User session status.
+ *
+ * pending     — session created, DM sent, user has not started yet
+ * in_progress — user has opened the session and completed at least one stage
+ * completed   — all stages in the session are completed
+ */
+export const V2_SESSION_STATUSES = [
+  "pending",
+  "in_progress",
+  "completed",
+] as const;

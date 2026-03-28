@@ -228,10 +228,15 @@ function StartButton({
   first_stage: { id: string } | null;
   is_authenticated: boolean;
 }) {
-  const fetcher = useFetcher<{ ok?: boolean; error?: string }>();
+  const fetcher = useFetcher<{ ok?: boolean; error?: string; session_id?: string }>();
   const is_sending = fetcher.state !== "idle";
   const is_sent = fetcher.data?.ok === true;
   const send_failed = !!fetcher.data?.error;
+
+  // Redirect to session page immediately after DM is sent
+  if (is_sent && fetcher.data?.session_id) {
+    window.location.href = `/sessions/${fetcher.data.session_id}`;
+  }
 
   // No stages yet
   if (!first_stage) {

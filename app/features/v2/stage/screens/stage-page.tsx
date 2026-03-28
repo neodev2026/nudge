@@ -61,11 +61,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     (meta?.sub as string | undefined) ??
     null;
 
+  // Read session context from query param — set by session-page when linking here
+  const session_id = new URL(request.url).searchParams.get("session");
+
   return {
     stage,
     is_authenticated: !!auth_user,
     sns_type: auth_user ? "discord" : null,
     sns_id,
+    session_id, // null when accessed directly (not from a session)
     headers,
   };
 }
@@ -75,7 +79,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 // ---------------------------------------------------------------------------
 
 export default function StagePage() {
-  const { stage, is_authenticated, sns_type, sns_id } =
+  const { stage, is_authenticated, sns_type, sns_id, session_id } =
     useLoaderData<typeof loader>();
 
   const cards = stage.nv2_cards;
@@ -124,14 +128,19 @@ export default function StagePage() {
     );
   }
 
-  // Redirect to next stage after complete action resolves
+  // After complete: return to session page if context exists, otherwise next stage
   const complete_data = complete_fetcher.data as
     | { ok: boolean; next_stage_id: string | null }
     | undefined;
 
-  if (complete_data?.ok && complete_data.next_stage_id) {
-    // Navigate to the next stage
-    window.location.href = `/stages/${complete_data.next_stage_id}`;
+  if (complete_data?.ok) {
+    if (session_id) {
+      // Always return to session page — session tracks overall progress
+      window.location.href = `/sessions/${session_id}`;
+    } else if (complete_data.next_stage_id) {
+      // Fallback: direct stage navigation when accessed outside a session
+      window.location.href = `/stages/${complete_data.next_stage_id}`;
+    }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -190,6 +199,7 @@ export default function StagePage() {
           is_completing={complete_fetcher.state !== "idle"}
           complete_done={!!complete_data?.ok}
           next_stage_id={complete_data?.next_stage_id ?? null}
+          session_id={session_id}
           onRetry={handleRetry}
           onComplete={handleComplete}
         />
@@ -324,6 +334,7 @@ function EvalView({
   is_completing,
   complete_done,
   next_stage_id,
+  session_id,
   onRetry,
   onComplete,
 }: {
@@ -332,6 +343,7 @@ function EvalView({
   is_completing: boolean;
   complete_done: boolean;
   next_stage_id: string | null;
+  session_id: string | null;
   onRetry: () => void;
   onComplete: () => void;
 }) {
@@ -368,25 +380,15 @@ function EvalView({
           </button>
         </div>
       ) : complete_done ? (
-        /* Completed */
+        /* Completed — window.location redirect is already fired above */
         <div className="w-full space-y-3">
           <div className="rounded-2xl bg-[#4caf72]/10 px-6 py-5 text-center">
             <div className="mb-1 text-3xl">🎉</div>
             <p className="font-bold text-[#1a2744]">암기 완료!</p>
             <p className="text-sm text-[#6b7a99]">
-              {next_stage_id
-                ? "다음 카드로 이동 중..."
-                : "모든 단계를 완료했어요!"}
+              {session_id ? "세션 페이지로 돌아가는 중..." : next_stage_id ? "다음 카드로 이동 중..." : "모든 단계를 완료했어요!"}
             </p>
           </div>
-          {!next_stage_id && (
-            <Link
-              to="/products"
-              className="block w-full rounded-2xl bg-[#1a2744] py-4 text-center text-base font-extrabold text-white"
-            >
-              상품 목록으로
-            </Link>
-          )}
         </div>
       ) : (
         /* Eval buttons */

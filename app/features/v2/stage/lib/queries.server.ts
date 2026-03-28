@@ -128,11 +128,24 @@ export async function initNv2StageProgress(
   sns_id: string,
   stage_id: string
 ) {
-  const { error } = await client.from("nv2_stage_progress").upsert(
-    { sns_type, sns_id, stage_id },
-    // Logical unique constraint: (sns_type, sns_id, stage_id)
-    { onConflict: "sns_type,sns_id,stage_id", ignoreDuplicates: true }
-  );
+  // Check if a progress row already exists before inserting.
+  // Using insert with ON CONFLICT requires a unique index — this avoids
+  // relying on that constraint being in sync with the schema.
+  const { data: existing } = await client
+    .from("nv2_stage_progress")
+    .select("progress_id")
+    .eq("sns_type", sns_type)
+    .eq("sns_id", sns_id)
+    .eq("stage_id", stage_id)
+    .maybeSingle();
+
+  if (existing) return; // Row already exists — nothing to do
+
+  const { error } = await client.from("nv2_stage_progress").insert({
+    sns_type,
+    sns_id,
+    stage_id,
+  });
 
   if (error) throw error;
 }
