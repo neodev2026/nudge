@@ -14,17 +14,25 @@ import {
 import { authenticatedRole } from "drizzle-orm/supabase";
 import { tstz, eventTstz, snsIdentity } from "~/core/db/helpers.server";
 import { isAdmin } from "~/core/db/helpers.rls";
-import { V2_SESSION_STATUSES } from "~/features/v2/shared/constants";
+import { V2_SESSION_STATUSES, V2_SESSION_KINDS } from "~/features/v2/shared/constants";
 import { nv2_learning_products } from "~/features/v2/products/schema";
 import { nv2_stages } from "~/features/v2/stage/schema";
 
 // ---------------------------------------------------------------------------
-// Enum
+// Enums
 // ---------------------------------------------------------------------------
 
 export const nv2SessionStatus = pgEnum(
   "nv2_session_status",
   V2_SESSION_STATUSES
+);
+
+/**
+ * Session kind — distinguishes first-time learning from spaced-repetition review.
+ */
+export const nv2SessionKind = pgEnum(
+  "nv2_session_kind",
+  V2_SESSION_KINDS
 );
 
 // ---------------------------------------------------------------------------
@@ -192,6 +200,12 @@ export const nv2_sessions = pgTable(
     product_session_id: uuid("product_session_id")
       .notNull()
       .references(() => nv2_product_sessions.id, { onDelete: "cascade" }),
+
+    // Distinguishes new learning from spaced-repetition review
+    session_kind: nv2SessionKind("session_kind").notNull().default("new"),
+
+    // For review sessions: which review round (1~4). null for new sessions.
+    review_round: integer("review_round"),
 
     status: nv2SessionStatus("status").notNull().default("pending"),
 

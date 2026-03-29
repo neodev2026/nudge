@@ -897,7 +897,9 @@ export type Database = {
           created_at: string
           dm_sent_at: string | null
           product_session_id: string
+          review_round: number | null
           session_id: number
+          session_kind: Database["public"]["Enums"]["nv2_session_kind"]
           sns_id: string
           sns_type: string
           started_at: string | null
@@ -909,7 +911,9 @@ export type Database = {
           created_at?: string
           dm_sent_at?: string | null
           product_session_id: string
+          review_round?: number | null
           session_id?: number
+          session_kind?: Database["public"]["Enums"]["nv2_session_kind"]
           sns_id: string
           sns_type: string
           started_at?: string | null
@@ -921,7 +925,9 @@ export type Database = {
           created_at?: string
           dm_sent_at?: string | null
           product_session_id?: string
+          review_round?: number | null
           session_id?: number
+          session_kind?: Database["public"]["Enums"]["nv2_session_kind"]
           sns_id?: string
           sns_type?: string
           started_at?: string | null
@@ -1336,6 +1342,7 @@ export type Database = {
         | "mastered"
       nv2_schedule_status: "pending" | "sent" | "failed" | "opened"
       nv2_schedule_type: "new" | "review" | "quiz" | "cheer" | "welcome"
+      nv2_session_kind: "new" | "review"
       nv2_session_status: "pending" | "in_progress" | "completed"
       nv2_sns_type: "discord" | "kakao" | "telegram" | "email"
       nv2_stage_type:
@@ -1541,6 +1548,7 @@ export const Constants = {
       ],
       nv2_schedule_status: ["pending", "sent", "failed", "opened"],
       nv2_schedule_type: ["new", "review", "quiz", "cheer", "welcome"],
+      nv2_session_kind: ["new", "review"],
       nv2_session_status: ["pending", "in_progress", "completed"],
       nv2_sns_type: ["discord", "kakao", "telegram", "email"],
       nv2_stage_type: [
