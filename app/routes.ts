@@ -30,12 +30,11 @@ export default [
       route("/locale", "features/settings/api/set-locale.tsx"),
     ]),
 
-    // v2 Cron endpoints — uncomment as each file is created
-    // ...prefix("/v2/cron", [
-    //   route("/dispatch",        "features/v2/cron/api/dispatch.tsx"),
-    //   route("/review-schedule", "features/v2/cron/api/review-schedule.tsx"),
-    //   route("/daily-reset",     "features/v2/cron/api/daily-reset.tsx"),
-    // ]),
+    // v2 Cron endpoints
+    ...prefix("/v2/cron", [
+      route("/dispatch",     "features/v2/cron/api/dispatch.tsx"),
+      route("/daily-reset",  "features/v2/cron/api/daily-reset.tsx"),
+    ]),
 
     // ✅ 구현 완료
     ...prefix("/v2", [

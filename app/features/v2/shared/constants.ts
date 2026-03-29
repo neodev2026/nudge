@@ -115,6 +115,17 @@ export const DAILY_GOAL_PRESETS = {
 } as const;
 
 /**
+ * User session kind.
+ *
+ * new    — first-time learning session
+ * review — spaced-repetition review session (review_round 1~4)
+ */
+export const V2_SESSION_KINDS = [
+  "new",
+  "review",
+] as const;
+
+/**
  * User session status.
  *
  * pending     — session created, DM sent, user has not started yet

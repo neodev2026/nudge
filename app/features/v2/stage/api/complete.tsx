@@ -84,7 +84,8 @@ export async function action({ request, params }: Route.ActionArgs) {
     );
   }
 
-  // result is null when already completed — treat as idempotent success
+  // result is null when already completed (e.g. review session re-completing a stage)
+  // Treat as idempotent success — still return ok:true so the client can redirect
   if (result !== null) {
     await incrementNv2TodayNewCount(client, typed_sns_type, sns_id).catch(
       (err) =>
