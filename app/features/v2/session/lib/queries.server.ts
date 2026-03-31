@@ -191,6 +191,7 @@ export async function getSessionIdentity(
   client: SupabaseClient<Database>,
   session_id: string
 ) {
+  // Step 1: Fetch session row (public select policy allows anon access)
   const { data, error } = await client
     .from("nv2_sessions")
     .select(
@@ -201,10 +202,7 @@ export async function getSessionIdentity(
       product_session_id,
       session_kind,
       review_round,
-      status,
-      nv2_product_sessions!inner (
-        product_id
-      )
+      status
     `
     )
     .eq("session_id", session_id)
@@ -213,14 +211,22 @@ export async function getSessionIdentity(
   if (error) throw error;
   if (!data) return null;
 
-  // Resolve link_access from nv2_subscriptions
-  const ps = data.nv2_product_sessions as any;
+  // Step 2: Fetch product_id from product_session (public select policy)
+  const { data: ps } = await client
+    .from("nv2_product_sessions")
+    .select("product_id")
+    .eq("id", data.product_session_id)
+    .maybeSingle();
+
+  // Step 3: Resolve link_access from nv2_subscriptions
+  // nv2_subscriptions has no public select policy — use service role or default to 'public'
+  // For anon users, sub query will return null → default to 'public'
   const { data: sub } = await client
     .from("nv2_subscriptions")
     .select("link_access")
     .eq("sns_type", data.sns_type)
     .eq("sns_id", data.sns_id)
-    .eq("product_id", ps.product_id)
+    .eq("product_id", ps?.product_id ?? "")
     .maybeSingle();
 
   return {
@@ -319,4 +325,52 @@ export async function completeNv2UserSession(
 
   if (error) throw error;
   return data; // null if already completed
+}
+
+// ---------------------------------------------------------------------------
+// Subscriptions
+// ---------------------------------------------------------------------------
+
+/**
+ * Upserts a subscription row for a user/product pair.
+ * Called when:
+ *   - User taps "학습 시작" on a product (start-learning.tsx)
+ *   - New user completes Discord OAuth (discord-callback.tsx)
+ *
+ * Uses upsert to avoid duplicates — safe to call multiple times.
+ * Does NOT overwrite link_access if a row already exists.
+ */
+export async function upsertNv2Subscription(
+  client: SupabaseClient<Database>,
+  sns_type: SnsType,
+  sns_id: string,
+  product_id: string
+) {
+  // Check if subscription already exists
+  const { data: existing } = await client
+    .from("nv2_subscriptions")
+    .select("id, link_access")
+    .eq("sns_type", sns_type)
+    .eq("sns_id", sns_id)
+    .eq("product_id", product_id)
+    .maybeSingle();
+
+  if (existing) return existing; // Already subscribed — preserve existing settings
+
+  // Create new subscription with defaults
+  const { data, error } = await client
+    .from("nv2_subscriptions")
+    .insert({
+      sns_type,
+      sns_id,
+      product_id,
+      link_access: "public",
+      is_active: true,
+      started_at: new Date().toISOString(),
+    })
+    .select("id, link_access")
+    .single();
+
+  if (error) throw error;
+  return data;
 }

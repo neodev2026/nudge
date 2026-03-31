@@ -60,9 +60,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
   let sns_type: string | null = null;
   let sns_id: string | null = null;
+  let link_access: string = "members_only"; // default — requires login when no session context
 
   if (session_id) {
-    // Resolve identity from the session row (works without login for public sessions)
     const { getSessionIdentity } = await import(
       "~/features/v2/session/lib/queries.server"
     );
@@ -73,6 +73,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     if (identity) {
       sns_type = identity.sns_type;
       sns_id = identity.sns_id;
+      link_access = identity.link_access;
 
       // members_only: must be authenticated to proceed
       if (identity.link_access === "members_only" && !is_authenticated) {
@@ -93,6 +94,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       (meta?.sub as string | undefined) ??
       null;
     sns_type = auth_user ? "discord" : null;
+    // No session = no identity resolution = login required
+    link_access = "members_only";
   }
 
   return {
@@ -101,6 +104,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     sns_type,
     sns_id,
     session_id,
+    link_access,
   };
 }
 
@@ -109,7 +113,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 // ---------------------------------------------------------------------------
 
 export default function StagePage() {
-  const { stage, is_authenticated, sns_type, sns_id, session_id } =
+  const { stage, is_authenticated, sns_type, sns_id, session_id, link_access } =
     useLoaderData<typeof loader>();
 
   const cards = stage.nv2_cards;
@@ -122,6 +126,9 @@ export default function StagePage() {
   const current_card = cards[card_index];
   const is_last_card = card_index === cards.length - 1;
 
+  // public 접근: sns_id는 session row에서 resolve됨 — 로그인 불필요
+  const can_submit = !!sns_type && !!sns_id;
+
   // ── Handlers ──────────────────────────────────────────────────────────────
 
   function handleNext() {
@@ -133,7 +140,7 @@ export default function StagePage() {
   }
 
   function handleRetry() {
-    if (!is_authenticated || !sns_type || !sns_id) return;
+    if (!can_submit) return;
     retry_fetcher.submit(
       { sns_type, sns_id },
       {
@@ -147,7 +154,7 @@ export default function StagePage() {
   }
 
   function handleComplete() {
-    if (!is_authenticated || !sns_type || !sns_id) return;
+    if (!can_submit) return;
     complete_fetcher.submit(
       { sns_type, sns_id },
       {
@@ -226,6 +233,8 @@ export default function StagePage() {
         <EvalView
           stage_title={stage.title}
           is_authenticated={is_authenticated}
+          can_submit={can_submit}
+          link_access={link_access ?? "public"}
           is_completing={complete_fetcher.state !== "idle"}
           complete_done={!!complete_data?.ok}
           next_stage_id={complete_data?.next_stage_id ?? null}
@@ -361,6 +370,8 @@ function CardView({
 function EvalView({
   stage_title,
   is_authenticated,
+  can_submit,
+  link_access,
   is_completing,
   complete_done,
   next_stage_id,
@@ -370,6 +381,8 @@ function EvalView({
 }: {
   stage_title: string;
   is_authenticated: boolean;
+  can_submit: boolean;
+  link_access: string;
   is_completing: boolean;
   complete_done: boolean;
   next_stage_id: string | null;
@@ -389,8 +402,8 @@ function EvalView({
         </p>
       </div>
 
-      {!is_authenticated ? (
-        /* Unauthenticated — prompt login */
+      {/* members_only + 비로그인: Discord 로그인 안내 */}
+      {!is_authenticated && link_access === "members_only" ? (
         <div className="w-full space-y-3">
           <p className="text-sm text-[#6b7a99]">
             학습 기록을 저장하려면 Discord 로그인이 필요합니다.

@@ -22,6 +22,7 @@ import makeServerClient from "~/core/lib/supa-client.server";
 import { upsertNv2Profile, getNv2ProfileByAuthUserId } from "../lib/queries.server";
 import { sendWelcomeDm } from "../lib/discord.server";
 import { getNv2WelcomeStage } from "~/features/v2/stage/lib/queries.server";
+import { upsertNv2Subscription } from "~/features/v2/session/lib/queries.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
@@ -106,6 +107,18 @@ export async function loader({ request }: Route.LoaderArgs) {
     const welcome_url = welcome_stage
       ? `${origin}/stages/${welcome_stage.id}`
       : `${origin}/products`;
+
+    // Create subscription for the welcome product
+    if (welcome_stage?.learning_product_id) {
+      await upsertNv2Subscription(
+        client,
+        "discord",
+        sns_id,
+        welcome_stage.learning_product_id
+      ).catch((err) => {
+        console.error("[discord-callback] upsertNv2Subscription failed:", err);
+      });
+    }
 
     sendWelcomeDm(sns_id, display_name, welcome_url).catch((err) => {
       console.error("[discord-callback] sendWelcomeDm failed:", err);

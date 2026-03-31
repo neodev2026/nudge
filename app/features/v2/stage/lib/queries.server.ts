@@ -59,7 +59,7 @@ export async function getNv2StageWithCards(
 export async function getNv2WelcomeStage(client: SupabaseClient<Database>) {
   const { data, error } = await client
     .from("nv2_stages")
-    .select("id, title")
+    .select("id, title, learning_product_id")
     .eq("stage_type", "welcome")
     .eq("is_active", true)
     .order("created_at", { ascending: true })

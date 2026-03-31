@@ -85,10 +85,10 @@ export const nv2_stages = pgTable(
     ),
     index("nv2_stages_type_idx").on(table.stage_type),
 
-    // RLS: Any authenticated user can view active stages
+    // RLS: Anyone can view active stages (needed for public session link access)
     pgPolicy("nv2_stages_select_active", {
       for: "select",
-      to: authenticatedRole,
+      to: "public",
       using: sql`${table.is_active} = true`,
     }),
 
@@ -154,10 +154,10 @@ export const nv2_cards = pgTable(
     index("nv2_cards_stage_order_idx").on(table.stage_id, table.display_order),
     index("nv2_cards_type_idx").on(table.card_type),
 
-    // RLS: Stage pages are link-accessed without login — active cards are public
+    // RLS: Anyone can view active cards (needed for public session link access)
     pgPolicy("nv2_cards_select_active", {
       for: "select",
-      to: authenticatedRole,
+      to: "public",
       using: sql`${table.is_active} = true`,
     }),
 
