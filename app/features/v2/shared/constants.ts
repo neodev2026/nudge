@@ -148,3 +148,21 @@ export const V2_SESSION_STATUSES = [
   "in_progress",
   "completed",
 ] as const;
+
+/**
+ * Quiz timer duration in seconds per stage_type.
+ *
+ * Configurable per stage_type — adjust these values to change quiz duration
+ * without touching UI code.
+ *
+ * quiz_5    : 5 stages × 4 seconds = 20 seconds
+ * quiz_10   : 10 stages × 4 seconds = 40 seconds
+ * quiz_daily: same as quiz_5 (default)
+ * quiz_final: 60 seconds (comprehensive review)
+ */
+export const QUIZ_TIMER_SECONDS: Record<string, number> = {
+  quiz_5:     20,
+  quiz_10:    40,
+  quiz_daily: 20,
+  quiz_final: 60,
+} as const;

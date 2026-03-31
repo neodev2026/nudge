@@ -30,11 +30,12 @@ export default [
       route("/locale", "features/settings/api/set-locale.tsx"),
     ]),
 
-    // v2 Cron endpoints
-    ...prefix("/v2/cron", [
-      route("/dispatch",     "features/v2/cron/api/dispatch.tsx"),
-      route("/daily-reset",  "features/v2/cron/api/daily-reset.tsx"),
-    ]),
+    // v2 Cron endpoints — uncomment as each file is created
+    // ...prefix("/v2/cron", [
+    //   route("/dispatch",        "features/v2/cron/api/dispatch.tsx"),
+    //   route("/review-schedule", "features/v2/cron/api/review-schedule.tsx"),
+    //   route("/daily-reset",     "features/v2/cron/api/daily-reset.tsx"),
+    // ]),
 
     // ✅ 구현 완료
     ...prefix("/v2", [
@@ -42,7 +43,7 @@ export default [
       route("/stage/:stageId/retry",        "features/v2/stage/api/retry.tsx"),
       route("/products/:slug/start",        "features/v2/products/api/start-learning.tsx"),
       route("/sessions/:sessionId/complete","features/v2/session/api/complete.tsx"),
-      // route("/quiz/:quizId/result",      "features/v2/quiz/api/result.tsx"),
+      route("/quiz/:stageId/result",        "features/v2/quiz/api/result.tsx"),
     ]),
   ]),
 
@@ -86,8 +87,8 @@ export default [
     // ✅ 구현 완료
     route("/sessions/:sessionId", "features/v2/session/screens/session-page.tsx"),
 
-    // 🔜 파일 생성 후 주석 해제
-    // route("/quiz/:quizId", "features/v2/quiz/screens/quiz-page.tsx"),
+    // ✅ 구현 완료
+    route("/quiz/:stageId", "features/v2/quiz/screens/quiz-page.tsx"),
 
     // ✅ 구현 완료
     ...prefix("/auth", [
