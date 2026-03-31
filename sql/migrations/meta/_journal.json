@@ -225,6 +225,104 @@
       "when": 1772750589015,
       "tag": "0031_thankful_bloodstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1774282679322,
+      "tag": "0032_absent_impossible_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1774368383259,
+      "tag": "0033_superb_ezekiel",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1774524000702,
+      "tag": "0034_mysterious_iceman",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1774568300640,
+      "tag": "0035_awesome_frog_thor",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1774591423693,
+      "tag": "0036_open_proudstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1774616391064,
+      "tag": "0037_tiny_mister_sinister",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1774638625354,
+      "tag": "0038_special_baron_zemo",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1774770788929,
+      "tag": "0039_tense_mandarin",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1774804132080,
+      "tag": "0040_rapid_mac_gargan",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1774930206061,
+      "tag": "0041_open_forge",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1774931578714,
+      "tag": "0042_burly_jigsaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1774932005209,
+      "tag": "0043_abnormal_colleen_wing",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1774933769689,
+      "tag": "0044_late_lord_tyger",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1774975915094,
+      "tag": "0045_youthful_slayback",
+      "breakpoints": true
     }
   ]
 }
