@@ -100,6 +100,13 @@ export const nv2_product_sessions = pgTable(
       to: "service_role",
       using: sql`true`,
     }),
+
+    // RLS: n8n_worker can insert product sessions (used by card generation workflow)
+    pgPolicy("nv2_product_sessions_n8n_insert", {
+      for: "insert",
+      to: 'n8n_worker',
+      withCheck: sql`true`,
+    }),
   ]
 );
 
@@ -163,6 +170,13 @@ export const nv2_product_session_stages = pgTable(
       for: "all",
       to: "service_role",
       using: sql`true`,
+    }),
+
+    // RLS: n8n_worker can insert session stages (used by card generation workflow)
+    pgPolicy("nv2_product_session_stages_n8n_insert", {
+      for: "insert",
+      to: 'n8n_worker',
+      withCheck: sql`true`,
     }),
   ]
 );
@@ -283,15 +297,6 @@ export const nv2_sessions = pgTable(
     pgPolicy("nv2_sessions_service_all", {
       for: "all",
       to: "service_role",
-      using: sql`true`,
-    }),
-
-    // RLS: Public select — allows anyone with the session link to read session row.
-    // sns_type/sns_id are resolved from the session itself for public link_access.
-    // Security is provided by the unguessable UUID session_id.
-    pgPolicy("nv2_sessions_select_public", {
-      for: "select",
-      to: "public",
       using: sql`true`,
     }),
   ]
