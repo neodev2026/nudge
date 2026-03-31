@@ -34,7 +34,7 @@ export const getNv2ProductsByCategory = async (
       "id, category, name, description, slug, icon, meta, total_stages, display_order"
     )
     .eq("is_active", true)
-    .eq("category", category)
+    .eq("category", category as any)
     .order("display_order", { ascending: true });
 
   if (error) throw error;

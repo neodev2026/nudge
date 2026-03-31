@@ -49,7 +49,7 @@ export async function adminUpsertProduct(
 ) {
   const { data, error } = await client
     .from("nv2_learning_products")
-    .upsert(product)
+    .upsert(product as any)
     .select("id")
     .single();
 
@@ -108,7 +108,7 @@ export async function adminUpsertStage(
 ) {
   const { data, error } = await client
     .from("nv2_stages")
-    .upsert(stage)
+    .upsert(stage as any)
     .select("id")
     .single();
 
@@ -161,7 +161,7 @@ export async function adminUpsertCard(
 ) {
   const { data, error } = await client
     .from("nv2_cards")
-    .upsert(card)
+    .upsert(card as any)
     .select("id")
     .single();
 
