@@ -1,22 +1,16 @@
 /**
  * Admin Stage API
  *
- * POST /admin/api/stages/upsert  — create or update a stage
- * POST /admin/api/stages/:id/delete — delete a stage
+ * POST /admin/api/stages/upsert — create or update a stage
  */
-import { redirect } from "react-router";
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/stages";
 
-import makeServerClient from "~/core/lib/supa-client.server";
-import { requireAdmin } from "~/features/admin/lib/guards.server";
-import {
-  adminUpsertStage,
-  adminDeleteStage,
-} from "~/features/admin/lib/queries.server";
-
-// POST /admin/api/stages/upsert
 export async function action({ request }: Route.ActionArgs) {
+  const { default: makeServerClient } = await import("~/core/lib/supa-client.server");
+  const { requireAdmin } = await import("~/features/admin/lib/guards.server");
+  const { adminUpsertStage } = await import("~/features/admin/lib/queries.server");
+
   const [client] = makeServerClient(request);
   await requireAdmin(client, request);
 

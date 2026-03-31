@@ -1,18 +1,25 @@
 /**
  * /sessions/:sessionId
  *
- * Session page — displays stages in order within a session.
+ * Session page — redesigned layout:
+ *   - Top: Leni image + guidance message
+ *   - Bottom: stage list
+ *   - No manual complete button — auto-completes when all stages done
+ *
+ * Auto-complete flow:
+ *   Each stage completion → returns to session page
+ *   → useEffect detects all_completed → auto-calls session complete API
+ *   → complete_data received → shows completion message + next session button
  *
  * Access control (per subscription.link_access):
- *   public       — anyone with the link can view and complete stages.
- *                  sns_type/sns_id resolved from the session row itself.
- *   members_only — requires Discord OAuth login.
- *                  redirects to /auth/discord/start?next=/sessions/:id
+ *   public       — no login required, sns_id resolved from session row
+ *   members_only — redirects to Discord login
  */
 import type { Route } from "./+types/session-page";
 
 import { Link, useLoaderData, useFetcher } from "react-router";
 import { redirect } from "react-router";
+import { useEffect } from "react";
 
 import makeServerClient from "~/core/lib/supa-client.server";
 import {
@@ -21,7 +28,6 @@ import {
   getSessionIdentity,
 } from "~/features/v2/session/lib/queries.server";
 import { getNv2StageProgress } from "~/features/v2/stage/lib/queries.server";
-import type { SnsType } from "~/features/v2/shared/types";
 
 // ---------------------------------------------------------------------------
 // Meta
@@ -48,16 +54,11 @@ export const meta: Route.MetaFunction = ({ matches }) => {
 export async function loader({ request, params }: Route.LoaderArgs) {
   const [client] = makeServerClient(request);
 
-  // ── Resolve session identity (sns_type/sns_id from session row) ───────────
   const identity = await getSessionIdentity(client, params.sessionId);
-
-  if (!identity) {
-    throw new Response("Session not found", { status: 404 });
-  }
+  if (!identity) throw new Response("Session not found", { status: 404 });
 
   const { sns_type, sns_id, link_access } = identity;
 
-  // ── Access control ────────────────────────────────────────────────────────
   const { data: auth_session } = await client.auth.getSession();
   const auth_user = auth_session.session?.user ?? null;
   const is_authenticated = !!auth_user;
@@ -67,47 +68,33 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     throw redirect(`/auth/discord/start?next=${next}`);
   }
 
-  // ── Load product session + stages ─────────────────────────────────────────
   const product_session = await getNv2ProductSessionWithStages(
     client,
     identity.product_session_id
   );
-
-  if (!product_session) {
-    throw new Response("Product session not found", { status: 404 });
-  }
+  if (!product_session) throw new Response("Product session not found", { status: 404 });
 
   const session_title =
     product_session.title ?? `Session ${product_session.session_number}`;
 
-  // ── Mark session as in_progress on first open ─────────────────────────────
-  // Works for both authenticated and public access
   if (identity.status === "pending") {
     await startNv2UserSession(client, params.sessionId).catch(() => null);
   }
 
-  // ── Fetch progress for each stage ─────────────────────────────────────────
   const stages = product_session.nv2_product_session_stages ?? [];
 
   const stage_progresses = await Promise.all(
     stages.map(async (s) => {
       const progress = await getNv2StageProgress(
-        client,
-        sns_type,
-        sns_id,
-        s.stage_id
+        client, sns_type, sns_id, s.stage_id
       ).catch(() => null);
-      return {
-        stage_id: s.stage_id,
-        completed: !!progress?.completed_at,
-      };
+      return { stage_id: s.stage_id, completed: !!progress?.completed_at };
     })
   );
 
   const progress_map = Object.fromEntries(
     stage_progresses.map((p) => [p.stage_id, p.completed])
   );
-
   const completed_count = stage_progresses.filter((p) => p.completed).length;
   const all_completed = completed_count === stages.length && stages.length > 0;
 
@@ -121,7 +108,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     total_count: stages.length,
     all_completed,
     is_authenticated,
-    // sns_type/sns_id from session row — available even without login (public)
     sns_type,
     sns_id,
     link_access,
@@ -150,15 +136,21 @@ export default function SessionPage() {
   const is_completing = complete_fetcher.state !== "idle";
   const complete_data = complete_fetcher.data;
 
-  function handleCompleteSession() {
-    complete_fetcher.submit(
-      {},
-      {
-        method: "POST",
-        action: `/api/v2/sessions/${session_id}/complete`,
-      }
-    );
-  }
+  // ── Auto-complete when all stages are done ────────────────────────────────
+  useEffect(() => {
+    if (all_completed && !complete_data && !is_completing) {
+      complete_fetcher.submit(
+        {},
+        {
+          method: "POST",
+          action: `/api/v2/sessions/${session_id}/complete`,
+        }
+      );
+    }
+  }, [all_completed]);
+
+  const is_done = !!complete_data?.ok;
+  const next_session_id = complete_data?.next_session_id ?? null;
 
   return (
     <div className="min-h-screen bg-[#fdf8f0]">
@@ -180,7 +172,7 @@ export default function SessionPage() {
                 {session_title}
               </h1>
             </div>
-            {/* Progress */}
+            {/* Progress count */}
             <div className="text-right">
               <p className="font-display text-2xl font-black text-[#1a2744]">
                 {completed_count}
@@ -206,82 +198,116 @@ export default function SessionPage() {
         </div>
       </div>
 
-      {/* Stage list */}
-      <div className="mx-auto max-w-lg space-y-3 px-6 py-8">
-        {stages.map((s, i) => {
-          const stage = s.nv2_stages;
-          if (!stage) return null;
-          const is_completed = progress_map[s.stage_id] ?? false;
-
-          // Find first incomplete stage to highlight as "current"
-          const first_incomplete_idx = stages.findIndex(
-            (st) => !(progress_map[st.stage_id] ?? false)
-          );
-          const is_current = i === first_incomplete_idx;
-
-          return (
-            <StageRow
-              key={s.stage_id}
-              index={i + 1}
-              stage_id={s.stage_id}
-              title={stage.title}
-              stage_type={stage.stage_type}
-              is_completed={is_completed}
-              is_current={is_current}
-              is_authenticated={is_authenticated}
-              session_id={session_id}
+      <div className="mx-auto max-w-lg px-6">
+        {/* ── Leni + message section ── */}
+        <div className="flex flex-col items-center py-8 text-center">
+          {/* Leni image */}
+          <div className="relative mb-4">
+            <img
+              src="/images/leni/leni-hero.png"
+              alt="Leni"
+              className={[
+                "h-44 w-auto object-contain transition-all duration-500",
+                is_done ? "drop-shadow-[0_8px_24px_rgba(76,175,114,0.35)]" : "",
+              ].join(" ")}
             />
-          );
-        })}
-
-        {/* Session complete button */}
-        {all_completed && !complete_data?.ok && (
-          <div className="pt-4">
-            <button
-              onClick={handleCompleteSession}
-              disabled={is_completing}
-              className="w-full rounded-2xl bg-[#4caf72] py-4 text-base font-extrabold text-white shadow-[0_4px_16px_rgba(76,175,114,0.30)] transition-all hover:bg-[#5ecb87] disabled:opacity-60"
-            >
-              {is_completing ? "처리 중..." : "세션 완료 🎉"}
-            </button>
-          </div>
-        )}
-
-        {/* Complete result */}
-        {complete_data?.ok && (
-          <div className="rounded-2xl bg-[#4caf72]/10 px-6 py-6 text-center">
-            <div className="mb-2 text-3xl">🎉</div>
-            <p className="font-bold text-[#1a2744]">세션 완료!</p>
-            <p className="mt-1 text-sm text-[#6b7a99]">
-              {complete_data.next_session_id
-                ? "Discord로 다음 세션 링크를 보내드렸어요!"
-                : "모든 학습을 완료했습니다! 🏆"}
-            </p>
-            {complete_data.next_session_id && (
-              <Link
-                to={`/sessions/${complete_data.next_session_id}`}
-                className="mt-4 inline-block rounded-xl bg-[#1a2744] px-6 py-3 text-sm font-extrabold text-white"
-              >
-                지금 바로 다음 세션 →
-              </Link>
+            {/* Sparkle overlay on completion */}
+            {is_done && (
+              <div className="absolute -top-2 -right-2 text-2xl animate-bounce">
+                🌟
+              </div>
             )}
           </div>
-        )}
 
-        {/* Not authenticated notice — only shown for members_only sessions */}
-        {!is_authenticated && link_access === "members_only" && (
-          <div className="rounded-2xl border border-[#5865F2]/20 bg-[#5865F2]/5 px-5 py-4 text-center">
-            <p className="mb-3 text-sm text-[#6b7a99]">
-              학습 기록을 저장하려면 Discord 로그인이 필요합니다.
+          {/* Guidance message */}
+          {!is_done ? (
+            /* Before completion */
+            <div>
+              <p className="font-display text-lg font-black text-[#1a2744]">
+                아래의 모든 학습을 완료하세요!
+              </p>
+              <p className="mt-1 text-sm text-[#6b7a99]">
+                순서대로 진행하면 더 효과적이에요 ✨
+              </p>
+            </div>
+          ) : (
+            /* After completion */
+            <div className="w-full">
+              <p className="font-display text-lg font-black text-[#4caf72]">
+                모든 학습을 완료하셨네요! 🎉
+              </p>
+              {next_session_id ? (
+                <>
+                  <p className="mt-1 text-sm text-[#6b7a99]">
+                    다음 세션 링크를 Discord로 보내드렸어요!
+                    <br />
+                    아니면 여기서 바로 시작할까요?
+                  </p>
+                  <Link
+                    to={`/sessions/${next_session_id}`}
+                    className="mt-4 inline-block rounded-2xl bg-[#1a2744] px-8 py-3.5 text-sm font-extrabold text-white shadow-[0_4px_16px_rgba(26,39,68,0.20)] transition-all hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(26,39,68,0.25)]"
+                  >
+                    지금 바로 다음 세션 →
+                  </Link>
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-[#6b7a99]">
+                  모든 학습을 완료했습니다! 🏆
+                  <br />
+                  수고하셨어요!
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Processing indicator */}
+          {all_completed && is_completing && (
+            <p className="mt-3 text-xs text-[#6b7a99] animate-pulse">
+              완료 처리 중...
             </p>
-            <Link
-              to="/auth/discord/start"
-              className="inline-flex items-center gap-2 rounded-xl bg-[#5865F2] px-5 py-2.5 text-sm font-extrabold text-white"
-            >
-              Discord로 로그인
-            </Link>
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* ── Stage list ── */}
+        <div className="space-y-3 pb-10">
+          {/* members_only login notice */}
+          {!is_authenticated && link_access === "members_only" && (
+            <div className="rounded-2xl border border-[#5865F2]/20 bg-[#5865F2]/5 px-5 py-4 text-center mb-4">
+              <p className="mb-3 text-sm text-[#6b7a99]">
+                학습 기록을 저장하려면 Discord 로그인이 필요합니다.
+              </p>
+              <Link
+                to="/auth/discord/start"
+                className="inline-flex items-center gap-2 rounded-xl bg-[#5865F2] px-5 py-2.5 text-sm font-extrabold text-white"
+              >
+                Discord로 로그인
+              </Link>
+            </div>
+          )}
+
+          {stages.map((s, i) => {
+            const stage = s.nv2_stages as any;
+            if (!stage) return null;
+            const is_completed = progress_map[s.stage_id] ?? false;
+            const first_incomplete_idx = stages.findIndex(
+              (st) => !(progress_map[st.stage_id] ?? false)
+            );
+            const is_current = i === first_incomplete_idx;
+
+            return (
+              <StageRow
+                key={s.stage_id}
+                index={i + 1}
+                stage_id={s.stage_id}
+                title={stage.title}
+                stage_type={stage.stage_type}
+                is_completed={is_completed}
+                is_current={is_current}
+                session_id={session_id}
+              />
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -308,7 +334,6 @@ function StageRow({
   stage_type,
   is_completed,
   is_current,
-  is_authenticated,
   session_id,
 }: {
   index: number;
@@ -317,14 +342,17 @@ function StageRow({
   stage_type: string;
   is_completed: boolean;
   is_current: boolean;
-  is_authenticated: boolean;
   session_id: string;
 }) {
   const is_quiz = stage_type.startsWith("quiz");
 
   return (
     <Link
-      to={`/stages/${stage_id}?session=${session_id}`}
+      to={
+        is_quiz
+          ? `/quiz/${stage_id}?session=${session_id}`
+          : `/stages/${stage_id}?session=${session_id}`
+      }
       className={[
         "flex items-center gap-4 rounded-2xl border px-5 py-4 transition-all",
         is_completed
