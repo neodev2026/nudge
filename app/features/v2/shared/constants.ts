@@ -166,3 +166,27 @@ export const QUIZ_TIMER_SECONDS: Record<string, number> = {
   quiz_daily: 20,
   quiz_final: 60,
 } as const;
+
+/**
+ * Quiz card pool size per stage_type.
+ *
+ * Defines how many recent learning stages to collect cards from
+ * when building the quiz pool. Looks back across sessions if needed.
+ *
+ * quiz_5    : most recent 5 learning stages (current session)
+ * quiz_10   : most recent 10 learning stages (current + previous session)
+ * quiz_20   : most recent 20 learning stages (future)
+ * quiz_50   : most recent 50 learning stages (future)
+ * quiz_100  : most recent 100 learning stages (future)
+ * quiz_daily: same as quiz_5
+ * quiz_final: all stages in the product
+ */
+export const QUIZ_CARD_POOL_SIZE: Record<string, number> = {
+  quiz_5:     5,
+  quiz_10:    10,
+  quiz_20:    20,
+  quiz_50:    50,
+  quiz_100:   100,
+  quiz_daily: 5,
+  quiz_final: 9999,
+} as const;
