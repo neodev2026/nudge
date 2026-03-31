@@ -49,11 +49,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
   const { stage } = ctx;
 
-  // Collect card pool from preceding learning stages
+  // Collect card pool from preceding learning stages (spans sessions if needed)
   const card_pool = await getQuizCardPool(
     client,
     identity.product_session_id,
-    params.stageId
+    params.stageId,
+    stage.stage_type  // determines pool size via QUIZ_CARD_POOL_SIZE
   );
 
   // Timer duration from constants (configurable per stage_type)
