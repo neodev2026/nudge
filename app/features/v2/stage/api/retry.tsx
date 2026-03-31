@@ -4,36 +4,29 @@
  * Increments retry_count for the user's progress row on a stage.
  * Called when the user taps "처음부터 다시 보기".
  *
+ * No authentication required — public sessions resolve sns_id from session row.
+ * Security is provided by the unguessable UUID session_id in the stage URL.
+ *
  * Request body (JSON):
  *   { sns_type: string, sns_id: string }
  *
  * Response (JSON):
  *   { ok: true }
- *
- * Error responses:
- *   401 — not authenticated
- *   400 — missing sns_type / sns_id
  */
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/retry";
 
-import makeServerClient from "~/core/lib/supa-client.server";
+import { createClient } from "@supabase/supabase-js";
+import type { Database } from "database.types";
 import {
   incrementNv2StageRetry,
   initNv2StageProgress,
 } from "../lib/queries.server";
+import type { SnsType } from "~/features/v2/shared/types";
 
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
     return routeData({ error: "Method not allowed" }, { status: 405 });
-  }
-
-  const [client, headers] = makeServerClient(request);
-
-  // ── Auth check ────────────────────────────────────────────────────────────
-  const { data: session_data } = await client.auth.getSession();
-  if (!session_data.session) {
-    return routeData({ error: "Unauthorized" }, { status: 401, headers });
   }
 
   // ── Parse body ────────────────────────────────────────────────────────────
@@ -41,25 +34,32 @@ export async function action({ request, params }: Route.ActionArgs) {
   try {
     body = await request.json();
   } catch {
-    return routeData({ error: "Invalid JSON body" }, { status: 400, headers });
+    return routeData({ error: "Invalid JSON body" }, { status: 400 });
   }
 
   const { sns_type, sns_id } = body;
   if (!sns_type || !sns_id) {
     return routeData(
       { error: "sns_type and sns_id are required" },
-      { status: 400, headers }
+      { status: 400 }
     );
   }
 
+  const typed_sns_type = sns_type as SnsType;
   const stage_id = params.stageId;
 
+  // Service role client — bypasses RLS for stage_progress write operations
+  const service_client = createClient<Database>(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   // ── Ensure progress row exists, then increment ────────────────────────────
-  await initNv2StageProgress(client, sns_type, sns_id, stage_id).catch(
+  await initNv2StageProgress(service_client, typed_sns_type, sns_id, stage_id).catch(
     () => null
   );
 
-  await incrementNv2StageRetry(client, sns_type, sns_id, stage_id);
+  await incrementNv2StageRetry(service_client, typed_sns_type, sns_id, stage_id);
 
-  return routeData({ ok: true }, { headers });
+  return routeData({ ok: true });
 }

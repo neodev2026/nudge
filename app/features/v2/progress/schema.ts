@@ -8,7 +8,6 @@ import {
   pgTable,
   text,
   timestamp,
-  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { authenticatedRole } from "drizzle-orm/supabase";
@@ -89,25 +88,20 @@ export const nv2_stage_progress = pgTable(
       .on(table.next_review_at)
       .where(sql`${table.next_review_at} IS NOT NULL`),
 
-    // Unique constraint — one progress row per (user, stage)
-    uniqueIndex("nv2_stage_progress_user_stage_uidx").on(
+    // Logical unique constraint — one progress row per (user, stage)
+    index("nv2_stage_progress_user_stage_uidx").on(
       table.sns_type,
       table.sns_id,
       table.stage_id
     ),
 
     // RLS: Users can read/write their own progress rows
+    // RLS: Anyone can read progress for public session links
+    // (session UUID acts as security token)
     pgPolicy("nv2_stage_progress_select_own", {
       for: "select",
-      to: authenticatedRole,
-      using: sql`
-        EXISTS (
-          SELECT 1 FROM nv2_profiles p
-          WHERE p.sns_type::text = ${table.sns_type}::text
-            AND p.sns_id         = ${table.sns_id}
-            AND p.auth_user_id   = auth.uid()::text
-        )
-      `,
+      to: "public",
+      using: sql`true`,
     }),
 
     pgPolicy("nv2_stage_progress_insert_own", {

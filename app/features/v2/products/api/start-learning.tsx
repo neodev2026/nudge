@@ -29,6 +29,7 @@ import {
   getNv2NextUnstartedProductSession,
   getNv2ProductSessionWithStages,
   createNv2UserSession,
+  upsertNv2Subscription,
 } from "~/features/v2/session/lib/queries.server";
 import { sendSessionDm } from "~/features/v2/auth/lib/discord.server";
 import type { SnsType } from "~/features/v2/shared/types";
@@ -71,6 +72,11 @@ export async function action({ request, params }: Route.ActionArgs) {
     return routeData({ error: "Product not found" }, { status: 404, headers });
   }
 
+  // ── Upsert subscription (creates if not exists, preserves existing settings) ──
+  await upsertNv2Subscription(client, sns_type, sns_id, product.id).catch(
+    (err) => console.error("[start-learning] upsertNv2Subscription failed:", err)
+  );
+
   // ── Check for existing active session ─────────────────────────────────────
   let user_session_id: string;
   let product_session_id: string;
@@ -84,7 +90,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   if (active_session) {
     // Reuse existing session — send DM again
-    user_session_id = String(active_session.session_id);
+    user_session_id = active_session.session_id as string;
     product_session_id = active_session.product_session_id;
   } else {
     // Find the next product session the user has not yet completed
@@ -112,7 +118,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       product_session_id
     );
 
-    user_session_id = String(new_session.session_id);
+    user_session_id = new_session.session_id as string;
   }
 
   // ── Fetch session details for DM ──────────────────────────────────────────

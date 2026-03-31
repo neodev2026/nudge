@@ -285,6 +285,15 @@ export const nv2_sessions = pgTable(
       to: "service_role",
       using: sql`true`,
     }),
+
+    // RLS: Public select — allows anyone with the session link to read session row.
+    // sns_type/sns_id are resolved from the session itself for public link_access.
+    // Security is provided by the unguessable UUID session_id.
+    pgPolicy("nv2_sessions_select_public", {
+      for: "select",
+      to: "public",
+      using: sql`true`,
+    }),
   ]
 );
 

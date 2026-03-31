@@ -63,7 +63,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const is_authenticated = !!auth_user;
 
   if (link_access === "members_only" && !is_authenticated) {
-    // Redirect to Discord login, return to this session after auth
     const next = encodeURIComponent(`/sessions/${params.sessionId}`);
     throw redirect(`/auth/discord/start?next=${next}`);
   }
@@ -144,6 +143,7 @@ export default function SessionPage() {
     total_count,
     all_completed,
     is_authenticated,
+    link_access,
   } = useLoaderData<typeof loader>();
 
   const complete_fetcher = useFetcher<{ ok?: boolean; next_session_id?: string | null }>();
@@ -268,8 +268,8 @@ export default function SessionPage() {
           </div>
         )}
 
-        {/* Not authenticated notice */}
-        {!is_authenticated && (
+        {/* Not authenticated notice — only shown for members_only sessions */}
+        {!is_authenticated && link_access === "members_only" && (
           <div className="rounded-2xl border border-[#5865F2]/20 bg-[#5865F2]/5 px-5 py-4 text-center">
             <p className="mb-3 text-sm text-[#6b7a99]">
               학습 기록을 저장하려면 Discord 로그인이 필요합니다.

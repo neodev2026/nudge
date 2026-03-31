@@ -2,19 +2,12 @@
  * POST /api/v2/sessions/:sessionId/complete
  *
  * Marks a session as completed.
+ * No authentication required — sns_id is resolved from the session row.
+ * Security is provided by the unguessable UUID session_id.
  *
  * Behaviour differs by session_kind:
- *
- * kind = 'new':
- *   - Sets review_status = r1_pending + next_review_at = +1 day for all learning stages
- *   - Pre-creates the next new-learning session
- *   - Sends congratulation DM with next session link
- *
- * kind = 'review':
- *   - Advances review_status for all learning stages in the session
- *     (r1→r2, r2→r3, r3→r4, r4→mastered)
- *   - Sets next_review_at for non-mastered stages
- *   - Sends congratulation DM (no next session link)
+ *   new    → schedules r1 review, pre-creates next session, sends DM
+ *   review → advances review_status (r1→r2→r3→r4→mastered), sends DM
  *
  * Response (JSON):
  *   { ok: true, next_session_id: string | null }
@@ -22,13 +15,15 @@
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/complete";
 
+import { createClient } from "@supabase/supabase-js";
+import type { Database } from "database.types";
 import makeServerClient from "~/core/lib/supa-client.server";
 import {
   completeNv2UserSession,
-  getNv2UserSession,
   getNv2ProductSessionWithStages,
   getNv2NextProductSession,
   createNv2UserSession,
+  getSessionIdentity,
 } from "~/features/v2/session/lib/queries.server";
 import { sendSessionCompleteDm } from "~/features/v2/auth/lib/discord.server";
 import {
@@ -42,50 +37,36 @@ export async function action({ request, params }: Route.ActionArgs) {
     return routeData({ error: "Method not allowed" }, { status: 405 });
   }
 
-  const [client, headers] = makeServerClient(request);
+  const [client] = makeServerClient(request);
 
-  // ── Auth check ────────────────────────────────────────────────────────────
-  const { data: session_data } = await client.auth.getSession();
-  if (!session_data.session) {
-    return routeData({ error: "Unauthorized" }, { status: 401, headers });
+  // Service role client — bypasses RLS for write operations
+  const service_client = createClient<Database>(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // ── Resolve identity from session row (no auth required) ──────────────────
+  const identity = await getSessionIdentity(client, params.sessionId).catch(
+    () => null
+  );
+
+  if (!identity) {
+    return routeData({ error: "Session not found" }, { status: 404 });
   }
 
-  const auth_user = session_data.session.user;
-  const meta = auth_user.user_metadata as Record<string, unknown>;
-  const sns_id =
-    (meta.provider_id as string | undefined) ??
-    (meta.sub as string | undefined);
+  const { sns_type, sns_id } = identity;
 
-  if (!sns_id) {
-    return routeData(
-      { error: "Discord identity not found" },
-      { status: 400, headers }
-    );
-  }
-
-  const sns_type: SnsType = "discord";
-
-  // ── Load user session ─────────────────────────────────────────────────────
-  const user_session = await getNv2UserSession(
-    client,
-    params.sessionId
-  ).catch(() => null);
-
-  if (!user_session) {
-    return routeData({ error: "Session not found" }, { status: 404, headers });
-  }
-
-  // ── Mark session completed ────────────────────────────────────────────────
-  await completeNv2UserSession(client, params.sessionId);
+  // ── Mark session completed (service role) ─────────────────────────────────
+  await completeNv2UserSession(service_client, params.sessionId);
 
   // ── Load product session ──────────────────────────────────────────────────
   const product_session = await getNv2ProductSessionWithStages(
     client,
-    user_session.product_session_id
+    identity.product_session_id
   ).catch(() => null);
 
   if (!product_session) {
-    return routeData({ ok: true, next_session_id: null }, { headers });
+    return routeData({ ok: true, next_session_id: null });
   }
 
   // Learning stage IDs in this session (exclude quiz/welcome/congratulations)
@@ -100,11 +81,11 @@ export async function action({ request, params }: Route.ActionArgs) {
   let next_user_session_id: string | null = null;
 
   // ── Branch by session_kind ────────────────────────────────────────────────
-  if (user_session.session_kind === "new") {
-    // Schedule r1 review for all learning stages in this session
+  if (identity.session_kind === "new") {
+    // Schedule r1 review for all learning stages
     for (const stage_id of learning_stage_ids) {
       const next_review_at = calcNextReviewAt(1, 0);
-      await client
+      await service_client
         .from("nv2_stage_progress")
         .update({
           review_status: "r1_pending",
@@ -114,7 +95,7 @@ export async function action({ request, params }: Route.ActionArgs) {
         .eq("sns_type", sns_type)
         .eq("sns_id", sns_id)
         .eq("stage_id", stage_id)
-        .eq("review_status", "none"); // Only update stages not yet scheduled
+        .eq("review_status", "none");
     }
 
     // Find and pre-create next new-learning session
@@ -126,14 +107,14 @@ export async function action({ request, params }: Route.ActionArgs) {
 
     if (next_product_session) {
       const next_session = await createNv2UserSession(
-        client,
+        service_client,
         sns_type,
         sns_id,
         next_product_session.id
       ).catch(() => null);
 
       if (next_session) {
-        next_user_session_id = next_session.session_id;
+        next_user_session_id = String(next_session.session_id);
       }
     }
 
@@ -147,10 +128,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   } else {
     // Review session complete — advance review_status for all learning stages
-    const review_round = user_session.review_round ?? 1;
+    const review_round = identity.review_round ?? 1;
 
     await advanceCronReviewProgress(
-      client,
+      service_client,
       sns_type,
       sns_id,
       learning_stage_ids,
@@ -159,14 +140,10 @@ export async function action({ request, params }: Route.ActionArgs) {
       console.error("[session-complete] advanceCronReviewProgress failed:", err);
     });
 
-    // No next session link for review — cron will send on the scheduled date
     sendSessionCompleteDm(sns_id, null).catch((err) => {
       console.error("[session-complete] review complete DM failed:", err);
     });
   }
 
-  return routeData(
-    { ok: true, next_session_id: next_user_session_id },
-    { headers }
-  );
+  return routeData({ ok: true, next_session_id: next_user_session_id });
 }
