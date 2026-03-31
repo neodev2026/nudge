@@ -133,7 +133,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       ).catch(() => null);
 
       if (next_session) {
-        next_user_session_id = String(next_session.session_id);
+        next_user_session_id = next_session.session_id;
       }
     }
 

@@ -7,7 +7,6 @@ import {
   pgPolicy,
   pgTable,
   text,
-  timestamp,
   uuid,
   boolean,
 } from "drizzle-orm/pg-core";
@@ -192,7 +191,8 @@ export type NV2NewProductSessionStage =
 export const nv2_sessions = pgTable(
   "nv2_sessions",
   {
-    session_id: bigserial("session_id", { mode: "bigint" }).primaryKey(),
+    // UUID PK — acts as a security token (unguessable link)
+    session_id: uuid("session_id").primaryKey().defaultRandom(),
 
     // Profile reference — composite FK to nv2_profiles(sns_type, sns_id)
     ...snsIdentity,
