@@ -1,11 +1,14 @@
 /**
  * Application Routes Configuration
- * 
- * This file defines all routes for the application using React Router's
- * file-based routing system. Routes are organized by feature and access level.
- * 
- * The structure uses layouts for shared UI elements and prefixes for route grouping.
- * This approach creates a hierarchical routing system that's both maintainable and scalable.
+ *
+ * Route groups:
+ *  - Core utilities (robots, sitemap)
+ *  - API routes (settings, cron, v2 actions)
+ *  - v2 public routes (/, /products, /stages, /sessions, /quiz, /auth)
+ *  - Legacy / future routes (commented out)
+ *
+ * 파일이 실제로 생성된 시점에 주석을 해제하세요.
+ * 주석 처리된 라우트 = 아직 파일 미생성
  */
 import {
   type RouteConfig,
@@ -16,138 +19,109 @@ import {
 } from "@react-router/dev/routes";
 
 export default [
+  // ── Core ────────────────────────────────────────────────────────────────
   route("/robots.txt", "core/screens/robots.ts"),
   route("/sitemap.xml", "core/screens/sitemap.ts"),
-  ...prefix("/debug", [
-    // You should delete this in production.
-    route("/sentry", "debug/sentry.tsx"),
-    route("/analytics", "debug/analytics.tsx"),
-  ]),
-  // API Routes. Routes that export actions and loaders but no UI.
+
+  // ── API ─────────────────────────────────────────────────────────────────
   ...prefix("/api", [
     ...prefix("/settings", [
-      route("/theme", "features/settings/api/set-theme.tsx"),
+      route("/theme",  "features/settings/api/set-theme.tsx"),
       route("/locale", "features/settings/api/set-locale.tsx"),
     ]),
-    ...prefix("/users", [
-      index("features/users/api/delete-account.tsx"),
-      route("/password", "features/users/api/change-password.tsx"),
-      route("/email", "features/users/api/change-email.tsx"),
-      route("/profile", "features/users/api/edit-profile.tsx"),
-      route("/providers", "features/users/api/connect-provider.tsx"),
-      route(
-        "/providers/:provider",
-        "features/users/api/disconnect-provider.tsx",
-      ),
-    ]),
-    ...prefix("/cron", [route("/mailer", "features/cron/api/mailer.tsx")]),
-    ...prefix("/blog", [route("/og", "features/blog/api/og.tsx")]),
-  ]),
 
-  layout("core/layouts/navigation.layout.tsx", [
-    route("/auth/confirm", "features/auth/screens/confirm.tsx"),
-    index("features/home/screens/home.tsx"),
-    route("/error", "core/screens/error.tsx"),
+    // v2 Cron endpoints — uncomment as each file is created
+    // ...prefix("/v2/cron", [
+    //   route("/dispatch",        "features/v2/cron/api/dispatch.tsx"),
+    //   route("/review-schedule", "features/v2/cron/api/review-schedule.tsx"),
+    //   route("/daily-reset",     "features/v2/cron/api/daily-reset.tsx"),
+    // ]),
 
-    layout("core/layouts/public.layout.tsx", [
-      // Routes that should only be visible to unauthenticated users.
-      route("/login", "features/auth/screens/login.tsx"),
-      route("/join", "features/auth/screens/join.tsx"),
-      ...prefix("/auth", [
-        route("/api/resend", "features/auth/api/resend.tsx"),
-        route(
-          "/forgot-password/reset",
-          "features/auth/screens/forgot-password.tsx",
-        ),
-        route("/magic-link", "features/auth/screens/magic-link.tsx"),
-        ...prefix("/otp", [
-          route("/start", "features/auth/screens/otp/start.tsx"),
-          route("/complete", "features/auth/screens/otp/complete.tsx"),
-        ]),
-        ...prefix("/social", [
-          route("/start/:provider", "features/auth/screens/social/start.tsx"),
-          route(
-            "/complete/:provider",
-            "features/auth/screens/social/complete.tsx",
-          ),
-        ]),
-      ]),
-    ]),
-    layout("core/layouts/private.layout.tsx", { id: "private-auth" }, [
-      ...prefix("/auth", [
-        route(
-          "/forgot-password/create",
-          "features/auth/screens/new-password.tsx",
-        ),
-        route("/email-verified", "features/auth/screens/email-verified.tsx"),
-      ]),
-      // Routes that should only be visible to authenticated users.
-      route("/logout", "features/auth/screens/logout.tsx"),
-      route("/user-sns-settings", "features/user-sns-connection/screens/sns-settings-page.tsx"),
-    ]),
-    route("/contact", "features/contact/screens/contact-us.tsx"),
-    ...prefix("/payments", [
-      index("features/payments/screens/payments.tsx"),
-      route("/checkout", "features/payments/screens/checkout.tsx"),
-      layout("core/layouts/private.layout.tsx", { id: "private-payments" }, [
-        route("/success", "features/payments/screens/success.tsx"),
-        route("/failure", "features/payments/screens/failure.tsx"),
-      ]),
-    ]),
-    /**
-     * [Learning Product] 관련 경로
-     */
-    // 제품 목록 브라우징 페이지
-    route("/learning-products", "features/learning-product/screens/products-page.tsx"),
-    route("/learning-products/:productId", "features/learning-product/screens/product-detail-page.tsx"),
-
-    route("/welcome", "features/users/screens/welcome-page.tsx"),
-    route("/cards/simulation", "features/learning-card/screens/simulation.tsx"),
-    route("/cards/simulation-page", "features/learning-card/screens/simulation-page.tsx"),
-  ]),
-
-  layout("core/layouts/private.layout.tsx", { id: "private-dashboard" }, [
-    layout("features/users/layouts/dashboard.layout.tsx", [
-      ...prefix("/dashboard", [
-        index("features/users/screens/dashboard.tsx"),
-      ]),
-      route("/account/edit", "features/users/screens/account.tsx"),
+    // ✅ 구현 완료
+    ...prefix("/v2", [
+      route("/stage/:stageId/complete",     "features/v2/stage/api/complete.tsx"),
+      route("/stage/:stageId/retry",        "features/v2/stage/api/retry.tsx"),
+      route("/products/:slug/start",        "features/v2/products/api/start-learning.tsx"),
+      route("/sessions/:sessionId/complete","features/v2/session/api/complete.tsx"),
+      route("/quiz/:stageId/result",        "features/v2/quiz/api/result.tsx"),
     ]),
   ]),
 
-  ...prefix("/legal", [route("/:slug", "features/legal/screens/policy.tsx")]),
-  layout("features/blog/layouts/blog.layout.tsx", [
-    ...prefix("/blog", [
-      index("features/blog/screens/posts.tsx"),
-      route("/:slug", "features/blog/screens/post.tsx"),
+  // ── Admin (이메일 로그인 필요) ────────────────────────────────────────────
+  route("/admin/login",  "features/admin/screens/login.tsx"),
+  route("/admin/logout", "features/admin/screens/logout.tsx"),
+  layout("core/layouts/admin.layout.tsx", [
+    ...prefix("/admin", [
+      index("features/admin/screens/dashboard.tsx"),
+      route("/products/new",                        "features/admin/screens/product-new.tsx"),
+      route("/products/:id",                        "features/admin/screens/product-detail.tsx"),
+      route("/products/:id/stages/new",             "features/admin/screens/stage-new.tsx"),
+      route("/products/:id/stages/:stageId",        "features/admin/screens/stage-edit.tsx"),
+      // /new is handled as sessionId="new" inside session-edit.tsx
+      route("/products/:id/sessions/:sessionId",    "features/admin/screens/session-edit.tsx"),
     ]),
-  ]), 
-
-  // 학습 카드 단독 화면 (몰입을 위해 네비게이션 레이아웃 제외)
-  layout("core/layouts/private.layout.tsx", [
-    route("/cards/:cardId", "features/learning-card/screens/learning-card.tsx"),
   ]),
 
-  /**
-   * [Nudge Lite Route Group]
-   * Uses a dedicated lite.layout.tsx to ensure a stateless, 
-   * high-contrast UI as per the new design policy.
-   * This group bypasses existing auth-based layouts.
-   */
-  layout("core/layouts/lite.layout.tsx", [
-    ...prefix("/lite", [
-      // Landing page: Service introduction & product exhibition
-      index("features/lite/screens/home-page.tsx"),
-      
-      // Product detail page
-      route("products/:id", "features/lite/screens/product-detail-page.tsx"),
-      
-      // Success page after SNS connection
-      route("success", "features/lite/screens/sns-conn-success-page.tsx"),
+  // Admin API actions (outside layout — no sidebar needed)
+  ...prefix("/admin/api", [
+    route("/stages/upsert",       "features/admin/api/stages.tsx"),
+    route("/stages/:id/delete",   "features/admin/api/stage-delete.tsx"),
+    route("/cards/upsert",        "features/admin/api/cards.tsx"),
+    route("/cards/:id/delete",    "features/admin/api/card-delete.tsx"),
+    route("/sessions/:id/delete", "features/admin/api/session-delete.tsx"),
+  ]),
 
-      route("cards/:delivery_id", "features/lite/screens/learning-card-page.tsx"),
+  // ── v2 Public layout ──────────────────────────────────────────────────
+  layout("core/layouts/v2.layout.tsx", [
 
-      route("auth/discord/callback", "features/lite/callback/auth-discord-callback.tsx"),
+    // ✅ 구현 완료
+    index("features/v2/home/screens/home-page.tsx"),
+
+    // ✅ 구현 완료
+    route("/products",       "features/v2/products/screens/products-page.tsx"),
+    route("/products/:slug", "features/v2/products/screens/product-detail-page.tsx"),
+
+    // ✅ 구현 완료
+    route("/stages/:stageId",   "features/v2/stage/screens/stage-page.tsx"),
+
+    // ✅ 구현 완료
+    route("/sessions/:sessionId", "features/v2/session/screens/session-page.tsx"),
+
+    // ✅ 구현 완료
+    route("/quiz/:stageId", "features/v2/quiz/screens/quiz-page.tsx"),
+
+    // ✅ 구현 완료
+    ...prefix("/auth", [
+      route("/discord/start",    "features/v2/auth/screens/discord-start.tsx"),
+      route("/discord/callback", "features/v2/auth/screens/discord-callback.tsx"),
     ]),
-  ]),  
+
+    // Legal
+    ...prefix("/legal", [
+      route("/:slug", "features/legal/screens/policy.tsx"),
+    ]),
+  ]),
+
+  // ── Legacy routes ────────────────────────────────────────────────────────
+  // [Auth — v1]
+  // layout("core/layouts/navigation.layout.tsx", [ ... ]),
+  //
+  // [Dashboard — v1]
+  // layout("core/layouts/private.layout.tsx", { id: "private-dashboard" }, [ ... ]),
+  //
+  // [Payments]
+  // ...prefix("/payments", [ ... ]),
+  //
+  // [Blog]
+  // layout("features/blog/layouts/blog.layout.tsx", [ ... ]),
+  //
+  // [v1 Learning Cards]
+  // route("/learning-products", ...),
+  //
+  // [Lite — 개발 중단]
+  // layout("core/layouts/lite.layout.tsx", [ ... ]),
+  //
+  // [Debug — 배포 전 제거]
+  // ...prefix("/debug", [ ... ]),
+
 ] satisfies RouteConfig;
