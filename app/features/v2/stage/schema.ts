@@ -105,6 +105,13 @@ export const nv2_stages = pgTable(
       to: "service_role",
       using: sql`true`,
     }),
+
+    // RLS: n8n_worker can insert stages (used by card generation workflow)
+    pgPolicy("nv2_stages_n8n_insert", {
+      for: "insert",
+      to: 'n8n_worker',
+      withCheck: sql`true`,
+    }),
   ]
 );
 
@@ -173,6 +180,13 @@ export const nv2_cards = pgTable(
       for: "all",
       to: "service_role",
       using: sql`true`,
+    }),
+
+    // RLS: n8n_worker can insert cards (used by card generation workflow)
+    pgPolicy("nv2_cards_n8n_insert", {
+      for: "insert",
+      to: 'n8n_worker',
+      withCheck: sql`true`,
     }),
   ]
 );
