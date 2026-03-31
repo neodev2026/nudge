@@ -102,21 +102,24 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (is_new_user) {
     const origin = new URL(request.url).origin;
 
-    // Resolve the welcome stage for the user's first product.
-    // Falls back to /products if no welcome stage exists yet.
     const welcome_stage = await getNv2WelcomeStage(client).catch(() => null);
     const welcome_url = welcome_stage
       ? `${origin}/stages/${welcome_stage.id}`
       : `${origin}/products`;
 
     sendWelcomeDm(sns_id, display_name, welcome_url).catch((err) => {
-      // DM failure is non-fatal — log and continue
       console.error("[discord-callback] sendWelcomeDm failed:", err);
     });
   }
 
-  // ── Step 6: Redirect to products page ─────────────────────────────────────
-  return redirect("/products", { headers });
+  // ── Step 6: Redirect — honour ?next= param if present ─────────────────────
+  // next= is set when the user was redirected here from a session/stage link
+  // that required members_only authentication.
+  const next_param = url.searchParams.get("next");
+  const redirect_to =
+    next_param && next_param.startsWith("/") ? next_param : "/products";
+
+  return redirect(redirect_to, { headers });
 }
 
 // No default export — this route renders nothing

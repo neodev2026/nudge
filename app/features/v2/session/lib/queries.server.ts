@@ -183,9 +183,60 @@ export async function getNv2ActiveUserSession(
 }
 
 /**
- * Fetches a user session by session_id.
- * Used by the session page and complete API.
+ * Fetches sns_type, sns_id, and link_access for a session.
+ * Used by session-page and stage-page to resolve user identity
+ * without requiring authentication (for public link_access sessions).
  */
+export async function getSessionIdentity(
+  client: SupabaseClient<Database>,
+  session_id: string
+) {
+  const { data, error } = await client
+    .from("nv2_sessions")
+    .select(
+      `
+      session_id,
+      sns_type,
+      sns_id,
+      product_session_id,
+      session_kind,
+      review_round,
+      status,
+      nv2_product_sessions!inner (
+        product_id
+      )
+    `
+    )
+    .eq("session_id", session_id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  // Resolve link_access from nv2_subscriptions
+  const ps = data.nv2_product_sessions as any;
+  const { data: sub } = await client
+    .from("nv2_subscriptions")
+    .select("link_access")
+    .eq("sns_type", data.sns_type)
+    .eq("sns_id", data.sns_id)
+    .eq("product_id", ps.product_id)
+    .maybeSingle();
+
+  return {
+    session_id: data.session_id,
+    sns_type: data.sns_type as SnsType,
+    sns_id: data.sns_id,
+    product_session_id: data.product_session_id,
+    session_kind: data.session_kind,
+    review_round: data.review_round,
+    status: data.status,
+    // Default to 'public' if no subscription row exists yet
+    link_access: (sub?.link_access ?? "public") as "public" | "members_only",
+  };
+}
+
+
 export async function getNv2UserSession(
   client: SupabaseClient<Database>,
   session_id: string
@@ -193,7 +244,7 @@ export async function getNv2UserSession(
   const { data, error } = await client
     .from("nv2_sessions")
     .select("*")
-    .eq("session_id", Number(session_id))
+    .eq("session_id", session_id)
     .maybeSingle();
 
   if (error) throw error;
@@ -240,7 +291,7 @@ export async function startNv2UserSession(
       status: "in_progress",
       started_at: new Date().toISOString(),
     })
-    .eq("session_id", Number(session_id))
+    .eq("session_id", session_id)
     .eq("status", "pending");
 
   if (error) throw error;
@@ -261,7 +312,7 @@ export async function completeNv2UserSession(
       status: "completed",
       completed_at: new Date().toISOString(),
     })
-    .eq("session_id", Number(session_id))
+    .eq("session_id", session_id)
     .neq("status", "completed") // Guard: idempotent
     .select("session_id, product_session_id")
     .maybeSingle();

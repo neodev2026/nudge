@@ -115,6 +115,17 @@ export const DAILY_GOAL_PRESETS = {
 } as const;
 
 /**
+ * Link access control for user subscriptions.
+ *
+ * public       — anyone with the link can view and complete stages (no login required)
+ * members_only — only authenticated Nudge users can access the session link
+ */
+export const V2_LINK_ACCESS_TYPES = [
+  "public",
+  "members_only",
+] as const;
+
+/**
  * User session kind.
  *
  * new    — first-time learning session

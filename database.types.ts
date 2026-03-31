@@ -898,7 +898,7 @@ export type Database = {
           dm_sent_at: string | null
           product_session_id: string
           review_round: number | null
-          session_id: number
+          session_id: string
           session_kind: Database["public"]["Enums"]["nv2_session_kind"]
           sns_id: string
           sns_type: string
@@ -912,7 +912,7 @@ export type Database = {
           dm_sent_at?: string | null
           product_session_id: string
           review_round?: number | null
-          session_id?: number
+          session_id?: string
           session_kind?: Database["public"]["Enums"]["nv2_session_kind"]
           sns_id: string
           sns_type: string
@@ -926,7 +926,7 @@ export type Database = {
           dm_sent_at?: string | null
           product_session_id?: string
           review_round?: number | null
-          session_id?: number
+          session_id?: string
           session_kind?: Database["public"]["Enums"]["nv2_session_kind"]
           sns_id?: string
           sns_type?: string
@@ -1029,6 +1029,50 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      nv2_subscriptions: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          link_access: Database["public"]["Enums"]["nv2_link_access_type"]
+          product_id: string
+          sns_id: string
+          sns_type: string
+          started_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          link_access?: Database["public"]["Enums"]["nv2_link_access_type"]
+          product_id: string
+          sns_id: string
+          sns_type: string
+          started_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          link_access?: Database["public"]["Enums"]["nv2_link_access_type"]
+          product_id?: string
+          sns_id?: string
+          sns_type?: string
+          started_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nv2_subscriptions_product_id_nv2_learning_products_id_fk"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "nv2_learning_products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       payments: {
         Row: {
@@ -1326,6 +1370,7 @@ export type Database = {
         | "etymology"
         | "example"
         | "option"
+      nv2_link_access_type: "public" | "members_only"
       nv2_product_category:
         | "language"
         | "medical"
@@ -1530,6 +1575,7 @@ export const Constants = {
         "example",
         "option",
       ],
+      nv2_link_access_type: ["public", "members_only"],
       nv2_product_category: [
         "language",
         "medical",

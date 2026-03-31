@@ -3,22 +3,22 @@
  *
  * Session page — displays stages in order within a session.
  *
- * Flow:
- *   1. Load session + ordered stage list
- *   2. Mark session as in_progress on first open
- *   3. Show stages one by one (each stage links to /stages/:stageId)
- *   4. Track completed stages via nv2_stage_progress
- *   5. When all stages complete → POST /api/v2/sessions/:sessionId/complete
+ * Access control (per subscription.link_access):
+ *   public       — anyone with the link can view and complete stages.
+ *                  sns_type/sns_id resolved from the session row itself.
+ *   members_only — requires Discord OAuth login.
+ *                  redirects to /auth/discord/start?next=/sessions/:id
  */
 import type { Route } from "./+types/session-page";
 
 import { Link, useLoaderData, useFetcher } from "react-router";
+import { redirect } from "react-router";
 
 import makeServerClient from "~/core/lib/supa-client.server";
 import {
   getNv2ProductSessionWithStages,
-  getNv2UserSession,
   startNv2UserSession,
+  getSessionIdentity,
 } from "~/features/v2/session/lib/queries.server";
 import { getNv2StageProgress } from "~/features/v2/stage/lib/queries.server";
 import type { SnsType } from "~/features/v2/shared/types";
@@ -46,31 +46,32 @@ export const meta: Route.MetaFunction = ({ matches }) => {
 // ---------------------------------------------------------------------------
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const [client, headers] = makeServerClient(request);
+  const [client] = makeServerClient(request);
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  const { data: session_data } = await client.auth.getSession();
-  const auth_user = session_data.session?.user ?? null;
+  // ── Resolve session identity (sns_type/sns_id from session row) ───────────
+  const identity = await getSessionIdentity(client, params.sessionId);
+
+  if (!identity) {
+    throw new Response("Session not found", { status: 404 });
+  }
+
+  const { sns_type, sns_id, link_access } = identity;
+
+  // ── Access control ────────────────────────────────────────────────────────
+  const { data: auth_session } = await client.auth.getSession();
+  const auth_user = auth_session.session?.user ?? null;
   const is_authenticated = !!auth_user;
 
-  const meta = auth_user?.user_metadata as Record<string, unknown> | undefined;
-  const sns_id =
-    (meta?.provider_id as string | undefined) ??
-    (meta?.sub as string | undefined) ??
-    null;
-  const sns_type: SnsType = "discord";
-
-  // ── Load user session ─────────────────────────────────────────────────────
-  const user_session = await getNv2UserSession(client, params.sessionId);
-
-  if (!user_session) {
-    throw new Response("Session not found", { status: 404 });
+  if (link_access === "members_only" && !is_authenticated) {
+    // Redirect to Discord login, return to this session after auth
+    const next = encodeURIComponent(`/sessions/${params.sessionId}`);
+    throw redirect(`/auth/discord/start?next=${next}`);
   }
 
   // ── Load product session + stages ─────────────────────────────────────────
   const product_session = await getNv2ProductSessionWithStages(
     client,
-    user_session.product_session_id
+    identity.product_session_id
   );
 
   if (!product_session) {
@@ -81,7 +82,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     product_session.title ?? `Session ${product_session.session_number}`;
 
   // ── Mark session as in_progress on first open ─────────────────────────────
-  if (user_session.status === "pending" && is_authenticated) {
+  // Works for both authenticated and public access
+  if (identity.status === "pending") {
     await startNv2UserSession(client, params.sessionId).catch(() => null);
   }
 
@@ -90,7 +92,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
   const stage_progresses = await Promise.all(
     stages.map(async (s) => {
-      if (!sns_id) return { stage_id: s.stage_id, completed: false };
       const progress = await getNv2StageProgress(
         client,
         sns_type,
@@ -121,9 +122,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     total_count: stages.length,
     all_completed,
     is_authenticated,
+    // sns_type/sns_id from session row — available even without login (public)
     sns_type,
     sns_id,
-    headers,
+    link_access,
   };
 }
 

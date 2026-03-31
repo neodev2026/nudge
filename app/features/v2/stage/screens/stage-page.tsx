@@ -42,7 +42,7 @@ export const meta: Route.MetaFunction = ({ matches }) => {
 // ---------------------------------------------------------------------------
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const [client, headers] = makeServerClient(request);
+  const [client] = makeServerClient(request);
 
   const stage = await getNv2StageWithCards(client, params.stageId);
 
@@ -50,27 +50,57 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     throw new Response("Stage not found", { status: 404 });
   }
 
-  // Determine if user is authenticated
-  const { data: session_data } = await client.auth.getSession();
-  const auth_user = session_data.session?.user ?? null;
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  const { data: auth_session } = await client.auth.getSession();
+  const auth_user = auth_session.session?.user ?? null;
+  const is_authenticated = !!auth_user;
 
-  // Extract sns_id from Discord OAuth metadata
-  const meta = auth_user?.user_metadata as Record<string, unknown> | undefined;
-  const sns_id =
-    (meta?.provider_id as string | undefined) ??
-    (meta?.sub as string | undefined) ??
-    null;
-
-  // Read session context from query param — set by session-page when linking here
+  // ── Session context ───────────────────────────────────────────────────────
   const session_id = new URL(request.url).searchParams.get("session");
+
+  let sns_type: string | null = null;
+  let sns_id: string | null = null;
+
+  if (session_id) {
+    // Resolve identity from the session row (works without login for public sessions)
+    const { getSessionIdentity } = await import(
+      "~/features/v2/session/lib/queries.server"
+    );
+    const identity = await getSessionIdentity(client, session_id).catch(
+      () => null
+    );
+
+    if (identity) {
+      sns_type = identity.sns_type;
+      sns_id = identity.sns_id;
+
+      // members_only: must be authenticated to proceed
+      if (identity.link_access === "members_only" && !is_authenticated) {
+        const { redirect } = await import("react-router");
+        const next = encodeURIComponent(
+          `/stages/${params.stageId}?session=${session_id}`
+        );
+        throw redirect(`/auth/discord/start?next=${next}`);
+      }
+    }
+  } else {
+    // Direct access without session context — fall back to auth metadata
+    const meta = auth_user?.user_metadata as
+      | Record<string, unknown>
+      | undefined;
+    sns_id =
+      (meta?.provider_id as string | undefined) ??
+      (meta?.sub as string | undefined) ??
+      null;
+    sns_type = auth_user ? "discord" : null;
+  }
 
   return {
     stage,
-    is_authenticated: !!auth_user,
-    sns_type: auth_user ? "discord" : null,
+    is_authenticated,
+    sns_type,
     sns_id,
-    session_id, // null when accessed directly (not from a session)
-    headers,
+    session_id,
   };
 }
 

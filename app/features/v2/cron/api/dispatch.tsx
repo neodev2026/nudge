@@ -156,7 +156,7 @@ export async function action({ request }: Route.ActionArgs) {
       await client
         .from("nv2_sessions")
         .update({ dm_sent_at: now })
-        .eq("session_id", Number(s.session_id));
+        .eq("session_id", s.session_id);
 
       results.nudges_sent++;
     }
