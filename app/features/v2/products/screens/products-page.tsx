@@ -31,7 +31,7 @@ type Product = {
   description: string | null;
   slug: string;
   icon: string | null;
-  meta: NV2ProductMeta | null;
+  meta: any; // Supabase returns Json type; cast to any for compatibility
   total_stages: number;
   display_order: number;
 };

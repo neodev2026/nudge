@@ -5,6 +5,20 @@
     "**/.client/**/*",
     ".react-router/types/**/*"
   ],
+  "exclude": [
+    "app/features/auth",
+    "app/features/blog",
+    "app/features/contact",
+    "app/features/cron",
+    "app/features/home",
+    "app/features/learning-card",
+    "app/features/learning-product",
+    "app/features/lite",
+    "app/features/payments",
+    "app/features/user-sns-connection",
+    "app/features/users",
+    "app/debug"
+  ],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "types": ["node", "vite/client"],
