@@ -3,20 +3,19 @@
  *
  * Learning stage page — displays cards in order, then presents self-evaluation.
  *
- * Access rules:
- *   - Anyone with the link can view cards (no login required)
- *   - Self-evaluation (complete / retry) requires authentication
- *     → unauthenticated users see a "Discord로 로그인" prompt instead of the buttons
- *
  * Card flow:
  *   title card → description card → ... → self-evaluation screen
  *   "처음부터 다시 보기" → restart from card 0, retry_count++
- *   "암기 완료"         → POST /api/v2/stage/:stageId/complete → redirect next stage
+ *   "학습 완료"         → POST /api/v2/stage/:stageId/complete → redirect to session
+ *
+ * TTS:
+ *   - title / example 카드에 발음 듣기 버튼 (무한 반복)
+ *   - 다음 버튼, 처음부터 다시 보기, 학습 목록 이동 시 자동 중지
  */
 import type { Route } from "./+types/stage-page";
 
 import { useLoaderData, useFetcher, Link } from "react-router";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { redirect } from "react-router";
 
 import makeServerClient from "~/core/lib/supa-client.server";
@@ -50,17 +49,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     throw new Response("Stage not found", { status: 404 });
   }
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
   const { data: auth_session } = await client.auth.getSession();
   const auth_user = auth_session.session?.user ?? null;
   const is_authenticated = !!auth_user;
 
-  // ── Session context ───────────────────────────────────────────────────────
   const session_id = new URL(request.url).searchParams.get("session");
 
   let sns_type: string | null = null;
   let sns_id: string | null = null;
-  let link_access: string = "members_only"; // default — requires login when no session context
+  let link_access: string = "members_only";
 
   if (session_id) {
     const { getSessionIdentity } = await import(
@@ -75,7 +72,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       sns_id = identity.sns_id;
       link_access = identity.link_access;
 
-      // members_only: must be authenticated to proceed
       if (identity.link_access === "members_only" && !is_authenticated) {
         const { redirect } = await import("react-router");
         const next = encodeURIComponent(
@@ -85,7 +81,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       }
     }
   } else {
-    // Direct access without session context — fall back to auth metadata
     const meta = auth_user?.user_metadata as
       | Record<string, unknown>
       | undefined;
@@ -94,7 +89,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       (meta?.sub as string | undefined) ??
       null;
     sns_type = auth_user ? "discord" : null;
-    // No session = no identity resolution = login required
     link_access = "members_only";
   }
 
@@ -106,6 +100,19 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     session_id,
     link_access,
   };
+}
+
+// ---------------------------------------------------------------------------
+// TTS 전역 상태 — 모듈 레벨에서 관리해야 stopTts()가 is_looping을 직접 제어 가능
+// ---------------------------------------------------------------------------
+
+let _tts_looping = false;
+
+function stopTts() {
+  _tts_looping = false; // 루프 플래그 먼저 해제 → onend 콜백이 재발화 안 함
+  if (typeof window !== "undefined" && window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -125,13 +132,10 @@ export default function StagePage() {
 
   const current_card = cards[card_index];
   const is_last_card = card_index === cards.length - 1;
-
-  // public 접근: sns_id는 session row에서 resolve됨 — 로그인 불필요
   const can_submit = !!sns_type && !!sns_id;
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
-
   function handleNext() {
+    stopTts(); // 다음 카드로 넘어갈 때 TTS 중지
     if (is_last_card) {
       set_phase("eval");
     } else {
@@ -141,6 +145,7 @@ export default function StagePage() {
 
   function handleRetry() {
     if (!can_submit) return;
+    stopTts(); // 처음부터 다시 볼 때 TTS 중지
     retry_fetcher.submit(
       { sns_type, sns_id },
       {
@@ -165,22 +170,17 @@ export default function StagePage() {
     );
   }
 
-  // After complete: return to session page if context exists, otherwise next stage
   const complete_data = complete_fetcher.data as
     | { ok: boolean; next_stage_id: string | null }
     | undefined;
 
   if (complete_data?.ok) {
     if (session_id) {
-      // Always return to session page — session tracks overall progress
       window.location.href = `/sessions/${session_id}`;
     } else if (complete_data.next_stage_id) {
-      // Fallback: direct stage navigation when accessed outside a session
       window.location.href = `/stages/${complete_data.next_stage_id}`;
     }
   }
-
-  // ── Render ────────────────────────────────────────────────────────────────
 
   if (cards.length === 0) {
     return <NoCardsState stage_title={stage.title} />;
@@ -190,17 +190,18 @@ export default function StagePage() {
     <div className="flex min-h-screen flex-col items-center bg-[#fdf8f0] px-4 py-10">
       {/* Header */}
       <div className="mb-8 w-full max-w-md">
+        {/* 학습 목록으로 이동 시 TTS 중지 */}
         <Link
-          to="/products"
+          to={session_id ? `/sessions/${session_id}` : "/products"}
           className="text-xs font-semibold text-[#6b7a99] hover:text-[#1a2744]"
+          onClick={stopTts}
         >
-          ← 상품 목록
+          ← 학습 목록
         </Link>
         <div className="mt-3 flex items-center justify-between">
           <span className="rounded-lg bg-[#1a2744] px-3 py-1 text-[0.7rem] font-black uppercase tracking-wide text-white">
             Stage {stage.stage_number}
           </span>
-          {/* Progress dots */}
           {phase === "cards" && (
             <div className="flex gap-1.5">
               {cards.map((_, i) => (
@@ -221,7 +222,6 @@ export default function StagePage() {
         </div>
       </div>
 
-      {/* Card / Eval */}
       {phase === "cards" ? (
         <CardView
           card={current_card}
@@ -248,6 +248,67 @@ export default function StagePage() {
 }
 
 // ---------------------------------------------------------------------------
+// TTS Hook — 무한 반복, 다시 누르면 중지
+// ---------------------------------------------------------------------------
+
+function useTts(text: string, lang = "de-DE") {
+  const [active, set_active] = useState(false);
+
+  const toggle = useCallback(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+
+    if (_tts_looping) {
+      stopTts();
+      set_active(false);
+      return;
+    }
+
+    _tts_looping = true;
+    set_active(true);
+
+    const speak = () => {
+      if (!_tts_looping) return;
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.lang = lang;
+      utt.rate = 0.9;
+      utt.onend = () => {
+        if (_tts_looping) setTimeout(speak, 700);
+      };
+      utt.onerror = () => {
+        _tts_looping = false;
+        set_active(false);
+      };
+      window.speechSynthesis.speak(utt);
+    };
+    speak();
+  }, [text, lang]);
+
+  return { toggle, active };
+}
+
+// ---------------------------------------------------------------------------
+// TTS Button
+// ---------------------------------------------------------------------------
+
+function TtsButton({ text, lang = "de-DE" }: { text: string; lang?: string }) {
+  const { toggle, active } = useTts(text, lang);
+  return (
+    <button
+      onClick={toggle}
+      className={[
+        "mt-4 flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all",
+        active
+          ? "bg-[#4caf72] text-white"
+          : "bg-[#fdf8f0] text-[#6b7a99] hover:bg-[#e8ecf5] hover:text-[#1a2744]",
+      ].join(" ")}
+    >
+      <span className="text-base">{active ? "⏹" : "🔊"}</span>
+      {active ? "중지" : "발음 듣기"}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // CardView
 // ---------------------------------------------------------------------------
 
@@ -260,64 +321,82 @@ function CardView({
   card: { card_type: string; card_data: unknown };
   card_index: number;
   total: number;
-  onNext: () => void;
+  onNext: () => void; // stopTts() 이미 포함됨 (StagePage.handleNext에서 호출)
 }) {
   const data = card.card_data as V2CardData;
-
-  const is_title = card.card_type === "title";
-  const is_description = card.card_type === "description";
-  const is_image = card.card_type === "image";
-  const is_example = card.card_type === "example";
+  const type = card.card_type;
 
   return (
     <div className="flex w-full max-w-md flex-col">
-      {/* Card */}
       <div className="rounded-3xl bg-white p-8 shadow-[0_8px_40px_rgba(26,39,68,0.10)]">
         {/* Card type badge */}
         <span className="mb-5 inline-block rounded-lg bg-[#fdf8f0] px-3 py-1 text-[0.68rem] font-black uppercase tracking-wide text-[#6b7a99]">
-          {CARD_TYPE_LABELS[card.card_type] ?? card.card_type}
+          {CARD_TYPE_LABELS[type] ?? type}
         </span>
 
-        {is_title && (
+        {/* ── title: 단어 + 번역 + TTS ── */}
+        {type === "title" && (
           <>
-            <div className="mb-2 font-display text-[2.4rem] font-black leading-tight text-[#1a2744]">
+            <div className="mb-1 font-display text-[2.4rem] font-black leading-tight text-[#1a2744]">
               {data.presentation.front}
             </div>
-            {data.presentation.hint && (
-              <div className="text-sm italic text-[#6b7a99]">
-                {data.presentation.hint}
-              </div>
-            )}
+            <div className="text-lg font-bold text-[#4caf72]">
+              {data.presentation.back}
+            </div>
+            <TtsButton text={data.presentation.front} lang="de-DE" />
           </>
         )}
 
-        {is_description && (
-          <div className="rounded-2xl bg-[#fdf8f0] p-5 text-lg font-bold text-[#1a2744]">
+        {/* ── description: 설명 텍스트 ── */}
+        {type === "description" && (
+          <div className="rounded-2xl bg-[#fdf8f0] p-5 text-base leading-[1.8] font-bold text-[#1a2744]">
             {data.presentation.back}
           </div>
         )}
 
-        {is_image && (
+        {/* ── example: 예문 + 번역 + TTS ── */}
+        {type === "example" && (
+          <>
+            <p className="mb-3 text-base font-bold leading-[1.8] text-[#1a2744]">
+              {data.presentation.front}
+            </p>
+            <p className="text-sm text-[#6b7a99]">
+              {data.presentation.back}
+            </p>
+            <TtsButton text={data.presentation.front} lang="de-DE" />
+          </>
+        )}
+
+        {/* ── etymology: 어원 ── */}
+        {type === "etymology" && (
+          <div className="rounded-2xl bg-[#fdf8f0] p-5 text-base leading-[1.8] text-[#1a2744]">
+            <p>{data.presentation.front}</p>
+            {data.presentation.back && (
+              <p className="mt-2 text-sm text-[#6b7a99]">
+                {data.presentation.back}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ── image: 연상 이미지 ── */}
+        {type === "image" && (
           <div className="overflow-hidden rounded-2xl">
             <img
               src={data.presentation.front}
               alt={data.presentation.back}
               className="w-full object-cover"
             />
+            {data.presentation.back && (
+              <p className="mt-2 text-sm text-[#6b7a99]">
+                {data.presentation.back}
+              </p>
+            )}
           </div>
         )}
 
-        {is_example && (
-          <>
-            <p className="mb-3 text-base leading-[1.8] text-[#1a2744]">
-              {data.presentation.front}
-            </p>
-            <p className="text-sm text-[#6b7a99]">{data.presentation.back}</p>
-          </>
-        )}
-
-        {/* Fallback for etymology / option */}
-        {!is_title && !is_description && !is_image && !is_example && (
+        {/* ── fallback ── */}
+        {!["title", "description", "example", "etymology", "image"].includes(type) && (
           <>
             <p className="mb-3 text-base font-bold text-[#1a2744]">
               {data.presentation.front}
@@ -328,23 +407,10 @@ function CardView({
           </>
         )}
 
-        {/* Explanation */}
         {data.details.explanation && (
           <p className="mt-5 text-sm leading-[1.7] text-[#6b7a99]">
             {data.details.explanation}
           </p>
-        )}
-
-        {/* Example context */}
-        {data.details.example_context && (
-          <div className="mt-4 rounded-xl border border-[#1a2744]/[0.07] bg-[#fdf8f0] p-4">
-            <p className="text-sm text-[#1a2744]">
-              "{data.details.example_context.sentence}"
-            </p>
-            <p className="mt-1 text-xs text-[#6b7a99]">
-              {data.details.example_context.translation}
-            </p>
-          </div>
         )}
       </div>
 
@@ -353,7 +419,7 @@ function CardView({
         onClick={onNext}
         className="mt-5 w-full rounded-2xl bg-[#1a2744] py-4 text-base font-extrabold text-white transition-all hover:bg-[#243358] active:scale-[0.98]"
       >
-        {card_index === total - 1 ? "평가하기 →" : "다음 →"}
+        다음 →
       </button>
 
       <p className="mt-3 text-center text-xs text-[#6b7a99]">
@@ -402,7 +468,6 @@ function EvalView({
         </p>
       </div>
 
-      {/* members_only + 비로그인: Discord 로그인 안내 */}
       {!is_authenticated && link_access === "members_only" ? (
         <div className="w-full space-y-3">
           <p className="text-sm text-[#6b7a99]">
@@ -423,25 +488,27 @@ function EvalView({
           </button>
         </div>
       ) : complete_done ? (
-        /* Completed — window.location redirect is already fired above */
         <div className="w-full space-y-3">
           <div className="rounded-2xl bg-[#4caf72]/10 px-6 py-5 text-center">
             <div className="mb-1 text-3xl">🎉</div>
-            <p className="font-bold text-[#1a2744]">암기 완료!</p>
+            <p className="font-bold text-[#1a2744]">학습 완료!</p>
             <p className="text-sm text-[#6b7a99]">
-              {session_id ? "세션 페이지로 돌아가는 중..." : next_stage_id ? "다음 카드로 이동 중..." : "모든 단계를 완료했어요!"}
+              {session_id
+                ? "세션 페이지로 돌아가는 중..."
+                : next_stage_id
+                ? "다음 카드로 이동 중..."
+                : "모든 단계를 완료했어요!"}
             </p>
           </div>
         </div>
       ) : (
-        /* Eval buttons */
         <div className="w-full space-y-3">
           <button
             onClick={onComplete}
             disabled={is_completing}
             className="w-full rounded-2xl bg-[#4caf72] py-4 text-base font-extrabold text-white transition-all hover:bg-[#5ecb87] disabled:opacity-60 active:scale-[0.98]"
           >
-            {is_completing ? "저장 중..." : "암기 완료 ✓"}
+            {is_completing ? "저장 중..." : "학습 완료 ✓"}
           </button>
           <button
             onClick={onRetry}
@@ -486,7 +553,7 @@ function NoCardsState({ stage_title }: { stage_title: string }) {
 
 const CARD_TYPE_LABELS: Record<string, string> = {
   title: "단어",
-  description: "의미",
+  description: "설명",
   image: "이미지",
   etymology: "어원",
   example: "예문",
