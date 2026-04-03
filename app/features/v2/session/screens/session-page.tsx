@@ -325,6 +325,7 @@ const STAGE_TYPE_LABELS: Record<string, string> = {
   quiz_final: "최종 퀴즈",
   welcome: "안내",
   congratulations: "축하",
+  sentence_practice: "문장 연습",
 };
 
 function StageRow({
@@ -345,12 +346,15 @@ function StageRow({
   session_id: string;
 }) {
   const is_quiz = stage_type.startsWith("quiz");
+  const is_sentence = stage_type === "sentence_practice";
 
   return (
     <Link
       to={
         is_quiz
           ? `/quiz/${stage_id}?session=${session_id}`
+          : is_sentence
+          ? `/sentence/${stage_id}?session=${session_id}`
           : `/stages/${stage_id}?session=${session_id}`
       }
       className={[
@@ -389,6 +393,7 @@ function StageRow({
         <p className="text-xs text-[#6b7a99]">
           {STAGE_TYPE_LABELS[stage_type] ?? stage_type}
           {is_quiz && " · 매칭 게임"}
+          {is_sentence && " · 문장 만들기"}
         </p>
       </div>
 
