@@ -1,0 +1,1 @@
+ALTER TYPE "public"."nv2_stage_type" ADD VALUE 'sentence_practice';

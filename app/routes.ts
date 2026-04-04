@@ -44,6 +44,7 @@ export default [
       route("/products/:slug/start",        "features/v2/products/api/start-learning.tsx"),
       route("/sessions/:sessionId/complete","features/v2/session/api/complete.tsx"),
       route("/quiz/:stageId/result",        "features/v2/quiz/api/result.tsx"),
+      route("/sentence/:stageId/result",    "features/v2/sentence/api/result.tsx"),
     ]),
   ]),
 
@@ -89,6 +90,9 @@ export default [
 
     // ✅ 구현 완료
     route("/quiz/:stageId", "features/v2/quiz/screens/quiz-page.tsx"),
+
+    // ✅ 구현 완료
+    route("/sentence/:stageId", "features/v2/sentence/screens/sentence-page.tsx"),
 
     // ✅ 구현 완료
     ...prefix("/auth", [
