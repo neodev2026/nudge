@@ -1,11 +1,11 @@
 /**
  * Quiz query helpers.
  *
- * Collects title and description cards from learning stages
- * that precede the quiz stage, looking back across sessions if needed.
+ * Collects title cards only from learning stages that precede the quiz stage.
+ * Each title card provides both front (word) and back (translation) —
+ * the quiz pairs word ↔ translation using a single card type.
  *
  * Pool size is determined by QUIZ_CARD_POOL_SIZE[stage_type] in constants.ts.
- * e.g. quiz_5 → 5 stages, quiz_10 → 10 stages (spans previous session).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "database.types";
@@ -19,19 +19,26 @@ import type { SnsType } from "~/features/v2/shared/types";
 export interface QuizCard {
   card_id: string;
   stage_id: string;
-  card_type: "title" | "description";
+  /** Always "title" — quiz uses only title cards */
+  card_type: "title";
+  /** German word (displayed in word column or as TTS source) */
   front: string;
+  /** Korean translation (displayed in meaning column) */
   back: string;
-  logic_key: string; // = stage_id — used to pair title ↔ description
+  logic_key: string; // = stage_id
+}
+
+/** Ranking entry for the result screen */
+export interface QuizRankEntry {
+  sns_id: string;
+  score: number;
+  completed_at: string;
 }
 
 // ---------------------------------------------------------------------------
-// Queries
+// Context
 // ---------------------------------------------------------------------------
 
-/**
- * Fetches the quiz stage and its parent session context.
- */
 export async function getQuizStageContext(
   client: SupabaseClient<Database>,
   stage_id: string,
@@ -57,16 +64,17 @@ export async function getQuizStageContext(
   return { stage, session };
 }
 
+// ---------------------------------------------------------------------------
+// Card Pool — title cards only
+// ---------------------------------------------------------------------------
+
 /**
- * Collects title and description cards for a quiz pool.
+ * Collects title cards for a quiz pool.
  *
- * Strategy:
- * 1. Load all product_sessions for this product, ordered by session_number DESC
- * 2. Walk backwards from the current session collecting learning stages
- * 3. Stop once we have `pool_size` learning stages worth of cards
+ * Only title cards are collected — each card provides both the word (front)
+ * and its translation (back), which are displayed as separate buttons in the UI.
  *
- * This allows quiz_10 to span the previous session, quiz_50 to span
- * multiple sessions, etc. — all configurable via QUIZ_CARD_POOL_SIZE.
+ * Pool is shuffled so cards appear in random order each time.
  */
 export async function getQuizCardPool(
   client: SupabaseClient<Database>,
@@ -91,20 +99,18 @@ export async function getQuizCardPool(
     .select("id, session_number")
     .eq("product_id", current_ps.product_id)
     .eq("is_active", true)
-    .lte("session_number", current_ps.session_number) // current and older
+    .lte("session_number", current_ps.session_number)
     .order("session_number", { ascending: false });
 
   if (!all_sessions || all_sessions.length === 0) return [];
 
-  // ── Step 3: Walk sessions backwards, collecting learning stages ───────────
+  // ── Step 3: Walk sessions backwards, collecting title cards ───────────────
   const collected_cards: QuizCard[] = [];
   let learning_stage_count = 0;
 
   for (const ps of all_sessions) {
     if (learning_stage_count >= pool_size) break;
 
-    // Load all stages in this session ordered by display_order DESC
-    // (newest stages first within session)
     const { data: session_stages } = await client
       .from("nv2_product_session_stages")
       .select(`
@@ -132,54 +138,81 @@ export async function getQuizCardPool(
 
       // For the current session: only collect stages BEFORE the quiz stage
       if (ps.id === product_session_id) {
-        // We need to find the quiz stage's display_order first
         const quiz_entry = session_stages.find(
           (s) => s.stage_id === quiz_stage_id
         );
         if (quiz_entry && entry.display_order >= quiz_entry.display_order) {
-          continue; // Skip quiz stage and anything after it
+          continue;
         }
       }
 
       const stage = entry.nv2_stages as any;
       if (!stage || stage.stage_type !== "learning") continue;
 
-      // Collect title + description cards from this stage
       const stage_cards = (stage.nv2_cards ?? []) as any[];
-      const stage_quiz_cards: QuizCard[] = [];
 
-      for (const card of stage_cards) {
-        if (!card.is_active) continue;
-        if (card.card_type !== "title" && card.card_type !== "description") continue;
+      // Collect title card only
+      const title_card = stage_cards.find(
+        (c: any) => c.is_active && c.card_type === "title"
+      );
 
-        const card_data = card.card_data as any;
-        stage_quiz_cards.push({
-          card_id: card.id,
-          stage_id: stage.id,
-          card_type: card.card_type as "title" | "description",
-          front: card_data?.presentation?.front ?? "",
-          back: card_data?.presentation?.back ?? "",
-          logic_key: card_data?.meta?.logic_key ?? stage.id,
-        });
-      }
+      if (!title_card) continue;
 
-      if (stage_quiz_cards.length > 0) {
-        // Prepend — we're walking backwards, so prepend to keep chronological order
-        collected_cards.unshift(...stage_quiz_cards);
-        learning_stage_count++;
-      }
+      const card_data = title_card.card_data as any;
+      collected_cards.unshift({
+        card_id: title_card.id,
+        stage_id: stage.id,
+        card_type: "title",
+        front: card_data?.presentation?.front ?? "",
+        back: card_data?.presentation?.back ?? "",
+        logic_key: card_data?.meta?.logic_key ?? stage.id,
+      });
+      learning_stage_count++;
     }
   }
 
-  return collected_cards;
+  // Shuffle pool for random card order
+  return shuffleArray(collected_cards);
 }
 
+// ---------------------------------------------------------------------------
+// Ranking
+// ---------------------------------------------------------------------------
+
 /**
- * Saves quiz result to nv2_quiz_results.
- * quiz_type is derived from stage_type:
- *   quiz_10   → quiz_10
- *   otherwise → quiz_5 (enum only has quiz_5 and quiz_10)
+ * Fetches top quiz scores for a given quiz stage.
+ * Returns top 10 results ordered by score descending.
+ * Score is read from result_snapshot.score (new field).
+ * Falls back to matched_pairs_count * 10 for legacy records.
  */
+export async function getQuizRanking(
+  client: SupabaseClient<Database>,
+  quiz_stage_id: string
+): Promise<QuizRankEntry[]> {
+  const { data, error } = await client
+    .from("nv2_quiz_results")
+    .select("sns_id, matched_pairs_count, result_snapshot, completed_at")
+    .contains("covered_stage_ids", [quiz_stage_id])
+    .order("matched_pairs_count", { ascending: false })
+    .limit(10);
+
+  if (error || !data) return [];
+
+  return data.map((row) => {
+    const snapshot = row.result_snapshot as any;
+    const score = snapshot?.score ?? (row.matched_pairs_count * 10);
+    return {
+      sns_id: row.sns_id,
+      score,
+      completed_at: row.completed_at?.toString() ?? "",
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Save Result
+// ---------------------------------------------------------------------------
+
 export async function saveQuizResult(
   client: SupabaseClient<Database>,
   sns_type: SnsType,
@@ -187,6 +220,7 @@ export async function saveQuizResult(
   stage_id: string,
   stage_type: string,
   matched_pairs_count: number,
+  score: number,
   covered_stage_ids: string[],
   duration_seconds: number
 ) {
@@ -204,6 +238,7 @@ export async function saveQuizResult(
       stage_type,
       covered_stage_ids,
       matched_pairs: matched_pairs_count,
+      score,
       duration_seconds,
       completed_at: new Date().toISOString(),
     },
@@ -212,4 +247,108 @@ export async function saveQuizResult(
   });
 
   if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ---------------------------------------------------------------------------
+// Quiz5 Types
+// ---------------------------------------------------------------------------
+
+export interface Quiz5Card {
+  stage_id: string;
+  word: string;           // title.front
+  translation: string;    // title.back
+  description: string;    // description.back
+  example_front: string;  // example.front (target sentence)
+  example_back: string;   // example.back (translation)
+}
+
+// ---------------------------------------------------------------------------
+// Quiz5 Card Pool
+// ---------------------------------------------------------------------------
+
+/**
+ * Collects title + description + example cards from learning stages
+ * that precede the quiz_5 stage within the same session.
+ *
+ * Returns one Quiz5Card per learning stage (5 cards for quiz_5).
+ * Stages missing any card type are silently skipped.
+ */
+export async function getQuiz5CardPool(
+  client: SupabaseClient<Database>,
+  product_session_id: string,
+  quiz_stage_id: string
+): Promise<Quiz5Card[]> {
+  // Load all stages in the current session (ascending order)
+  const { data: session_stages } = await client
+    .from("nv2_product_session_stages")
+    .select(`
+      stage_id,
+      display_order,
+      nv2_stages!inner (
+        id,
+        stage_type,
+        nv2_cards (
+          id,
+          card_type,
+          card_data,
+          display_order,
+          is_active
+        )
+      )
+    `)
+    .eq("product_session_id", product_session_id)
+    .order("display_order", { ascending: true });
+
+  if (!session_stages || session_stages.length === 0) return [];
+
+  // Find the quiz stage display_order to only include stages before it
+  const quiz_entry = session_stages.find((s) => s.stage_id === quiz_stage_id);
+  const quiz_display_order = quiz_entry?.display_order ?? 9999;
+
+  const result: Quiz5Card[] = [];
+
+  for (const entry of session_stages) {
+    if (entry.display_order >= quiz_display_order) continue;
+
+    const stage = entry.nv2_stages as any;
+    if (!stage || stage.stage_type !== "learning") continue;
+
+    const cards = (stage.nv2_cards ?? []) as any[];
+    const active = cards.filter((c: any) => c.is_active);
+
+    const title_card   = active.find((c: any) => c.card_type === "title");
+    const desc_card    = active.find((c: any) => c.card_type === "description");
+    const example_card = active.find((c: any) => c.card_type === "example");
+
+    // All three card types required
+    if (!title_card || !desc_card || !example_card) continue;
+
+    const t = title_card.card_data as any;
+    const d = desc_card.card_data as any;
+    const e = example_card.card_data as any;
+
+    result.push({
+      stage_id:      stage.id,
+      word:          t?.presentation?.front ?? "",
+      translation:   t?.presentation?.back  ?? "",
+      description:   d?.presentation?.back  ?? "",
+      example_front: e?.presentation?.front ?? "",
+      example_back:  e?.presentation?.back  ?? "",
+    });
+  }
+
+  return result;
 }
