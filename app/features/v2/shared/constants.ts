@@ -28,13 +28,15 @@ export const V2_CARD_TYPES = [
  *
  * - welcome        : Delivered once at onboarding before any learning begins
  * - learning       : Standard vocabulary / content learning stage
- * - quiz_5         : Matching quiz triggered at every 5th new stage completion
- *                    (5, 15, 25, 35, 45, ...)
- * - quiz_10        : Matching quiz triggered at every 10th new stage completion
- *                    (10, 20, 30, 40, 50, ...) — replaces quiz_5 at those counts
- * - quiz_daily     : Quiz triggered when the user hits their daily new-stage goal
- * - quiz_final     : Comprehensive quiz triggered on full product completion
- * - congratulations: Celebration stage delivered after the user masters all stages
+ * - quiz_5              : Matching quiz triggered at every 5th new stage completion
+ *                         (5, 15, 25, 35, 45, ...)
+ * - quiz_10             : Matching quiz triggered at every 10th new stage completion
+ *                         (10, 20, 30, 40, 50, ...) — replaces quiz_5 at those counts
+ * - quiz_daily          : Quiz triggered when the user hits their daily new-stage goal
+ * - quiz_final          : Comprehensive quiz triggered on full product completion
+ * - congratulations     : Celebration stage delivered after the user masters all stages
+ * - sentence_practice   : Sentence ordering + shadowing practice using example cards
+ *                         from preceding learning stages in the same session
  */
 export const V2_STAGE_TYPES = [
   "welcome",
@@ -44,6 +46,7 @@ export const V2_STAGE_TYPES = [
   "quiz_daily",
   "quiz_final",
   "congratulations",
+  "sentence_practice",
 ] as const;
 
 /**
@@ -161,8 +164,8 @@ export const V2_SESSION_STATUSES = [
  * quiz_final: 60 seconds (comprehensive review)
  */
 export const QUIZ_TIMER_SECONDS: Record<string, number> = {
-  quiz_5:     20,
-  quiz_10:    40,
+  quiz_5:     90,
+  quiz_10:    120,
   quiz_daily: 20,
   quiz_final: 60,
 } as const;
