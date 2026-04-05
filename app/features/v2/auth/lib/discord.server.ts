@@ -218,3 +218,38 @@ export async function sendSessionCompleteDm(
     );
   }
 }
+
+/**
+ * Adds a Discord user to a guild (server) using their OAuth access token.
+ * This is required so the bot can send DMs to users who share no mutual guild.
+ *
+ * Requires:
+ *   - Bot permission: CREATE_INSTANT_INVITE (or Manage Server)
+ *   - OAuth scope: guilds.join
+ *   - Env: NUDGE_DISCORD_GUILD_ID
+ *
+ * HTTP 201 = user newly added, 204 = already a member — both are success.
+ */
+export async function addUserToGuild(
+  access_token: string,
+  user_id: string,
+  guild_id: string
+): Promise<void> {
+  const res = await fetch(
+    `${DISCORD_API_URL}/guilds/${guild_id}/members/${user_id}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ access_token }),
+    }
+  );
+
+  // 201 = newly added, 204 = already a member — both are fine
+  if (!res.ok && res.status !== 204) {
+    const body = await res.text();
+    throw new Error(`addUserToGuild failed [${res.status}]: ${body}`);
+  }
+}

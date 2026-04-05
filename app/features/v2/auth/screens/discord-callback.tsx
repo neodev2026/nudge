@@ -20,7 +20,7 @@ import type { Route } from "./+types/discord-callback";
 
 import makeServerClient from "~/core/lib/supa-client.server";
 import { upsertNv2Profile, getNv2ProfileByAuthUserId } from "../lib/queries.server";
-import { sendWelcomeDm } from "../lib/discord.server";
+import { sendWelcomeDm, addUserToGuild } from "../lib/discord.server";
 import { getNv2WelcomeStage } from "~/features/v2/stage/lib/queries.server";
 import { upsertNv2Subscription } from "~/features/v2/session/lib/queries.server";
 
@@ -74,6 +74,20 @@ export async function loader({ request }: Route.LoaderArgs) {
     "Nudger";
 
   const avatar_url = (meta.avatar_url as string | undefined) ?? null;
+
+  // ── Step 2-b: Add user to Nudge Discord guild ───────────────────────────
+  // Required so the bot can send DMs (Discord restricts DMs to mutual-guild members).
+  // provider_token is the Discord OAuth access_token issued during login.
+  const provider_token = session_data.session.provider_token;
+  const guild_id = process.env.NUDGE_DISCORD_GUILD_ID;
+
+  if (provider_token && guild_id) {
+    addUserToGuild(provider_token, sns_id, guild_id).catch((err) => {
+      console.error("[discord-callback] addUserToGuild failed:", err);
+    });
+  } else {
+    console.warn("[discord-callback] Skipping addUserToGuild — missing provider_token or NUDGE_DISCORD_GUILD_ID");
+  }
 
   // ── Step 3: Check if this is a returning user before upsert ───────────────
   const existing_profile = await getNv2ProfileByAuthUserId(
