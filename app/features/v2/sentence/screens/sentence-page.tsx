@@ -375,6 +375,13 @@ function OrderStep({
         )}
       </div>
 
+      {/* Translation hint — shown above dropzone so user knows what to build */}
+      {card.example_back && (
+        <p className="text-center text-sm font-bold text-[#1a2744]">
+          {card.example_back}
+        </p>
+      )}
+
       {/* Dropzone */}
       <div
         className={[
@@ -458,11 +465,11 @@ function ShadowStep({
   on_next: () => void;
   is_last: boolean;
 }) {
-  // Auto-play TTS on mount
+  // Auto-play TTS on mount using card's resolved language
   useEffect(() => {
-    playOnce(card.example_front);
+    playOnce(card.example_front, card.tts_lang);
     return () => stopTts();
-  }, [card.example_front]);
+  }, [card.example_front, card.tts_lang]);
 
   return (
     <div className="flex w-full max-w-md flex-col gap-4">
