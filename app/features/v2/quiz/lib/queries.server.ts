@@ -21,11 +21,13 @@ export interface QuizCard {
   stage_id: string;
   /** Always "title" — quiz uses only title cards */
   card_type: "title";
-  /** German word (displayed in word column or as TTS source) */
+  /** Word in the target language (displayed in word column or as TTS source) */
   front: string;
-  /** Korean translation (displayed in meaning column) */
+  /** Translation in learner's language (displayed in meaning column) */
   back: string;
   logic_key: string; // = stage_id
+  /** BCP-47 language tag derived from meta.target_locale */
+  tts_lang: string;
 }
 
 /** Ranking entry for the result screen */
@@ -82,7 +84,11 @@ export async function getQuizCardPool(
   quiz_stage_id: string,
   quiz_stage_type: string
 ): Promise<QuizCard[]> {
-  const pool_size = QUIZ_CARD_POOL_SIZE[quiz_stage_type] ?? 5;
+  // quiz_current_and_prev_session: pool = all learning stages in current + previous session.
+  // pool_size is computed dynamically below after loading session data.
+  // For all other types, use the fixed value from QUIZ_CARD_POOL_SIZE.
+  const is_dynamic = quiz_stage_type === "quiz_current_and_prev_session";
+  const pool_size = is_dynamic ? 9999 : (QUIZ_CARD_POOL_SIZE[quiz_stage_type] ?? 5);
 
   // ── Step 1: Get current product_session info ──────────────────────────────
   const { data: current_ps } = await client
@@ -108,8 +114,14 @@ export async function getQuizCardPool(
   const collected_cards: QuizCard[] = [];
   let learning_stage_count = 0;
 
+  // For quiz_current_and_prev_session, limit to current + 1 previous session only.
+  const session_limit = is_dynamic ? 2 : all_sessions.length;
+  let session_count = 0;
+
   for (const ps of all_sessions) {
     if (learning_stage_count >= pool_size) break;
+    if (session_count >= session_limit) break;
+    session_count++;
 
     const { data: session_stages } = await client
       .from("nv2_product_session_stages")
@@ -159,6 +171,10 @@ export async function getQuizCardPool(
       if (!title_card) continue;
 
       const card_data = title_card.card_data as any;
+      const locale_map: Record<string, string> = {
+        de: "de-DE", en: "en-US", ja: "ja-JP", ko: "ko-KR", fr: "fr-FR", es: "es-ES",
+      };
+      const target_locale = card_data?.meta?.target_locale ?? "de";
       collected_cards.unshift({
         card_id: title_card.id,
         stage_id: stage.id,
@@ -166,6 +182,7 @@ export async function getQuizCardPool(
         front: card_data?.presentation?.front ?? "",
         back: card_data?.presentation?.back ?? "",
         logic_key: card_data?.meta?.logic_key ?? stage.id,
+        tts_lang: locale_map[target_locale] ?? "de-DE",
       });
       learning_stage_count++;
     }
@@ -273,6 +290,7 @@ export interface Quiz5Card {
   description: string;    // description.back
   example_front: string;  // example.front (target sentence)
   example_back: string;   // example.back (translation)
+  tts_lang: string;       // BCP-47 lang tag derived from meta.target_locale
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +307,10 @@ export interface Quiz5Card {
 export async function getQuiz5CardPool(
   client: SupabaseClient<Database>,
   product_session_id: string,
-  quiz_stage_id: string
+  quiz_stage_id: string,
+  // stage_type accepted for future extensibility; current logic collects
+  // all learning stages before the quiz stage regardless of type.
+  _stage_type?: string
 ): Promise<Quiz5Card[]> {
   // Load all stages in the current session (ascending order)
   const { data: session_stages } = await client
@@ -340,6 +361,11 @@ export async function getQuiz5CardPool(
     const d = desc_card.card_data as any;
     const e = example_card.card_data as any;
 
+    // Resolve TTS language from title card meta.target_locale
+    const locale_map: Record<string, string> = {
+      de: "de-DE", en: "en-US", ja: "ja-JP", ko: "ko-KR", fr: "fr-FR", es: "es-ES",
+    };
+    const target_locale = t?.meta?.target_locale ?? "de";
     result.push({
       stage_id:      stage.id,
       word:          t?.presentation?.front ?? "",
@@ -347,6 +373,7 @@ export async function getQuiz5CardPool(
       description:   d?.presentation?.back  ?? "",
       example_front: e?.presentation?.front ?? "",
       example_back:  e?.presentation?.back  ?? "",
+      tts_lang:      locale_map[target_locale] ?? "de-DE",
     });
   }
 

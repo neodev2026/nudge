@@ -378,6 +378,8 @@ const STAGE_TYPE_LABELS: Record<string, string> = {
   learning: "학습",
   quiz_5: "퀴즈",
   quiz_10: "퀴즈",
+  quiz_current_session: "퀴즈",
+  quiz_current_and_prev_session: "퀴즈",
   quiz_daily: "퀴즈",
   quiz_final: "최종 퀴즈",
   welcome: "안내",
@@ -402,7 +404,11 @@ function StageRow({
   is_current: boolean;
   session_id: string;
 }) {
-  const is_quiz = stage_type.startsWith("quiz");
+  const is_matching_quiz =
+    stage_type === "quiz_10" || stage_type === "quiz_current_and_prev_session";
+  const is_step_quiz =
+    stage_type === "quiz_5" || stage_type === "quiz_current_session";
+  const is_quiz = is_matching_quiz || is_step_quiz;
   const is_sentence = stage_type === "sentence_practice";
 
   return (
@@ -449,7 +455,8 @@ function StageRow({
         </p>
         <p className="text-xs text-[#6b7a99]">
           {STAGE_TYPE_LABELS[stage_type] ?? stage_type}
-          {is_quiz && " · 매칭 게임"}
+          {is_matching_quiz && " · 매칭 게임"}
+          {is_step_quiz && " · 3단계 퀴즈"}
           {is_sentence && " · 문장 만들기"}
         </p>
       </div>
