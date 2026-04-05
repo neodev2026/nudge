@@ -254,7 +254,7 @@ function StartButton({
     return (
       <div className="space-y-3">
         <Link
-          to="/auth/discord/start"
+          to={`/auth/discord/start?next=${encodeURIComponent(`/products/${product_slug}`)}`}
           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#5865F2] py-4 text-base font-extrabold text-white shadow-[0_4px_16px_rgba(88,101,242,0.25)] transition-all hover:-translate-y-px"
         >
           <DiscordIcon />
