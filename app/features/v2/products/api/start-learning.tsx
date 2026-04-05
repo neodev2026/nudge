@@ -23,6 +23,7 @@ import { data as routeData } from "react-router";
 import type { Route } from "./+types/start-learning";
 
 import makeServerClient from "~/core/lib/supa-client.server";
+import adminClient from "~/core/lib/supa-admin-client.server";
 import { getNv2ProductBySlug } from "~/features/v2/products/queries";
 import {
   getNv2ActiveUserSession,
@@ -72,8 +73,8 @@ export async function action({ request, params }: Route.ActionArgs) {
     return routeData({ error: "Product not found" }, { status: 404, headers });
   }
 
-  // ── Upsert subscription (creates if not exists, preserves existing settings) ──
-  await upsertNv2Subscription(client, sns_type, sns_id, product.id).catch(
+  // ── Upsert subscription (uses adminClient to bypass RLS insert restriction) ──
+  await upsertNv2Subscription(adminClient, sns_type, sns_id, product.id).catch(
     (err) => console.error("[start-learning] upsertNv2Subscription failed:", err)
   );
 
