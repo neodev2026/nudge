@@ -20,6 +20,7 @@ import type { Route } from "./+types/session-page";
 import { Link, useLoaderData, useFetcher } from "react-router";
 import { redirect } from "react-router";
 import { useEffect } from "react";
+import React from "react";
 
 import makeServerClient from "~/core/lib/supa-client.server";
 import {
@@ -98,6 +99,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const completed_count = stage_progresses.filter((p) => p.completed).length;
   const all_completed = completed_count === stages.length && stages.length > 0;
 
+  // True when all learning stages are done (quiz/sentence stages may still be pending).
+  // Used to show the optional "skip remaining & complete" button.
+  const all_learning_completed =
+    stages.length > 0 &&
+    stages
+      .filter((s) => (s.nv2_stages as any)?.stage_type === "learning")
+      .every((s) => progress_map[s.stage_id] ?? false);
+
   return {
     session_id: params.sessionId,
     session_title,
@@ -107,6 +116,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     completed_count,
     total_count: stages.length,
     all_completed,
+    all_learning_completed,
     is_authenticated,
     sns_type,
     sns_id,
@@ -128,7 +138,10 @@ export default function SessionPage() {
     completed_count,
     total_count,
     all_completed,
+    all_learning_completed,
     is_authenticated,
+    sns_type,
+    sns_id,
     link_access,
   } = useLoaderData<typeof loader>();
 
@@ -149,7 +162,40 @@ export default function SessionPage() {
     }
   }, [all_completed]);
 
-  const is_done = !!complete_data?.ok;
+  // ── Force-complete: mark remaining stages done then complete session ──────
+  // Shown when all learning stages are done but quiz/sentence stages remain.
+  const force_fetcher = useFetcher();
+  const [is_force_completing, set_is_force_completing] = React.useState(false);
+
+  async function handleForceComplete() {
+    if (!sns_type || !sns_id || is_force_completing) return;
+    set_is_force_completing(true);
+
+    // Mark every incomplete stage as complete via the existing stage API
+    const incomplete_stage_ids = stages
+      .filter((s) => !(progress_map[s.stage_id] ?? false))
+      .map((s) => s.stage_id);
+
+    await Promise.all(
+      incomplete_stage_ids.map((stage_id) =>
+        fetch(`/api/v2/stage/${stage_id}/complete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sns_type, sns_id }),
+        })
+      )
+    );
+
+    // Then trigger session complete
+    complete_fetcher.submit(
+      {},
+      { method: "POST", action: `/api/v2/sessions/${session_id}/complete` }
+    );
+  }
+
+  // Guard against stale fetcher data from previous session navigation.
+  // all_completed ensures the completion state reflects the current session.
+  const is_done = !!complete_data?.ok && all_completed;
   const next_session_id = complete_data?.next_session_id ?? null;
 
   return (
@@ -260,6 +306,17 @@ export default function SessionPage() {
             </div>
           )}
 
+          {/* Force-complete button — shown when only quiz/sentence/welcome stages remain */}
+          {!is_done && all_learning_completed && !all_completed && (
+            <button
+              onClick={handleForceComplete}
+              disabled={is_force_completing || is_completing}
+              className="mt-4 w-full rounded-2xl border-2 border-dashed border-[#6b7a99]/40 bg-white px-6 py-3.5 text-sm font-bold text-[#6b7a99] transition-all hover:border-[#1a2744] hover:text-[#1a2744] disabled:opacity-50"
+            >
+              {is_force_completing ? "처리 중..." : "퀴즈 건너뛰고 다음 세션으로 →"}
+            </button>
+          )}
+
           {/* Processing indicator */}
           {all_completed && is_completing && (
             <p className="mt-3 text-xs text-[#6b7a99] animate-pulse">
@@ -321,6 +378,8 @@ const STAGE_TYPE_LABELS: Record<string, string> = {
   learning: "학습",
   quiz_5: "퀴즈",
   quiz_10: "퀴즈",
+  quiz_current_session: "퀴즈",
+  quiz_current_and_prev_session: "퀴즈",
   quiz_daily: "퀴즈",
   quiz_final: "최종 퀴즈",
   welcome: "안내",
@@ -345,7 +404,11 @@ function StageRow({
   is_current: boolean;
   session_id: string;
 }) {
-  const is_quiz = stage_type.startsWith("quiz");
+  const is_matching_quiz =
+    stage_type === "quiz_10" || stage_type === "quiz_current_and_prev_session";
+  const is_step_quiz =
+    stage_type === "quiz_5" || stage_type === "quiz_current_session";
+  const is_quiz = is_matching_quiz || is_step_quiz;
   const is_sentence = stage_type === "sentence_practice";
 
   return (
@@ -392,7 +455,8 @@ function StageRow({
         </p>
         <p className="text-xs text-[#6b7a99]">
           {STAGE_TYPE_LABELS[stage_type] ?? stage_type}
-          {is_quiz && " · 매칭 게임"}
+          {is_matching_quiz && " · 매칭 게임"}
+          {is_step_quiz && " · 3단계 퀴즈"}
           {is_sentence && " · 문장 만들기"}
         </p>
       </div>

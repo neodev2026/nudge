@@ -1,0 +1,2 @@
+ALTER TYPE "public"."nv2_stage_type" ADD VALUE 'quiz_current_session' BEFORE 'quiz_daily';--> statement-breakpoint
+ALTER TYPE "public"."nv2_stage_type" ADD VALUE 'quiz_current_and_prev_session' BEFORE 'quiz_daily';
