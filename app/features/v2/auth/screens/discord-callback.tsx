@@ -19,6 +19,7 @@ import { redirect } from "react-router";
 import type { Route } from "./+types/discord-callback";
 
 import makeServerClient from "~/core/lib/supa-client.server";
+import adminClient from "~/core/lib/supa-admin-client.server";
 import { upsertNv2Profile, getNv2ProfileByAuthUserId } from "../lib/queries.server";
 import { sendWelcomeDm, addUserToGuild } from "../lib/discord.server";
 import { getNv2WelcomeStage } from "~/features/v2/stage/lib/queries.server";
@@ -98,7 +99,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const is_new_user = existing_profile === null;
 
   // ── Step 4: Upsert nv2_profiles ───────────────────────────────────────────
-  const profile = await upsertNv2Profile(client, {
+  const profile = await upsertNv2Profile(adminClient, {
     sns_type: "discord",
     sns_id,
     auth_user_id: auth_user.id,
@@ -125,7 +126,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     // Create subscription for the welcome product
     if (welcome_stage?.learning_product_id) {
       await upsertNv2Subscription(
-        client,
+        adminClient,
         "discord",
         sns_id,
         welcome_stage.learning_product_id
