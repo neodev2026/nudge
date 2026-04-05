@@ -293,6 +293,14 @@ export const nv2_sessions = pgTable(
       using: isAdmin,
     }),
 
+    // RLS: Public select — session_id UUID acts as a security token
+    // Anyone with the link can view the session (needed for DM link access)
+    pgPolicy("nv2_sessions_select_public", {
+      for: "select",
+      to: "public",
+      using: sql`true`,
+    }),
+
     // RLS: Service role for Cron
     pgPolicy("nv2_sessions_service_all", {
       for: "all",

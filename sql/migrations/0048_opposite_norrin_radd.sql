@@ -1,0 +1,1 @@
+CREATE POLICY "nv2_sessions_select_public" ON "nv2_sessions" AS PERMISSIVE FOR SELECT TO public USING (true);
