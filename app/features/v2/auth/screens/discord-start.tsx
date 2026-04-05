@@ -22,12 +22,20 @@ export async function loader({ request }: Route.LoaderArgs) {
   const origin = new URL(request.url).origin;
   const redirect_to = `${origin}/auth/discord/callback`;
 
+  // Preserve ?next= param so the callback can redirect back to the original URL
+  const url_obj = new URL(request.url);
+  const next_param = url_obj.searchParams.get("next");
+  const redirect_with_next = next_param
+    ? `${redirect_to}?next=${encodeURIComponent(next_param)}`
+    : redirect_to;
+
   const { data, error } = await client.auth.signInWithOAuth({
     provider: "discord",
     options: {
-      redirectTo: redirect_to,
-      // Request only the identity scope — no guild or message permissions needed
-      scopes: "identify",
+      redirectTo: redirect_with_next,
+      // identify : read basic Discord profile (required)
+      // guilds.join: allows the bot to add user to Nudge guild so DMs work
+      scopes: "identify guilds.join",
     },
   });
 
