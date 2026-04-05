@@ -290,8 +290,8 @@ function OrderStep({
   card: SentenceCard;
   on_complete: () => void;
 }) {
-  // Tokenise: split on spaces, keep punctuation attached to last token
-  const tokens = card.example_front.split(" ").filter(Boolean);
+  // Tokenise: multi-word → split by space, single-word → split by character
+  const tokens = tokenizeExample(card.example_front);
 
   // Shuffle tokens for initial display
   const [shuffled] = useState<string[]>(() => shuffle([...tokens]));
@@ -478,7 +478,7 @@ function ShadowStep({
       </div>
 
       {/* TTS button */}
-      <TtsButton text={card.example_front} lang="de-DE" />
+      <TtsButton text={card.example_front} lang={card.tts_lang} />
 
       {/* Hint */}
       {card.description_back && (
@@ -605,6 +605,17 @@ function EmptyState({
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Tokenizes example_front for Step1.
+ * - Multiple words (contains space): split by space → word-order exercise
+ * - Single word (no space): split into individual characters → character-order exercise
+ */
+function tokenizeExample(text: string): string[] {
+  const words = text.split(" ").filter(Boolean);
+  if (words.length > 1) return words;
+  return text.trim().split("");
+}
 
 function shuffle<T>(arr: T[]): T[] {
   for (let i = arr.length - 1; i > 0; i--) {

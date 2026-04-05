@@ -66,13 +66,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const timer_seconds = QUIZ_TIMER_SECONDS[stage.stage_type] ?? 90;
   const covered_stage_ids = card_pool.map((c) => c.stage_id);
 
-  // quiz_5: collect title + description + example cards
+  // quiz_5 / quiz_current_session: collect title + description + example cards
   const quiz5_cards =
-    stage.stage_type === "quiz_5"
+    (stage.stage_type === "quiz_5" || stage.stage_type === "quiz_current_session")
       ? await getQuiz5CardPool(
           client,
           identity.product_session_id,
-          params.stageId
+          params.stageId,
+          stage.stage_type
         )
       : [];
 
@@ -97,7 +98,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 export default function QuizPage() {
   const data = useLoaderData<typeof loader>();
 
-  if (data.stage_type === "quiz_10") {
+  if (
+    data.stage_type === "quiz_10" ||
+    data.stage_type === "quiz_current_and_prev_session"
+  ) {
     return <Quiz10Game {...data} />;
   }
 
@@ -105,6 +109,7 @@ export default function QuizPage() {
   return (
     <Quiz5Game
       stage_id={data.stage_id}
+      stage_type={data.stage_type}
       stage_title={data.stage_title}
       session_id={data.session_id}
       sns_type={data.sns_type}
@@ -122,6 +127,7 @@ type Quiz5Step = "step1" | "step2" | "step3";
 
 function Quiz5Game({
   stage_id,
+  stage_type,
   stage_title,
   session_id,
   sns_type,
@@ -129,6 +135,7 @@ function Quiz5Game({
   cards,
 }: {
   stage_id: string;
+  stage_type: string;
   stage_title: string;
   session_id: string;
   sns_type: string;
@@ -145,7 +152,7 @@ function Quiz5Game({
       {
         sns_type,
         sns_id,
-        stage_type: "quiz_5",
+        stage_type,  // quiz_5 or quiz_current_session
         matched_pairs_count: 0,
         score: 0,
         covered_stage_ids: "",
@@ -250,7 +257,7 @@ function Quiz5Step1({
 
   function handleFlip() {
     if (!flipped) {
-      playTts(card.word, "de-DE");
+      playTts(card.word, card.tts_lang);
     }
     set_flipped((v) => !v);
   }
@@ -297,7 +304,7 @@ function Quiz5Step1({
               {card.word}
             </p>
             <button
-              onClick={(e) => { e.stopPropagation(); playTts(card.word, "de-DE"); }}
+              onClick={(e) => { e.stopPropagation(); playTts(card.word, card.tts_lang); }}
               className="mt-2 flex items-center gap-2 rounded-xl bg-[#fdf8f0] px-4 py-2 text-sm font-bold text-[#6b7a99] hover:bg-[#e8ecf5]"
             >
               🔊 발음 듣기
@@ -518,13 +525,13 @@ function Quiz5Step3({
   const [flash_error, set_flash_error] = useState(false);
 
   const card = cards[idx];
-  const tokens = card.example_front.split(" ").filter(Boolean);
+  const tokens = tokenizeExample(card.example_front);
 
   // shuffled is managed as state so it can be updated when idx changes
   const [shuffled, set_shuffled] = useState<string[]>(() => quiz5Shuffle([...tokens]));
 
   useEffect(() => {
-    resetCard(cards[idx].example_front.split(" ").filter(Boolean));
+    resetCard(tokenizeExample(cards[idx].example_front));
   }, [idx]);
 
   function resetCard(current_tokens: string[]) {
@@ -548,9 +555,10 @@ function Quiz5Step3({
     set_available(next_available);
 
     if (next_selected.length === tokens.length) {
-      if (next_selected.join(" ") === tokens.join(" ")) {
+      const sep = tokens.length > 1 && tokens[0].length > 1 ? " " : "";
+      if (next_selected.join(sep) === tokens.join(sep)) {
         // Correct
-        playTts(card.example_front, "de-DE");
+        playTts(card.example_front, card.tts_lang);
         setTimeout(handleNext, 900);
       } else {
         // Wrong
@@ -670,6 +678,18 @@ function Quiz5Step3({
       )}
     </div>
   );
+}
+
+/**
+ * Tokenizes example_front for Step3.
+ * - Multiple words (contains space): split by space → word-order exercise
+ * - Single word (no space): split into individual characters → character-order exercise
+ */
+function tokenizeExample(text: string): string[] {
+  const words = text.split(" ").filter(Boolean);
+  if (words.length > 1) return words;
+  // Single word — split into characters
+  return text.trim().split("");
 }
 
 function quiz5Shuffle<T>(arr: T[]): T[] {
@@ -1287,7 +1307,7 @@ function AudioSlotButton({
       window.speechSynthesis.cancel();
       set_playing(true);
       const utt = new SpeechSynthesisUtterance(card.front);
-      utt.lang = "de-DE";
+      utt.lang = card.tts_lang;
       utt.rate = 0.9;
       utt.onend  = () => set_playing(false);
       utt.onerror = () => set_playing(false);

@@ -1395,6 +1395,8 @@ export type Database = {
         | "learning"
         | "quiz_5"
         | "quiz_10"
+        | "quiz_current_session"
+        | "quiz_current_and_prev_session"
         | "quiz_daily"
         | "quiz_final"
         | "congratulations"
@@ -1603,6 +1605,8 @@ export const Constants = {
         "learning",
         "quiz_5",
         "quiz_10",
+        "quiz_current_session",
+        "quiz_current_and_prev_session",
         "quiz_daily",
         "quiz_final",
         "congratulations",
