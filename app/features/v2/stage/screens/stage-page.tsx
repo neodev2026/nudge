@@ -248,6 +248,16 @@ export default function StagePage() {
 }
 
 // ---------------------------------------------------------------------------
+/** Maps card meta.target_locale to BCP-47 language tag for Web Speech API */
+const TTS_LANG_MAP: Record<string, string> = {
+  de: "de-DE",
+  en: "en-US",
+  ja: "ja-JP",
+  ko: "ko-KR",
+  fr: "fr-FR",
+  es: "es-ES",
+};
+
 // TTS Hook — 무한 반복, 다시 누르면 중지
 // ---------------------------------------------------------------------------
 
@@ -326,6 +336,10 @@ function CardView({
   const data = card.card_data as V2CardData;
   const type = card.card_type;
 
+  // Resolve TTS language from card metadata.
+  // Falls back to "de-DE" for legacy cards without target_locale.
+  const tts_lang = TTS_LANG_MAP[data.meta?.target_locale ?? "de"] ?? "de-DE";
+
   return (
     <div className="flex w-full max-w-md flex-col">
       <div className="rounded-3xl bg-white p-8 shadow-[0_8px_40px_rgba(26,39,68,0.10)]">
@@ -343,7 +357,7 @@ function CardView({
             <div className="text-lg font-bold text-[#4caf72]">
               {data.presentation.back}
             </div>
-            <TtsButton text={data.presentation.front} lang="de-DE" />
+            <TtsButton text={data.presentation.front} lang={tts_lang} />
           </>
         )}
 
@@ -363,7 +377,7 @@ function CardView({
             <p className="text-sm text-[#6b7a99]">
               {data.presentation.back}
             </p>
-            <TtsButton text={data.presentation.front} lang="de-DE" />
+            <TtsButton text={data.presentation.front} lang={tts_lang} />
           </>
         )}
 

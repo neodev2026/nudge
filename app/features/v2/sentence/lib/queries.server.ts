@@ -26,6 +26,8 @@ export interface SentenceCard {
   description_back: string;
   /** The word being studied (title card front) */
   word: string;
+  /** BCP-47 language tag derived from meta.target_locale */
+  tts_lang: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,12 +142,17 @@ export async function getSentenceCardPool(
     const desc_data = desc_card?.card_data as any;
     const title_data = title_card?.card_data as any;
 
+    const locale_map: Record<string, string> = {
+      de: "de-DE", en: "en-US", ja: "ja-JP", ko: "ko-KR", fr: "fr-FR", es: "es-ES",
+    };
+    const target_locale = title_data?.meta?.target_locale ?? "de";
     result.push({
       stage_id: stage.id,
       example_front: example_data?.presentation?.front ?? "",
       example_back: example_data?.presentation?.back ?? "",
       description_back: desc_data?.presentation?.back ?? "",
       word: title_data?.presentation?.front ?? "",
+      tts_lang: locale_map[target_locale] ?? "de-DE",
     });
   }
 

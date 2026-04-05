@@ -48,6 +48,7 @@ export interface QuizResultSnapshot {
   quiz_type: QuizType;
   covered_stage_ids: string[];  // Stage IDs in scope for this quiz
   matched_pairs: number;        // Total correct pairs across all loops
-  duration_seconds: number;     // Total elapsed time (sum of 20s loops)
+  score: number;                // Total score (word+meaning=10pt, audio+meaning=30pt)
+  duration_seconds: number;     // Total elapsed time
   completed_at: string;         // ISO timestamp
 }

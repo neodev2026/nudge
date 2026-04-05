@@ -43,6 +43,8 @@ export const V2_STAGE_TYPES = [
   "learning",
   "quiz_5",
   "quiz_10",
+  "quiz_current_session",       // Same game as quiz_5, pool = all learning stages in current session
+  "quiz_current_and_prev_session", // Same game as quiz_10, pool = all learning stages in current + previous session
   "quiz_daily",
   "quiz_final",
   "congratulations",
@@ -164,10 +166,12 @@ export const V2_SESSION_STATUSES = [
  * quiz_final: 60 seconds (comprehensive review)
  */
 export const QUIZ_TIMER_SECONDS: Record<string, number> = {
-  quiz_5:     20,
-  quiz_10:    40,
-  quiz_daily: 20,
-  quiz_final: 60,
+  quiz_5:                      90,
+  quiz_10:                     120,
+  quiz_current_session:        90,  // Same as quiz_5
+  quiz_current_and_prev_session: 120, // Same as quiz_10
+  quiz_daily:                  20,
+  quiz_final:                  60,
 } as const;
 
 /**

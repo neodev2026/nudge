@@ -1,8 +1,8 @@
 /**
  * POST /api/v2/quiz/:stageId/result
  *
- * Saves quiz result and marks the quiz stage as completed
- * so the session can detect all stages are done.
+ * Saves quiz result and marks the quiz stage as completed.
+ * Returns top ranking for the result screen.
  *
  * No authentication required — public access via UUID session link.
  *
@@ -10,21 +10,23 @@
  *   {
  *     sns_type: string,
  *     sns_id: string,
+ *     stage_type: string,
  *     matched_pairs_count: number,
- *     covered_stage_ids: string,  // comma-separated
+ *     score: number,               // word+meaning=10pt, audio+meaning=30pt
+ *     covered_stage_ids: string,   // comma-separated
  *     duration_seconds: number
  *   }
  *
- * Response: { ok: true }
+ * Response: { ok: true, ranking: QuizRankEntry[] }
  */
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/result";
 
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "database.types";
-import makeServerClient from "~/core/lib/supa-client.server";
 import {
   saveQuizResult,
+  getQuizRanking,
 } from "../lib/queries.server";
 import {
   initNv2StageProgress,
@@ -42,6 +44,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     sns_id?: string;
     stage_type?: string;
     matched_pairs_count?: number;
+    score?: number;
     covered_stage_ids?: string;
     duration_seconds?: number;
   };
@@ -52,10 +55,21 @@ export async function action({ request, params }: Route.ActionArgs) {
     return routeData({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { sns_type, sns_id, stage_type, matched_pairs_count, covered_stage_ids, duration_seconds } = body;
+  const {
+    sns_type,
+    sns_id,
+    stage_type,
+    matched_pairs_count,
+    score,
+    covered_stage_ids,
+    duration_seconds,
+  } = body;
 
   if (!sns_type || !sns_id) {
-    return routeData({ error: "sns_type and sns_id are required" }, { status: 400 });
+    return routeData(
+      { error: "sns_type and sns_id are required" },
+      { status: 400 }
+    );
   }
 
   const typed_sns_type = sns_type as SnsType;
@@ -71,8 +85,6 @@ export async function action({ request, params }: Route.ActionArgs) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const [client] = makeServerClient(request);
-
   // ── Save quiz result ──────────────────────────────────────────────────────
   await saveQuizResult(
     service_client,
@@ -81,6 +93,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     stage_id,
     stage_type ?? "quiz_5",
     matched_pairs_count ?? 0,
+    score ?? 0,
     covered_ids,
     duration_seconds ?? 0
   ).catch((err) => {
@@ -88,7 +101,6 @@ export async function action({ request, params }: Route.ActionArgs) {
   });
 
   // ── Mark quiz stage as completed ──────────────────────────────────────────
-  // This allows session-page to detect all stages are done
   await initNv2StageProgress(
     service_client,
     typed_sns_type,
@@ -105,5 +117,12 @@ export async function action({ request, params }: Route.ActionArgs) {
     console.error("[quiz-result] completeNv2Stage failed:", err);
   });
 
-  return routeData({ ok: true });
+  // ── Fetch ranking for result screen ──────────────────────────────────────
+  // Use service_client — nv2_quiz_results RLS requires authentication,
+  // but ranking is public-facing data on the result screen.
+  const ranking = await getQuizRanking(service_client, stage_id).catch(
+    () => []
+  );
+
+  return routeData({ ok: true, ranking });
 }
