@@ -64,11 +64,11 @@ function getProductSubtitle(product: Product): string {
 // ─── Meta ────────────────────────────────────────────────────────────────────
 
 export const meta: Route.MetaFunction = () => [
-  { title: "Nudge — 하루 20초 언어 학습" },
+  { title: "Nudge — 알림 하나로 시작하는 오늘의 학습" },
   {
     name: "description",
     content:
-      "Discord 연결 하나로 시작하는 언어 학습. 가입 불필요. Leni가 매일 20초짜리 학습 카드를 보내드립니다.",
+      "SNS 알림 하나로 시작하는 오늘의 학습. 가입 불필요. Leni가 매일 학습 링크를 보내드립니다.",
   },
 ];
 
@@ -90,6 +90,15 @@ export default function HomePage() {
       {/* German flag stripe */}
       <div className="h-[5px] bg-[linear-gradient(to_right,#000_33%,#dd0000_33%_66%,#ffce00_66%)]" />
 
+      {/* ── BETA NOTICE BANNER ── */}
+      <div className="bg-[#f5a623]/10 border-b border-[#f5a623]/20 px-6 py-2.5 text-center">
+        <p className="text-xs leading-relaxed text-[#6b7a99]">
+          <span className="mr-2 inline-block rounded-full bg-[#f5a623] px-2 py-0.5 text-[0.65rem] font-black text-white">BETA</span>
+          현재 베타 서비스 중입니다. 서비스 개선 과정에서 데이터가 초기화되거나 기능이 변경될 수 있으며,
+          학습 데이터는 서비스 품질 향상에 활용될 수 있습니다.
+        </p>
+      </div>
+
       {/* ── NAV ── */}
       <nav className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-[#1a2744]/[0.07] bg-[#fdf8f0]/85 px-10 backdrop-blur-xl">
         <span className="font-display text-2xl font-black tracking-tight text-[#1a2744]">
@@ -100,6 +109,7 @@ export default function HomePage() {
             { href: "#how", label: "어떻게 하나요" },
             { href: "#products", label: "학습 상품" },
             { href: "#leni", label: "Leni 소개" },
+            { href: "#roadmap", label: "로드맵" },
           ].map(({ href, label }) => (
             <li key={href}>
               <a
@@ -138,25 +148,24 @@ export default function HomePage() {
             </div>
 
             <h1 className="mb-5 font-display text-[clamp(2.6rem,4vw,3.6rem)] font-black leading-[1.1] text-[#1a2744]">
-              하루{" "}
-              <span className="text-[#4caf72]">20초</span>,<br />
+              <span className="text-[#4caf72]">알림 하나</span>로<br />
+              시작하는{" "}
               <span className="relative inline-block">
-                잊을 틈
+                오늘의 학습
                 <span className="absolute -bottom-1 left-0 right-0 h-[6px] rounded-sm bg-[#f5a623]/60" />
               </span>
-              이 없습니다
             </h1>
 
             <p className="mb-8 max-w-[420px] text-[1.05rem] leading-[1.75] text-[#6b7a99]">
-              Nudge는 SNS 알림으로 학습 카드를 보냅니다.<br />
+              Nudge는 SNS 알림으로 오늘의 학습 링크를 보냅니다.<br />
               앱 설치도, 로그인도, 복잡한 설정도 필요 없어요.<br />
               Discord 연결 하나로 지금 바로 시작하세요.
             </p>
 
             <div className="mb-10 flex gap-8">
               {[
-                { num: "20", unit: "초", label: "카드 1장 학습 시간" },
-                { num: "703", unit: "개", label: "영어 B1 단어" },
+                { num: "3", unit: "개", label: "지원 언어" },
+                { num: "1,200", unit: "개+", label: "학습 콘텐츠" },
                 { num: "0", unit: "원", label: "무료 시작" },
               ].map(({ num, unit, label }) => (
                 <div key={label}>
@@ -243,7 +252,7 @@ export default function HomePage() {
             {
               num: "02", icon: "📬",
               title: "학습 카드 수신",
-              desc: "Leni가 Discord로 학습 카드 링크를 보내드려요. 클릭하면 20초짜리 카드가 펼쳐집니다.",
+              desc: "Leni가 Discord로 오늘의 학습 링크를 보내드려요. 링크 하나만 클릭하면 바로 시작됩니다.",
             },
             {
               num: "03", icon: "✅",
@@ -285,28 +294,32 @@ export default function HomePage() {
           <div>
             <p className="mb-3 text-xs font-extrabold uppercase tracking-[2px] text-[#4caf72]">Meet Leni</p>
             <h2 className="mb-5 font-display text-[clamp(1.8rem,3vw,2.5rem)] font-black leading-snug text-[#1a2744]">
-              당신의 학습 파트너,<br />Leni를 소개합니다
+              안녕, 나는 Leni야! 👋
             </h2>
-            <p className="mb-8 max-w-[520px] text-base leading-[1.8] text-[#6b7a99]">
-              Leni는 Nudge의 학습 도우미예요. 매일 적절한 타이밍에 카드를 보내고,
-              잊어버릴 것 같은 단어는 먼저 챙겨드립니다.
+            <p className="mb-3 text-base leading-[1.85] text-[#6b7a99]">
+              나는 독일에서 온 15살 소녀예요. 영어, 한국어, 일본어... 배우고 싶은 게
+              너무 많은데 외우는 건 정말 자신 없어요 😅
+            </p>
+            <p className="mb-8 text-base leading-[1.85] text-[#6b7a99]">
+              그래서 나도 Nudge로 매일 조금씩 공부하고 있어요!
+              여러분의 학습 알림을 대신 보내드리면서, 저도 함께 열심히 할게요. 🌟
             </p>
             <div className="flex flex-col gap-4">
               {[
                 {
-                  icon: "⏰",
+                  icon: "📬",
+                  title: "매일 학습 알림 발송",
+                  desc: "적절한 타이밍에 오늘의 학습 링크를 Discord로 보내드려요. 링크 하나만 클릭하면 됩니다.",
+                },
+                {
+                  icon: "🔄",
                   title: "망각 곡선 기반 복습",
-                  desc: "암기 완료 후 +1일, +3일, +7일, +14일에 자동으로 복습 카드를 보내드려요.",
+                  desc: "학습 완료 후 +1일, +3일, +7일, +14일에 자동으로 복습 알림을 보내드려요.",
                 },
                 {
-                  icon: "📊",
-                  title: "5·10 단어 퀴즈",
-                  desc: "5개, 10개 단어를 학습할 때마다 매칭 퀴즈로 기억을 점검해 드립니다.",
-                },
-                {
-                  icon: "💬",
-                  title: "응원 메시지",
-                  desc: "오늘 아직 못 보셨나요? Leni가 먼저 챙겨드립니다. 부담은 없어요.",
+                  icon: "🎯",
+                  title: "퀴즈와 문장 연습",
+                  desc: "단어만 외우면 지루하잖아요. 매칭 퀴즈와 문장 만들기로 기억을 단단하게 다져드려요.",
                 },
               ].map(({ icon, title, desc }) => (
                 <div key={title} className="flex items-start gap-4 rounded-2xl bg-white p-5 shadow-[0_2px_12px_rgba(26,39,68,0.06)]">
@@ -318,36 +331,93 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
+            <p className="mt-6 text-[0.72rem] text-[#6b7a99]/60">
+              * Leni 캐릭터 이미지는 SeaArt AI로 직접 제작한 오리지널 캐릭터입니다.
+            </p>
           </div>
 
-          {/* Learning card preview */}
+          {/* Leni animated character */}
           <div className="flex items-center justify-center">
-            <div className="relative">
-              <div className="absolute -left-3 top-3 h-[340px] w-[300px] -rotate-[4deg] rounded-3xl bg-white opacity-50 shadow-[0_10px_40px_rgba(26,39,68,0.08)]" />
-              <div className="absolute -right-3 top-2.5 h-[340px] w-[300px] rotate-[3deg] rounded-3xl bg-white opacity-35 shadow-[0_10px_40px_rgba(26,39,68,0.08)]" />
-              <div className="relative z-10 w-[300px] rounded-3xl bg-white p-8 shadow-[0_20px_60px_rgba(26,39,68,0.14)]">
-                <span className="mb-6 inline-block rounded-lg bg-[#1a2744] px-3 py-1 text-[0.68rem] font-black uppercase tracking-wide text-white">
-                  English B1 · Stage 42
-                </span>
-                <div className="mb-2 font-display text-[2.2rem] font-black text-[#1a2744]">apparent</div>
-                <div className="mb-6 text-sm italic text-[#6b7a99]">/əˈpær.ənt/ · adj.</div>
-                <div className="mb-6 rounded-xl bg-[#fdf8f0] p-4 text-base font-bold text-[#1a2744]">
-                  명백한, 분명한 / 겉으로 보이는
-                </div>
-                <p className="mb-6 text-xs leading-[1.6] text-[#6b7a99]">
-                  "It was <strong className="text-[#1a2744]">apparent</strong> to everyone that the project was behind schedule."
-                </p>
-                <div className="flex gap-3">
-                  <button className="flex-1 rounded-xl border-2 border-[#e8ecf5] bg-white py-2.5 text-sm font-extrabold text-[#6b7a99] transition-colors hover:border-[#1a2744] hover:text-[#1a2744]">
-                    ↺ 다시 보기
-                  </button>
-                  <button className="flex-[1.5] rounded-xl bg-[#4caf72] py-2.5 text-sm font-extrabold text-white transition-colors hover:bg-[#5ecb87]">
-                    암기 완료 ✓
-                  </button>
-                </div>
-              </div>
+            <div
+              className="relative"
+              style={{ animation: "leniFloat 5s ease-in-out infinite" }}
+            >
+              <img
+                src="/images/leni/leni-hero-ani.gif"
+                alt="Leni — Nudge 학습 파트너"
+                className="mx-auto block w-full max-w-[360px] object-contain drop-shadow-[0_20px_60px_rgba(26,39,68,0.15)]"
+              />
             </div>
           </div>
+        </div>
+      </section>
+
+
+      {/* ── ROADMAP ── */}
+      <section id="roadmap" className="mx-auto max-w-[1100px] px-10 py-24">
+        <p className="mb-3 text-xs font-extrabold uppercase tracking-[2px] text-[#4caf72]">Roadmap</p>
+        <h2 className="mb-4 font-display text-[clamp(1.8rem,3vw,2.5rem)] font-black leading-snug text-[#1a2744]">
+          Nudge는 계속 성장합니다
+        </h2>
+        <p className="mb-12 max-w-[520px] text-base leading-[1.8] text-[#6b7a99]">
+          지금은 시작입니다. 더 많은 학습 상품, 더 똑똑한 학습 방법,
+          그리고 새로운 파트너들이 찾아올 예정이에요.
+        </p>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            {
+              icon: "📚",
+              title: "다양한 학습 상품 확대",
+              desc: "언어뿐 아니라 자격증, 상식, 전문 용어 등 다양한 카테고리의 학습 콘텐츠가 추가됩니다.",
+              status: "예정",
+            },
+            {
+              icon: "🧩",
+              title: "새로운 학습 방식 추가",
+              desc: "플래시카드, O/X 퀴즈, 문장 완성 외에도 더 재미있고 효과적인 학습 방식을 준비하고 있어요.",
+              status: "예정",
+            },
+            {
+              icon: "🤝",
+              title: "새로운 학습 파트너 추가",
+              desc: "Leni 외에도 다양한 개성을 가진 학습 도우미 캐릭터들이 등장할 예정이에요.",
+              status: "예정",
+            },
+            {
+              icon: "💬",
+              title: "카카오톡 · 텔레그램 지원",
+              desc: "Discord 외에도 카카오톡, 텔레그램 등 더 많은 SNS 채널로 학습 알림을 받을 수 있게 됩니다.",
+              status: "예정",
+            },
+            {
+              icon: "📊",
+              title: "학습 통계 및 진도 리포트",
+              desc: "얼마나 학습했는지, 어떤 항목이 약한지 한눈에 볼 수 있는 대시보드가 생깁니다.",
+              status: "예정",
+            },
+            {
+              icon: "📱",
+              title: "모바일 앱 출시",
+              desc: "알림을 더 편리하게 받고, 어디서든 빠르게 학습할 수 있는 네이티브 앱을 준비하고 있어요.",
+              status: "예정",
+            },
+          ].map(({ icon, title, desc, status }) => (
+            <div
+              key={title}
+              className="rounded-2xl border border-[#e8ecf5] bg-white p-6 transition-all hover:-translate-y-1 hover:shadow-[0_8px_32px_rgba(26,39,68,0.10)]"
+            >
+              <div className="mb-4 flex items-start justify-between">
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fdf8f0] text-2xl">
+                  {icon}
+                </span>
+                <span className="rounded-full bg-[#e8ecf5] px-2.5 py-1 text-[0.65rem] font-black tracking-wide text-[#6b7a99]">
+                  {status}
+                </span>
+              </div>
+              <h3 className="mb-2 font-display text-base font-extrabold text-[#1a2744]">{title}</h3>
+              <p className="text-sm leading-[1.7] text-[#6b7a99]">{desc}</p>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -355,7 +425,7 @@ export default function HomePage() {
       <section className="px-10 py-24 text-center">
         <p className="mb-3 text-xs font-extrabold uppercase tracking-[2px] text-[#4caf72]">지금 시작</p>
         <h2 className="mb-4 font-display text-[clamp(1.8rem,3vw,2.5rem)] font-black leading-snug text-[#1a2744]">
-          오늘부터 20초씩,<br />Leni와 함께 시작해요
+          알림 하나로,<br />Leni와 함께 시작해요
         </h2>
         <p className="mx-auto mb-10 max-w-[520px] text-base leading-[1.8] text-[#6b7a99]">
           회원가입 없이 Discord 연결만으로 바로 시작할 수 있습니다.
@@ -371,7 +441,7 @@ export default function HomePage() {
       </section>
 
       <footer className="bg-[#1a2744] py-8 text-center text-sm text-white/40">
-        <strong className="text-white/70">Nudge</strong> · 하루 20초 언어 학습 서비스 · 가입 없이 시작하세요
+        <strong className="text-white/70">Nudge</strong> · 알림 하나로 시작하는 오늘의 학습 · 가입 없이 시작하세요
       </footer>
 
       {/* Animation keyframes */}
