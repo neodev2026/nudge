@@ -1,16 +1,16 @@
 /**
  * POST /api/v2/cron/dispatch
  *
- * Main cron job — runs daily (recommended: 08:00 KST = 23:00 UTC).
+ * Processes pending rows in nv2_schedules where scheduled_at <= now().
+ * Dispatches each row to the appropriate SNS channel (Discord for MVP).
  *
- * Three tasks in order:
- *   1. Auto-send next session for users who completed their last session
- *   2. Send nudge DM to users with incomplete sessions (no DM in 20+ hours)
- *   3. Send review DM to users with stage progress due for review
+ * Runs every 5 minutes via Supabase Cron.
+ * Security: Requires Authorization: Bearer {CRON_SECRET}
  *
- * Security:
- *   Requires Authorization: Bearer {CRON_SECRET} header.
- *   Uses Supabase service-role client to bypass RLS.
+ * Flow per schedule row:
+ *   1. Send DM via Discord Bot
+ *   2. On success: mark status = 'sent'
+ *   3. On failure: increment retry_count; mark 'failed' if exhausted
  */
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/dispatch";
@@ -18,25 +18,14 @@ import type { Route } from "./+types/dispatch";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "database.types";
 import {
-  getCronUsersNeedingNextSession,
-  getCronSessionsNeedingNudge,
-  getCronStageProgressDueForReview,
-  getProductSessionContainingStage,
-  createCronNewSession,
-  createCronReviewSession,
+  getCronPendingSchedules,
+  markCronScheduleSent,
+  markCronScheduleFailedOrRetry,
 } from "../lib/queries.server";
 import {
   sendSessionDm,
-  sendSessionCompleteDm,
+  sendCheerDm,
 } from "~/features/v2/auth/lib/discord.server";
-import {
-  getNv2NextUnstartedProductSession,
-} from "~/features/v2/session/lib/queries.server";
-import type { SnsType } from "~/features/v2/shared/types";
-
-// ---------------------------------------------------------------------------
-// Auth guard
-// ---------------------------------------------------------------------------
 
 function verifyCronSecret(request: Request): boolean {
   const auth = request.headers.get("Authorization") ?? "";
@@ -45,20 +34,12 @@ function verifyCronSecret(request: Request): boolean {
   return auth === `Bearer ${secret}`;
 }
 
-// ---------------------------------------------------------------------------
-// Service-role client (bypasses RLS)
-// ---------------------------------------------------------------------------
-
 function makeServiceClient() {
   return createClient<Database>(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 }
-
-// ---------------------------------------------------------------------------
-// Action
-// ---------------------------------------------------------------------------
 
 export async function action({ request }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -70,175 +51,66 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   const client = makeServiceClient();
-  const origin = new URL(request.url).origin;
-  const now = new Date().toISOString();
 
   const results = {
-    next_sessions_sent: 0,
-    nudges_sent: 0,
-    reviews_sent: 0,
+    sent: 0,
+    failed: 0,
+    retrying: 0,
     errors: [] as string[],
   };
 
-  // ── Task 1: Auto-send next session ────────────────────────────────────────
   try {
-    const completed_sessions = await getCronUsersNeedingNextSession(client);
+    const pending = await getCronPendingSchedules(client);
 
-    // Deduplicate by (sns_type, sns_id, product_id) — take latest completed
-    const seen = new Set<string>();
-    for (const s of completed_sessions) {
-      const ps = s.nv2_product_sessions as any;
-      if (!ps) continue;
+    for (const schedule of pending) {
+      const schedule_id = schedule.schedule_id as unknown as bigint;
 
-      const key = `${s.sns_type}:${s.sns_id}:${ps.product_id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      try {
+        if (schedule.schedule_type === "cheer") {
+          // cheer: message_body is "cheer:HH|<actual message>"
+          const raw_body = schedule.message_body ?? "";
+          const message = raw_body.includes("|")
+            ? raw_body.split("|").slice(1).join("|")
+            : raw_body;
 
-      const sns_type = s.sns_type as SnsType;
-      const sns_id = s.sns_id;
+          await sendCheerDm(schedule.sns_id, schedule.delivery_url, message);
+        } else {
+          // new / review / welcome — send session DM
+          await sendSessionDm(
+            schedule.sns_id,
+            schedule.delivery_url,
+            schedule.message_body ?? "오늘의 학습",
+            0
+          );
+        }
 
-      // Find next unstarted product session
-      const next_ps = await getNv2NextUnstartedProductSession(
-        client,
-        sns_type,
-        sns_id,
-        ps.product_id
-      ).catch(() => null);
+        await markCronScheduleSent(client, schedule_id);
+        results.sent++;
+      } catch (err: any) {
+        const msg = err?.message ?? "unknown error";
+        results.errors.push(`schedule ${schedule.schedule_id}: ${msg}`);
 
-      if (!next_ps) continue; // All sessions completed
+        const retry_count = schedule.retry_count ?? 0;
+        const max_retries = schedule.max_retries ?? 3;
 
-      // Create new user session
-      const new_session = await createCronNewSession(
-        client,
-        sns_type,
-        sns_id,
-        next_ps.id,
-        now
-      ).catch(() => null);
+        await markCronScheduleFailedOrRetry(
+          client,
+          schedule_id,
+          msg,
+          retry_count,
+          max_retries
+        ).catch(() => {});
 
-      if (!new_session) continue;
-
-      const session_url = `${origin}/sessions/${new_session.session_id}`;
-
-      await sendSessionDm(
-        sns_id,
-        session_url,
-        next_ps.title ?? `Session ${next_ps.session_number}`,
-        0 // stage count — cron doesn't need to fetch it
-      ).catch((err) => {
-        results.errors.push(`sendSessionDm failed for ${sns_id}: ${err.message}`);
-      });
-
-      results.next_sessions_sent++;
-    }
-  } catch (err: any) {
-    results.errors.push(`Task1 failed: ${err.message}`);
-  }
-
-  // ── Task 2: Nudge incomplete sessions ─────────────────────────────────────
-  try {
-    const incomplete = await getCronSessionsNeedingNudge(client);
-
-    for (const s of incomplete) {
-      const session_url = `${origin}/sessions/${s.session_id}`;
-
-      // Reuse sendSessionDm with a nudge-appropriate title
-      await sendSessionDm(
-        s.sns_id,
-        session_url,
-        "오늘 학습을 완료해볼까요? 🔔",
-        0
-      ).catch((err) => {
-        results.errors.push(`nudge failed for ${s.sns_id}: ${err.message}`);
-      });
-
-      // Update dm_sent_at so we don't nudge again for 20 hours
-      await client
-        .from("nv2_sessions")
-        .update({ dm_sent_at: now })
-        .eq("session_id", s.session_id);
-
-      results.nudges_sent++;
-    }
-  } catch (err: any) {
-    results.errors.push(`Task2 failed: ${err.message}`);
-  }
-
-  // ── Task 3: Send review DMs ───────────────────────────────────────────────
-  try {
-    const due_reviews = await getCronStageProgressDueForReview(client);
-
-    // Group by (sns_type, sns_id, product_session) to send one DM per session
-    const review_map = new Map<
-      string,
-      {
-        sns_type: SnsType;
-        sns_id: string;
-        product_session_id: string;
-        review_round: number;
-        stage_ids: string[];
+        if (retry_count + 1 >= max_retries) {
+          results.failed++;
+        } else {
+          results.retrying++;
+        }
       }
-    >();
-
-    for (const row of due_reviews) {
-      const stage = row.nv2_stages as any;
-      if (!stage) continue;
-
-      // Find the product_session containing this stage
-      const pss = await getProductSessionContainingStage(
-        client,
-        row.stage_id
-      ).catch(() => null);
-
-      if (!pss) continue;
-
-      const ps = pss.nv2_product_sessions as any;
-      const round = row.review_round ?? 1;
-      const key = `${row.sns_type}:${row.sns_id}:${pss.product_session_id}`;
-
-      if (!review_map.has(key)) {
-        review_map.set(key, {
-          sns_type: row.sns_type as SnsType,
-          sns_id: row.sns_id,
-          product_session_id: pss.product_session_id,
-          review_round: round,
-          stage_ids: [],
-        });
-      }
-      review_map.get(key)!.stage_ids.push(row.stage_id);
-    }
-
-    for (const [, info] of review_map) {
-      // Create review session
-      const review_session = await createCronReviewSession(
-        client,
-        info.sns_type,
-        info.sns_id,
-        info.product_session_id,
-        info.review_round,
-        now
-      ).catch(() => null);
-
-      if (!review_session) continue;
-
-      const session_url = `${origin}/sessions/${review_session.session_id}`;
-      const round_label = `${info.review_round}차 복습`;
-
-      await sendSessionDm(
-        info.sns_id,
-        session_url,
-        `${round_label} — 기억이 날까요? 🔄`,
-        info.stage_ids.length
-      ).catch((err) => {
-        results.errors.push(
-          `review DM failed for ${info.sns_id}: ${err.message}`
-        );
-      });
-
-      results.reviews_sent++;
     }
   } catch (err: any) {
-    results.errors.push(`Task3 failed: ${err.message}`);
+    console.error("[cron/dispatch] fatal:", err);
+    return routeData({ error: err.message }, { status: 500 });
   }
 
   return routeData({ ok: true, results });
