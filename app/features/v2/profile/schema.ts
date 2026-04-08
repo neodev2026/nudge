@@ -50,6 +50,15 @@ export const nv2_profiles = pgTable(
     today_new_count: integer("today_new_count").notNull().default(0),
     today_review_count: integer("today_review_count").notNull().default(0),
 
+    // User's IANA timezone (e.g. "Asia/Seoul", "Europe/Berlin").
+    // Used by Cron jobs to calculate local time for each user.
+    // Adjustable via personal settings in the future.
+    timezone: text("timezone").notNull().default("Asia/Seoul"),
+
+    // Hour of day to send the daily learning DM (0~23, local time).
+    // Default: 5 = 05:00 local time. Adjustable via personal settings in the future.
+    send_hour: integer("send_hour").notNull().default(5),
+
     is_active: boolean("is_active").notNull().default(true),
 
     ...tstz,
