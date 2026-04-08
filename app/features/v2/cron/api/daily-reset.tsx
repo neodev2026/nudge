@@ -1,9 +1,10 @@
 /**
  * POST /api/v2/cron/daily-reset
  *
- * Resets daily counters for all active profiles.
- * Runs at midnight UTC (09:00 KST).
+ * Resets today_new_count and today_review_count to 0 for users
+ * whose local time is currently 00:00~00:29 (midnight window).
  *
+ * Runs every 30 minutes via Supabase Cron.
  * Security: Requires Authorization: Bearer {CRON_SECRET}
  */
 import { data as routeData } from "react-router";
@@ -39,8 +40,8 @@ export async function action({ request }: Route.ActionArgs) {
   const client = makeServiceClient();
 
   try {
-    await resetCronDailyCounters(client);
-    return routeData({ ok: true, message: "Daily counters reset." });
+    const result = await resetCronDailyCounters(client);
+    return routeData({ ok: true, ...result });
   } catch (err: any) {
     console.error("[cron/daily-reset] failed:", err);
     return routeData({ error: err.message }, { status: 500 });

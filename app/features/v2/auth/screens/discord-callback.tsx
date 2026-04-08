@@ -5,15 +5,15 @@
  *
  * Flow:
  *   1. Exchange the OAuth code for a Supabase session
- *      (Supabase creates / updates auth.users automatically)
  *   2. Read the Discord identity from the session's user metadata
- *   3. Upsert nv2_profiles (sns_type="discord", sns_id=Discord user ID)
- *   4. If this is a brand-new profile → send a welcome DM via Discord Bot
- *   5. Redirect to /products
+ *   3. Upsert nv2_profiles — includes timezone on new user creation
+ *   4. If new profile → send a welcome DM via Discord Bot
+ *   5. Redirect to ?next= param or /products
  *
- * Error handling:
- *   Any failure redirects to /?auth_error=<reason> so the landing page
- *   can display a user-facing toast message.
+ * Timezone:
+ *   ?tz=<IANA_timezone> is forwarded from discord-start via the redirectTo URL.
+ *   It is passed to upsertNv2Profile and stored only for new users.
+ *   Returning users keep their existing timezone value.
  */
 import { redirect } from "react-router";
 import type { Route } from "./+types/discord-callback";
@@ -25,12 +25,23 @@ import { sendWelcomeDm, addUserToGuild } from "../lib/discord.server";
 import { getNv2WelcomeStage } from "~/features/v2/stage/lib/queries.server";
 import { upsertNv2Subscription } from "~/features/v2/session/lib/queries.server";
 
+// IANA timezone validation — basic check to avoid storing garbage values
+function isValidIanaTimezone(tz: string): boolean {
+  if (!tz || tz.length > 64) return false;
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const error_param = url.searchParams.get("error");
+  const tz_param = url.searchParams.get("tz");
 
-  // Discord / Supabase returned an error on the consent page (e.g. user denied)
   if (error_param) {
     return redirect(`/?auth_error=${encodeURIComponent(error_param)}`);
   }
@@ -53,11 +64,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   const auth_user = session_data.session.user;
 
   // ── Step 2: Extract Discord identity from provider metadata ───────────────
-  // Supabase stores the provider's raw user object in user.user_metadata
-  // Discord fields: id, username, global_name, avatar
   const meta = auth_user.user_metadata as Record<string, unknown>;
 
-  // provider_id is the Discord user ID when using Supabase Discord OAuth
   const sns_id =
     (meta.provider_id as string | undefined) ??
     (meta.sub as string | undefined);
@@ -76,9 +84,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const avatar_url = (meta.avatar_url as string | undefined) ?? null;
 
-  // ── Step 2-b: Add user to Nudge Discord guild ───────────────────────────
-  // Required so the bot can send DMs (Discord restricts DMs to mutual-guild members).
-  // provider_token is the Discord OAuth access_token issued during login.
+  // ── Step 2-b: Add user to Nudge Discord guild ─────────────────────────────
   const provider_token = session_data.session.provider_token;
   const guild_id = process.env.NUDGE_DISCORD_GUILD_ID;
 
@@ -87,24 +93,32 @@ export async function loader({ request }: Route.LoaderArgs) {
       console.error("[discord-callback] addUserToGuild failed:", err);
     });
   } else {
-    console.warn("[discord-callback] Skipping addUserToGuild — missing provider_token or NUDGE_DISCORD_GUILD_ID");
+    console.warn(
+      "[discord-callback] Skipping addUserToGuild — missing provider_token or NUDGE_DISCORD_GUILD_ID"
+    );
   }
 
   // ── Step 3: Check if this is a returning user before upsert ───────────────
   const existing_profile = await getNv2ProfileByAuthUserId(
     client,
     auth_user.id
-  ).catch(() => null); // Non-fatal — treat as new user on error
+  ).catch(() => null);
 
   const is_new_user = existing_profile === null;
 
-  // ── Step 4: Upsert nv2_profiles ───────────────────────────────────────────
+  // ── Step 4: Resolve timezone ───────────────────────────────────────────────
+  // Use browser-captured timezone if valid; fall back to DB default ("Asia/Seoul")
+  const timezone =
+    tz_param && isValidIanaTimezone(tz_param) ? tz_param : null;
+
+  // ── Step 5: Upsert nv2_profiles ───────────────────────────────────────────
   const profile = await upsertNv2Profile(adminClient, {
     sns_type: "discord",
     sns_id,
     auth_user_id: auth_user.id,
     display_name,
     avatar_url,
+    timezone, // null for returning users → existing value is preserved
   }).catch((err) => {
     console.error("[discord-callback] upsertNv2Profile failed:", err);
     return null;
@@ -114,7 +128,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     return redirect("/?auth_error=profile_upsert_failed", { headers });
   }
 
-  // ── Step 5: Send welcome DM (new users only) ──────────────────────────────
+  // ── Step 6: Send welcome DM (new users only) ──────────────────────────────
   if (is_new_user) {
     const origin = new URL(request.url).origin;
 
@@ -123,7 +137,6 @@ export async function loader({ request }: Route.LoaderArgs) {
       ? `${origin}/stages/${welcome_stage.id}`
       : `${origin}/products`;
 
-    // Create subscription for the welcome product
     if (welcome_stage?.learning_product_id) {
       await upsertNv2Subscription(
         adminClient,
@@ -140,9 +153,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     });
   }
 
-  // ── Step 6: Redirect — honour ?next= param if present ─────────────────────
-  // next= is set when the user was redirected here from a session/stage link
-  // that required members_only authentication.
+  // ── Step 7: Redirect ───────────────────────────────────────────────────────
   const next_param = url.searchParams.get("next");
   const redirect_to =
     next_param && next_param.startsWith("/") ? next_param : "/products";

@@ -732,8 +732,10 @@ export type Database = {
           daily_goal_review: number
           display_name: string | null
           is_active: boolean
+          send_hour: number
           sns_id: string
           sns_type: Database["public"]["Enums"]["nv2_sns_type"]
+          timezone: string
           today_new_count: number
           today_review_count: number
           updated_at: string
@@ -746,8 +748,10 @@ export type Database = {
           daily_goal_review?: number
           display_name?: string | null
           is_active?: boolean
+          send_hour?: number
           sns_id: string
           sns_type: Database["public"]["Enums"]["nv2_sns_type"]
+          timezone?: string
           today_new_count?: number
           today_review_count?: number
           updated_at?: string
@@ -760,8 +764,10 @@ export type Database = {
           daily_goal_review?: number
           display_name?: string | null
           is_active?: boolean
+          send_hour?: number
           sns_id?: string
           sns_type?: Database["public"]["Enums"]["nv2_sns_type"]
+          timezone?: string
           today_new_count?: number
           today_review_count?: number
           updated_at?: string
@@ -1386,7 +1392,7 @@ export type Database = {
         | "r4_pending"
         | "mastered"
       nv2_schedule_status: "pending" | "sent" | "failed" | "opened"
-      nv2_schedule_type: "new" | "review" | "quiz" | "cheer" | "welcome"
+      nv2_schedule_type: "new" | "review" | "cheer" | "welcome"
       nv2_session_kind: "new" | "review"
       nv2_session_status: "pending" | "in_progress" | "completed"
       nv2_sns_type: "discord" | "kakao" | "telegram" | "email"
@@ -1596,7 +1602,7 @@ export const Constants = {
         "mastered",
       ],
       nv2_schedule_status: ["pending", "sent", "failed", "opened"],
-      nv2_schedule_type: ["new", "review", "quiz", "cheer", "welcome"],
+      nv2_schedule_type: ["new", "review", "cheer", "welcome"],
       nv2_session_kind: ["new", "review"],
       nv2_session_status: ["pending", "in_progress", "completed"],
       nv2_sns_type: ["discord", "kakao", "telegram", "email"],
