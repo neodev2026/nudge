@@ -89,9 +89,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   const guild_id = process.env.NUDGE_DISCORD_GUILD_ID;
 
   if (provider_token && guild_id) {
-    addUserToGuild(provider_token, sns_id, guild_id).catch((err) => {
+    // Await guild join before redirecting — ensures Bot DM permission is ready
+    // when the user immediately taps "학습 시작" after OAuth completion.
+    try {
+      await addUserToGuild(provider_token, sns_id, guild_id);
+    } catch (err) {
+      // Non-fatal: log and continue — user can still browse products
       console.error("[discord-callback] addUserToGuild failed:", err);
-    });
+    }
   } else {
     console.warn(
       "[discord-callback] Skipping addUserToGuild — missing provider_token or NUDGE_DISCORD_GUILD_ID"
