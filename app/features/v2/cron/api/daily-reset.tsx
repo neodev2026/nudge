@@ -10,22 +10,11 @@
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/daily-reset";
 
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "database.types";
-import { resetCronDailyCounters } from "../lib/queries.server";
-
 function verifyCronSecret(request: Request): boolean {
   const auth = request.headers.get("Authorization") ?? "";
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
   return auth === `Bearer ${secret}`;
-}
-
-function makeServiceClient() {
-  return createClient<Database>(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -37,10 +26,17 @@ export async function action({ request }: Route.ActionArgs) {
     return routeData({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const client = makeServiceClient();
+  // Server-only imports inside action to prevent client bundle contamination
+  const { createClient } = await import("@supabase/supabase-js");
+  const { resetCronDailyCounters } = await import("../lib/queries.server");
+
+  const client = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
   try {
-    const result = await resetCronDailyCounters(client);
+    const result = await resetCronDailyCounters(client as any);
     return routeData({ ok: true, ...result });
   } catch (err: any) {
     console.error("[cron/daily-reset] failed:", err);

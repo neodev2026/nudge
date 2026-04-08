@@ -24,22 +24,6 @@
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/enqueue-daily";
 
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "database.types";
-import type { SnsType } from "~/features/v2/shared/types";
-import {
-  getProfilesInLocalTimeWindow,
-  getCronActiveSessionsForUser,
-  getCronUserSubscriptions,
-  getCronNextUnstartedProductSession,
-  createCronNewSession,
-  createCronReviewSession,
-  getCronScheduleExistsToday,
-  insertCronSchedule,
-  getCronStageProgressDueForReview,
-  getProductSessionContainingStage,
-} from "../lib/queries.server";
-
 function verifyCronSecret(request: Request): boolean {
   const auth = request.headers.get("Authorization") ?? "";
   const secret = process.env.CRON_SECRET;
@@ -47,27 +31,15 @@ function verifyCronSecret(request: Request): boolean {
   return auth === `Bearer ${secret}`;
 }
 
-function makeServiceClient() {
-  return createClient<Database>(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
 /** Returns the local date prefix "YYYY-MM-DD" for a given timezone */
 function getLocalDatePrefix(timezone: string): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: timezone }); // en-CA = YYYY-MM-DD
+  return new Date().toLocaleDateString("en-CA", { timeZone: timezone });
 }
 
 /** Builds the scheduled_at ISO string for today's send_hour in the user's timezone */
 function buildScheduledAt(timezone: string, send_hour: number): string {
   const date_str = getLocalDatePrefix(timezone);
-  // Convert local send_hour to UTC ISO string
   const local_str = `${date_str}T${String(send_hour).padStart(2, "0")}:00:00`;
-  const local_date = new Date(
-    new Date(local_str).toLocaleString("en-US", { timeZone: timezone })
-  );
-  // Use the Intl offset approach: find UTC equivalent
   const utc_offset_ms =
     new Date(local_str).getTime() -
     new Date(
@@ -86,9 +58,28 @@ export async function action({ request }: Route.ActionArgs) {
     return routeData({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const client = makeServiceClient();
+  // Server-only imports inside action to prevent client bundle contamination
+  const { createClient } = await import("@supabase/supabase-js");
+  const {
+    getCronActiveSessionsForUser,
+    getCronUserSubscriptions,
+    getCronNextUnstartedProductSession,
+    createCronNewSession,
+    createCronReviewSession,
+    getCronScheduleExistsToday,
+    insertCronSchedule,
+    getCronStageProgressDueForReview,
+    getProductSessionContainingStage,
+  } = await import("../lib/queries.server");
+
+  const client = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   const origin = new URL(request.url).origin;
   const now = new Date().toISOString();
+  const now_date = new Date();
 
   const results = {
     new_enqueued: 0,
@@ -99,8 +90,6 @@ export async function action({ request }: Route.ActionArgs) {
 
   try {
     // --- New / incomplete session DMs ---
-    // Find profiles whose local send_hour window is active right now
-    // We check each profile's send_hour individually below
     const { data: all_profiles, error: profile_error } = await client
       .from("nv2_profiles")
       .select("sns_type, sns_id, timezone, send_hour")
@@ -108,11 +97,8 @@ export async function action({ request }: Route.ActionArgs) {
 
     if (profile_error) throw profile_error;
 
-    const now_date = new Date();
-
     for (const profile of all_profiles ?? []) {
       try {
-        // Check if user's local time is within [send_hour:00, send_hour:29]
         const local_time_str = now_date.toLocaleString("en-US", {
           timeZone: profile.timezone,
           hour: "numeric",
@@ -122,30 +108,22 @@ export async function action({ request }: Route.ActionArgs) {
         const [local_h, local_m] = local_time_str.split(":").map(Number);
         if (local_h !== profile.send_hour || local_m >= 30) continue;
 
-        const sns_type = profile.sns_type as SnsType;
+        const sns_type = profile.sns_type as any;
         const sns_id = profile.sns_id;
         const date_prefix = getLocalDatePrefix(profile.timezone);
         const scheduled_at = buildScheduledAt(profile.timezone, profile.send_hour);
 
-        // Duplicate guard: skip if already enqueued today
         const already_enqueued = await getCronScheduleExistsToday(
-          client, sns_type, sns_id, "new", date_prefix
+          client as any, sns_type, sns_id, "new", date_prefix
         );
-        if (already_enqueued) {
-          results.skipped++;
-          continue;
-        }
+        if (already_enqueued) { results.skipped++; continue; }
 
-        const subscriptions = await getCronUserSubscriptions(client, sns_type, sns_id);
+        const subscriptions = await getCronUserSubscriptions(client as any, sns_type, sns_id);
 
         for (const sub of subscriptions) {
           try {
-            const active_sessions = await getCronActiveSessionsForUser(
-              client, sns_type, sns_id
-            );
-
-            // Filter active sessions for this product
-            const active_for_product = active_sessions.filter((s) => {
+            const active_sessions = await getCronActiveSessionsForUser(client as any, sns_type, sns_id);
+            const active_for_product = active_sessions.filter((s: any) => {
               const ps = s.nv2_product_sessions as any;
               return ps?.product_id === sub.product_id;
             });
@@ -162,12 +140,12 @@ export async function action({ request }: Route.ActionArgs) {
             } else {
               // Case B: create new session
               const next_ps = await getCronNextUnstartedProductSession(
-                client, sns_type, sns_id, sub.product_id
+                client as any, sns_type, sns_id, sub.product_id
               );
               if (!next_ps) continue; // Case C: all done
 
               const new_session = await createCronNewSession(
-                client, sns_type, sns_id, next_ps.id, now
+                client as any, sns_type, sns_id, next_ps.id, now
               );
               session_id = new_session.session_id;
               session_title = next_ps.title ?? session_title;
@@ -175,22 +153,18 @@ export async function action({ request }: Route.ActionArgs) {
 
             if (!session_id) continue;
 
-            const delivery_url = `${origin}/sessions/${session_id}`;
-
-            await insertCronSchedule(client, {
+            await insertCronSchedule(client as any, {
               sns_type,
               sns_id,
               schedule_type: "new",
-              delivery_url,
+              delivery_url: `${origin}/sessions/${session_id}`,
               message_body: session_title,
               scheduled_at,
             });
 
             results.new_enqueued++;
           } catch (err: any) {
-            results.errors.push(
-              `new enqueue failed (${sns_id}/${sub.product_id}): ${err.message}`
-            );
+            results.errors.push(`new enqueue failed (${sns_id}/${sub.product_id}): ${err.message}`);
           }
         }
       } catch (err: any) {
@@ -199,33 +173,19 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     // --- Review DMs ---
-    const due_reviews = await getCronStageProgressDueForReview(client);
+    const due_reviews = await getCronStageProgressDueForReview(client as any);
 
-    // Group by (sns_type, sns_id, product_session_id)
-    const review_map = new Map<
-      string,
-      {
-        sns_type: SnsType;
-        sns_id: string;
-        timezone: string;
-        send_hour: number;
-        product_session_id: string;
-        review_round: number;
-        stage_ids: string[];
-        session_title: string;
-      }
-    >();
+    const review_map = new Map<string, any>();
 
     for (const row of due_reviews) {
       try {
-        const pss = await getProductSessionContainingStage(client, row.stage_id).catch(() => null);
+        const pss = await getProductSessionContainingStage(client as any, row.stage_id).catch(() => null);
         if (!pss) continue;
 
         const ps = pss.nv2_product_sessions as any;
         const round = row.review_round ?? 1;
         const key = `${row.sns_type}:${row.sns_id}:${pss.product_session_id}`;
 
-        // Find profile timezone
         const { data: profile_row } = await client
           .from("nv2_profiles")
           .select("timezone, send_hour")
@@ -238,7 +198,7 @@ export async function action({ request }: Route.ActionArgs) {
 
         if (!review_map.has(key)) {
           review_map.set(key, {
-            sns_type: row.sns_type as SnsType,
+            sns_type: row.sns_type,
             sns_id: row.sns_id,
             timezone,
             send_hour,
@@ -259,32 +219,22 @@ export async function action({ request }: Route.ActionArgs) {
         const date_prefix = getLocalDatePrefix(info.timezone);
 
         const already_enqueued = await getCronScheduleExistsToday(
-          client, info.sns_type, info.sns_id, "review", date_prefix
+          client as any, info.sns_type, info.sns_id, "review", date_prefix
         );
-        if (already_enqueued) {
-          results.skipped++;
-          continue;
-        }
+        if (already_enqueued) { results.skipped++; continue; }
 
         const review_session = await createCronReviewSession(
-          client,
-          info.sns_type,
-          info.sns_id,
-          info.product_session_id,
-          info.review_round,
-          now
+          client as any, info.sns_type, info.sns_id,
+          info.product_session_id, info.review_round, now
         );
 
-        const delivery_url = `${origin}/sessions/${review_session.session_id}`;
-        const scheduled_at = buildScheduledAt(info.timezone, info.send_hour);
-
-        await insertCronSchedule(client, {
+        await insertCronSchedule(client as any, {
           sns_type: info.sns_type,
           sns_id: info.sns_id,
           schedule_type: "review",
-          delivery_url,
+          delivery_url: `${origin}/sessions/${review_session.session_id}`,
           message_body: info.session_title,
-          scheduled_at,
+          scheduled_at: buildScheduledAt(info.timezone, info.send_hour),
           review_round: info.review_round,
         });
 
