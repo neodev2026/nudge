@@ -30,21 +30,23 @@ export default [
       route("/locale", "features/settings/api/set-locale.tsx"),
     ]),
 
-    // v2 Cron endpoints — uncomment as each file is created
-    // ...prefix("/v2/cron", [
-    //   route("/dispatch",        "features/v2/cron/api/dispatch.tsx"),
-    //   route("/review-schedule", "features/v2/cron/api/review-schedule.tsx"),
-    //   route("/daily-reset",     "features/v2/cron/api/daily-reset.tsx"),
-    // ]),
+    // ✅ v2 Cron endpoints
+    ...prefix("/v2/cron", [
+      route("/daily-reset",   "features/v2/cron/api/daily-reset.tsx"),
+      route("/enqueue-daily", "features/v2/cron/api/enqueue-daily.tsx"),
+      route("/enqueue-nudge", "features/v2/cron/api/enqueue-nudge.tsx"),
+      route("/dispatch",      "features/v2/cron/api/dispatch.tsx"),
+      // route("/review-schedule", "features/v2/cron/api/review-schedule.tsx"), // not yet implemented
+    ]),
 
-    // ✅ 구현 완료
+    // ✅ v2 action endpoints
     ...prefix("/v2", [
-      route("/stage/:stageId/complete",     "features/v2/stage/api/complete.tsx"),
-      route("/stage/:stageId/retry",        "features/v2/stage/api/retry.tsx"),
-      route("/products/:slug/start",        "features/v2/products/api/start-learning.tsx"),
-      route("/sessions/:sessionId/complete","features/v2/session/api/complete.tsx"),
-      route("/quiz/:stageId/result",        "features/v2/quiz/api/result.tsx"),
-      route("/sentence/:stageId/result",    "features/v2/sentence/api/result.tsx"),
+      route("/stage/:stageId/complete",      "features/v2/stage/api/complete.tsx"),
+      route("/stage/:stageId/retry",         "features/v2/stage/api/retry.tsx"),
+      route("/products/:slug/start",         "features/v2/products/api/start-learning.tsx"),
+      route("/sessions/:sessionId/complete", "features/v2/session/api/complete.tsx"),
+      route("/quiz/:stageId/result",         "features/v2/quiz/api/result.tsx"),
+      route("/sentence/:stageId/result",     "features/v2/sentence/api/result.tsx"),
     ]),
   ]),
 
@@ -75,32 +77,22 @@ export default [
   // ── v2 Public layout ──────────────────────────────────────────────────
   layout("core/layouts/v2.layout.tsx", [
 
-    // ✅ 구현 완료
     index("features/v2/home/screens/home-page.tsx"),
 
-    // ✅ 구현 완료
     route("/products",       "features/v2/products/screens/products-page.tsx"),
     route("/products/:slug", "features/v2/products/screens/product-detail-page.tsx"),
 
-    // ✅ 구현 완료
-    route("/stages/:stageId",   "features/v2/stage/screens/stage-page.tsx"),
-
-    // ✅ 구현 완료
+    route("/stages/:stageId",     "features/v2/stage/screens/stage-page.tsx"),
     route("/sessions/:sessionId", "features/v2/session/screens/session-page.tsx"),
+    route("/quiz/:stageId",       "features/v2/quiz/screens/quiz-page.tsx"),
+    route("/sentence/:stageId",   "features/v2/sentence/screens/sentence-page.tsx"),
 
-    // ✅ 구현 완료
-    route("/quiz/:stageId", "features/v2/quiz/screens/quiz-page.tsx"),
-
-    // ✅ 구현 완료
-    route("/sentence/:stageId", "features/v2/sentence/screens/sentence-page.tsx"),
-
-    // ✅ 구현 완료
     ...prefix("/auth", [
-      route("/discord/start",    "features/v2/auth/screens/discord-start.tsx"),
+      route("/discord/start",       "features/v2/auth/screens/discord-start.tsx"),
+      route("/discord/start-oauth", "features/v2/auth/screens/discord-start-oauth.tsx"),
       route("/discord/callback", "features/v2/auth/screens/discord-callback.tsx"),
     ]),
 
-    // Legal
     ...prefix("/legal", [
       route("/:slug", "features/legal/screens/policy.tsx"),
     ]),

@@ -253,3 +253,29 @@ export async function addUserToGuild(
     throw new Error(`addUserToGuild failed [${res.status}]: ${body}`);
   }
 }
+
+/**
+ * Sends a Leni cheer (nudge) DM to a user with an incomplete session.
+ *
+ * @param sns_id      - Discord user ID
+ * @param session_url - Full URL to the incomplete session
+ * @param message     - Leni's cheer message (selected randomly by enqueue-nudge)
+ */
+export async function sendCheerDm(
+  sns_id: string,
+  session_url: string,
+  message: string
+): Promise<void> {
+  const channel_id = await openDmChannel(sns_id);
+
+  await postEmbedWithButton(channel_id, {
+    content: message,
+    embed: {
+      title: "📖 학습을 계속해봐요!",
+      description: "아래 버튼을 눌러 이어서 학습하세요. 금방 끝나요!",
+      color: 0xffa500, // Orange — warm encouragement
+    },
+    button_label: "학습 이어하기 →",
+    button_url: session_url,
+  });
+}
