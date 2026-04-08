@@ -15,30 +15,11 @@
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/dispatch";
 
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "database.types";
-import {
-  getCronPendingSchedules,
-  markCronScheduleSent,
-  markCronScheduleFailedOrRetry,
-} from "../lib/queries.server";
-import {
-  sendSessionDm,
-  sendCheerDm,
-} from "~/features/v2/auth/lib/discord.server";
-
 function verifyCronSecret(request: Request): boolean {
   const auth = request.headers.get("Authorization") ?? "";
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
   return auth === `Bearer ${secret}`;
-}
-
-function makeServiceClient() {
-  return createClient<Database>(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -50,7 +31,21 @@ export async function action({ request }: Route.ActionArgs) {
     return routeData({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const client = makeServiceClient();
+  // Server-only imports inside action to prevent client bundle contamination
+  const { createClient } = await import("@supabase/supabase-js");
+  const {
+    getCronPendingSchedules,
+    markCronScheduleSent,
+    markCronScheduleFailedOrRetry,
+  } = await import("../lib/queries.server");
+  const { sendSessionDm, sendCheerDm } = await import(
+    "~/features/v2/auth/lib/discord.server"
+  );
+
+  const client = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
   const results = {
     sent: 0,
@@ -60,7 +55,7 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   try {
-    const pending = await getCronPendingSchedules(client);
+    const pending = await getCronPendingSchedules(client as any);
 
     for (const schedule of pending) {
       const schedule_id = schedule.schedule_id as unknown as bigint;
@@ -84,7 +79,7 @@ export async function action({ request }: Route.ActionArgs) {
           );
         }
 
-        await markCronScheduleSent(client, schedule_id);
+        await markCronScheduleSent(client as any, schedule_id);
         results.sent++;
       } catch (err: any) {
         const msg = err?.message ?? "unknown error";
@@ -94,7 +89,7 @@ export async function action({ request }: Route.ActionArgs) {
         const max_retries = schedule.max_retries ?? 3;
 
         await markCronScheduleFailedOrRetry(
-          client,
+          client as any,
           schedule_id,
           msg,
           retry_count,

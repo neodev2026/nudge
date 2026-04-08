@@ -17,29 +17,16 @@
  */
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/enqueue-nudge";
-
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "database.types";
-import type { SnsType } from "~/features/v2/shared/types";
-import { NUDGE_SCHEDULE_TIMES, getRandomNudgeMessage } from "~/features/v2/shared/constants";
 import {
-  getCronUsersWithIncompleteSessions,
-  getCronCheerExistsTodayForHour,
-  insertCronSchedule,
-} from "../lib/queries.server";
+  NUDGE_SCHEDULE_TIMES,
+  getRandomNudgeMessage,
+} from "~/features/v2/shared/constants";
 
 function verifyCronSecret(request: Request): boolean {
   const auth = request.headers.get("Authorization") ?? "";
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
   return auth === `Bearer ${secret}`;
-}
-
-function makeServiceClient() {
-  return createClient<Database>(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
 }
 
 function getLocalDatePrefix(timezone: string): string {
@@ -55,7 +42,19 @@ export async function action({ request }: Route.ActionArgs) {
     return routeData({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const client = makeServiceClient();
+  // Server-only imports inside action to prevent client bundle contamination
+  const { createClient } = await import("@supabase/supabase-js");
+  const {
+    getCronUsersWithIncompleteSessions,
+    getCronCheerExistsTodayForHour,
+    insertCronSchedule,
+  } = await import("../lib/queries.server");
+
+  const client = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   const origin = new URL(request.url).origin;
   const now_date = new Date();
   const now_iso = now_date.toISOString();
@@ -67,11 +66,10 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   try {
-    const candidates = await getCronUsersWithIncompleteSessions(client);
+    const candidates = await getCronUsersWithIncompleteSessions(client as any);
 
     for (const candidate of candidates) {
       try {
-        // Fetch profile timezone
         const { data: profile } = await client
           .from("nv2_profiles")
           .select("timezone")
@@ -81,7 +79,6 @@ export async function action({ request }: Route.ActionArgs) {
 
         const timezone = profile?.timezone ?? "Asia/Seoul";
 
-        // Get user's current local time
         const local_time_str = now_date.toLocaleString("en-US", {
           timeZone: timezone,
           hour: "numeric",
@@ -91,50 +88,35 @@ export async function action({ request }: Route.ActionArgs) {
         const [local_h, local_m] = local_time_str.split(":").map(Number);
 
         // No DMs after 22:00 local time
-        if (local_h >= 22) {
-          results.skipped++;
-          continue;
-        }
+        if (local_h >= 22) { results.skipped++; continue; }
 
-        // Check if current local time matches any nudge slot within a 30-min window
         const matched_slot = NUDGE_SCHEDULE_TIMES.find((slot) => {
           if (slot.hour !== local_h) return false;
-          // For :00 slots, match minute 0~29
-          // For :30 slots, match minute 30~59
-          if (slot.minute === 0) return local_m < 30;
+          if (slot.minute === 0)  return local_m < 30;
           if (slot.minute === 30) return local_m >= 30;
           return false;
         });
 
-        if (!matched_slot) {
-          results.skipped++;
-          continue;
-        }
+        if (!matched_slot) { results.skipped++; continue; }
 
-        const sns_type = candidate.sns_type as SnsType;
+        const sns_type = candidate.sns_type as any;
         const sns_id = candidate.sns_id;
         const date_prefix = getLocalDatePrefix(timezone);
 
-        // Duplicate guard: only one cheer per hour per day
         const already_cheered = await getCronCheerExistsTodayForHour(
-          client, sns_type, sns_id, matched_slot.hour, date_prefix
+          client as any, sns_type, sns_id, matched_slot.hour, date_prefix
         );
-        if (already_cheered) {
-          results.skipped++;
-          continue;
-        }
+        if (already_cheered) { results.skipped++; continue; }
 
         const message = getRandomNudgeMessage(matched_slot.hour);
         const hour_tag = `cheer:${String(matched_slot.hour).padStart(2, "0")}`;
         const message_body = `${hour_tag}|${message}`;
 
-        const delivery_url = `${origin}/sessions/${candidate.session_id}`;
-
-        await insertCronSchedule(client, {
+        await insertCronSchedule(client as any, {
           sns_type,
           sns_id,
           schedule_type: "cheer",
-          delivery_url,
+          delivery_url: `${origin}/sessions/${candidate.session_id}`,
           message_body,
           scheduled_at: now_iso,
         });
