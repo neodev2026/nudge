@@ -8,16 +8,19 @@
  *   2. Check if user has an active (pending/in_progress) session for this product
  *      → Active session exists : reuse it (send DM again, return session_id)
  *      → No active session     : find next product_session → create nv2_sessions row
- *   3. Send Discord DM with session link
- *   4. Return { ok: true, session_id } for client-side redirect
+ *   3. Attempt to send Discord DM with session link
+ *      → DM success: { ok: true, session_id }
+ *      → DM failure: log the error and still return { ok: true, session_id }
+ *        The session URL is valid — the user can study without the DM.
+ *        Error 50278 (no mutual guild) is the most common cause; the user
+ *        can still access the session by navigating directly.
  *
  * Response (JSON):
- *   { ok: true, session_id: string }
+ *   { ok: true, session_id: string, dm_sent: boolean }
  *
  * Error responses:
  *   401 — not authenticated
  *   404 — product not found / no sessions configured
- *   500 — DM dispatch failed
  */
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/start-learning";
@@ -139,20 +142,24 @@ export async function action({ request, params }: Route.ActionArgs) {
   const session_title =
     product_session.title ?? `Session ${product_session.session_number}`;
 
-  // ── Send Discord DM ───────────────────────────────────────────────────────
+  // ── Attempt Discord DM (non-blocking) ─────────────────────────────────────
+  // DM failure (e.g. error 50278 — no mutual guild) must NOT block the user
+  // from studying. The session URL is valid regardless of DM delivery.
+  // The user will be redirected to /sessions/:id either way.
   const origin = new URL(request.url).origin;
   const session_url = `${origin}/sessions/${user_session_id}`;
 
+  let dm_sent = false;
   try {
     await sendSessionDm(sns_id, session_url, session_title, stage_count);
+    dm_sent = true;
   } catch (err) {
-    console.error("[start-learning] sendSessionDm failed:", err);
-    return routeData(
-      { error: "Failed to send Discord message" },
-      { status: 500, headers }
-    );
+    // Log the full error for debugging but do not surface it to the user.
+    // Common cause: Discord error 50278 (bot and user share no mutual guild).
+    // The user can still navigate to the session directly via the redirect below.
+    console.error("[start-learning] sendSessionDm failed (non-fatal):", err);
   }
 
-  // Return session_id so the client can redirect immediately
-  return routeData({ ok: true, session_id: user_session_id }, { headers });
+  // Always return ok — the client will redirect to /sessions/:id
+  return routeData({ ok: true, session_id: user_session_id, dm_sent }, { headers });
 }

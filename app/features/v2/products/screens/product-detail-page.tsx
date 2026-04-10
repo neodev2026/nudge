@@ -228,14 +228,19 @@ function StartButton({
   first_stage: { id: string } | null;
   is_authenticated: boolean;
 }) {
-  const fetcher = useFetcher<{ ok?: boolean; error?: string; session_id?: string }>();
+  const fetcher = useFetcher<{
+    ok?: boolean;
+    error?: string;
+    session_id?: string;
+    dm_sent?: boolean;
+  }>();
   const is_sending = fetcher.state !== "idle";
-  const is_sent = fetcher.data?.ok === true;
-  const send_failed = !!fetcher.data?.error;
+  const result = fetcher.data;
 
-  // Redirect to session page immediately after DM is sent
-  if (is_sent && fetcher.data?.session_id) {
-    window.location.href = `/sessions/${fetcher.data.session_id}`;
+  // Redirect to session page whenever ok=true (regardless of dm_sent)
+  // DM failure is non-fatal — the session URL is valid either way.
+  if (result?.ok && result.session_id) {
+    window.location.href = `/sessions/${result.session_id}`;
   }
 
   // No stages yet
@@ -273,26 +278,23 @@ function StartButton({
     );
   }
 
-  // DM sent successfully
-  if (is_sent) {
+  // ok=true — redirect is handled above; show loading state while navigating
+  if (result?.ok) {
     return (
       <div className="rounded-2xl bg-[#4caf72]/10 px-5 py-5 text-center">
-        <div className="mb-1 text-2xl">✉️</div>
-        <p className="font-bold text-[#1a2744]">Discord로 첫 번째 카드를 보냈어요!</p>
-        <p className="mt-1 text-sm text-[#6b7a99]">
-          Discord 알림을 확인해주세요.
-        </p>
+        <div className="mb-1 text-2xl">⏳</div>
+        <p className="font-bold text-[#1a2744]">세션 페이지로 이동 중...</p>
       </div>
     );
   }
 
-  // DM failed
-  if (send_failed) {
+  // Hard error — only non-DM errors reach here (product not found, 401, etc.)
+  if (result?.error) {
     return (
       <div className="space-y-3">
         <div className="rounded-2xl bg-red-50 px-5 py-4 text-center">
           <p className="text-sm font-bold text-red-600">
-            Discord 메시지 발송에 실패했어요. 잠시 후 다시 시도해주세요.
+            오류가 발생했어요. 잠시 후 다시 시도해주세요.
           </p>
         </div>
         <button
@@ -310,7 +312,7 @@ function StartButton({
     );
   }
 
-  // Logged in — send first stage DM
+  // Logged in — default state
   return (
     <button
       disabled={is_sending}
@@ -322,7 +324,7 @@ function StartButton({
       }
       className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4caf72] py-4 text-base font-extrabold text-white shadow-[0_4px_16px_rgba(76,175,114,0.30)] transition-all hover:-translate-y-px hover:bg-[#5ecb87] disabled:opacity-60"
     >
-      {is_sending ? "발송 중..." : "학습 시작 — Discord로 카드 받기 📬"}
+      {is_sending ? "준비 중..." : "학습 시작 — Discord로 카드 받기 📬"}
     </button>
   );
 }
