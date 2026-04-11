@@ -551,3 +551,36 @@ export async function advanceCronReviewProgress(
       .eq("progress_id", Number(progress.progress_id));
   }
 }
+
+// ---------------------------------------------------------------------------
+// Chat turn retention
+// ---------------------------------------------------------------------------
+
+/**
+ * Deletes nv2_chat_turns older than CHAT_TURN_RETENTION_DAYS (default 90).
+ *
+ * Retention period is controlled by the CHAT_TURN_RETENTION_DAYS environment
+ * variable so it can be adjusted without a code deploy.
+ *
+ * Called nightly by daily-reset cron.
+ */
+export async function purgeStaleChatTurns(
+  client: SupabaseClient<Database>
+): Promise<{ purged_chat_turns: number }> {
+  const retention_days = parseInt(
+    process.env.CHAT_TURN_RETENTION_DAYS ?? "90",
+    10
+  );
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - retention_days);
+
+  const { error, count } = await client
+    .from("nv2_chat_turns")
+    .delete({ count: "exact" })
+    .lt("created_at", cutoff.toISOString());
+
+  if (error) throw error;
+
+  return { purged_chat_turns: count ?? 0 };
+}

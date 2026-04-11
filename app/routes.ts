@@ -4,8 +4,7 @@
  * Route groups:
  *  - Core utilities (robots, sitemap)
  *  - API routes (settings, cron, v2 actions)
- *  - v2 auth routes (outside layout — raw Response / redirect only)
- *  - v2 public routes (/, /products, /stages, /sessions, /quiz)
+ *  - v2 public routes (/, /products, /stages, /sessions, /quiz, /auth)
  *  - Legacy / future routes (commented out)
  *
  * 파일이 실제로 생성된 시점에 주석을 해제하세요.
@@ -46,6 +45,7 @@ export default [
       route("/stage/:stageId/retry",         "features/v2/stage/api/retry.tsx"),
       route("/products/:slug/start",         "features/v2/products/api/start-learning.tsx"),
       route("/sessions/:sessionId/complete", "features/v2/session/api/complete.tsx"),
+      route("/chat/:sessionId/message",         "features/v2/chat/api/message.tsx"),
       route("/quiz/:stageId/result",         "features/v2/quiz/api/result.tsx"),
       route("/sentence/:stageId/result",     "features/v2/sentence/api/result.tsx"),
     ]),
@@ -75,16 +75,6 @@ export default [
     route("/sessions/:id/delete", "features/admin/api/session-delete.tsx"),
   ]),
 
-  // ── v2 Auth routes (outside layout — return raw Response or redirect only) ──
-  // discord-start   : returns raw HTML with inline JS → must NOT be wrapped in layout
-  // discord-start-oauth : returns redirect() → layout-safe but kept here for consistency
-  // discord-callback    : returns redirect() → layout-safe but kept here for consistency
-  ...prefix("/auth", [
-    route("/discord/start",       "features/v2/auth/screens/discord-start.tsx"),
-    route("/discord/start-oauth", "features/v2/auth/screens/discord-start-oauth.tsx"),
-    route("/discord/callback",    "features/v2/auth/screens/discord-callback.tsx"),
-  ]),
-
   // ── v2 Public layout ──────────────────────────────────────────────────
   layout("core/layouts/v2.layout.tsx", [
 
@@ -94,9 +84,16 @@ export default [
     route("/products/:slug", "features/v2/products/screens/product-detail-page.tsx"),
 
     route("/stages/:stageId",     "features/v2/stage/screens/stage-page.tsx"),
-    route("/sessions/:sessionId", "features/v2/session/screens/session-page.tsx"),
+    route("/sessions/:sessionId",      "features/v2/session/screens/session-page.tsx"),
+    route("/sessions/:sessionId/chat", "features/v2/chat/screens/chat-page.tsx"),
     route("/quiz/:stageId",       "features/v2/quiz/screens/quiz-page.tsx"),
     route("/sentence/:stageId",   "features/v2/sentence/screens/sentence-page.tsx"),
+
+    ...prefix("/auth", [
+      route("/discord/start",       "features/v2/auth/screens/discord-start.tsx"),
+      route("/discord/start-oauth", "features/v2/auth/screens/discord-start-oauth.tsx"),
+      route("/discord/callback", "features/v2/auth/screens/discord-callback.tsx"),
+    ]),
 
     ...prefix("/legal", [
       route("/:slug", "features/legal/screens/policy.tsx"),
