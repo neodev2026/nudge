@@ -77,6 +77,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
         )
       : [];
 
+  // from=chat: opened from Leni chat bubble (new tab) — show "close tab" button instead of session link
+  const from_chat = new URL(request.url).searchParams.get("from") === "chat";
+
   return {
     stage_id: params.stageId,
     stage_type: stage.stage_type,
@@ -88,6 +91,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     quiz5_cards,
     timer_seconds,
     covered_stage_ids,
+    from_chat,
   };
 }
 
@@ -102,7 +106,7 @@ export default function QuizPage() {
     data.stage_type === "quiz_10" ||
     data.stage_type === "quiz_current_and_prev_session"
   ) {
-    return <Quiz10Game {...data} />;
+    return <Quiz10Game {...data} from_chat={data.from_chat} />;
   }
 
   // quiz_5
@@ -115,6 +119,7 @@ export default function QuizPage() {
       sns_type={data.sns_type}
       sns_id={data.sns_id}
       cards={data.quiz5_cards}
+      from_chat={data.from_chat}
     />
   );
 }
@@ -133,6 +138,7 @@ function Quiz5Game({
   sns_type,
   sns_id,
   cards,
+  from_chat = false,
 }: {
   stage_id: string;
   stage_type: string;
@@ -141,6 +147,7 @@ function Quiz5Game({
   sns_type: string;
   sns_id: string;
   cards: Quiz5Card[];
+  from_chat?: boolean;
 }) {
   const result_fetcher = useFetcher();
   const [step, set_step] = useState<Quiz5Step>("step1");
@@ -168,20 +175,32 @@ function Quiz5Game({
 
   const result_data = result_fetcher.data as { ok?: boolean } | undefined;
   useEffect(() => {
-    if (result_data?.ok) {
+    if (result_data?.ok && !from_chat) {
       window.location.href = `/sessions/${session_id}`;
     }
   }, [result_data]);
+
+  // from_chat: show result screen after completion instead of redirecting
+  const is_done = !!result_data?.ok && from_chat;
 
   if (cards.length === 0) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#fdf8f0] px-6">
         <div className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-[0_8px_40px_rgba(26,39,68,0.10)]">
           <p className="mb-4 text-sm text-[#6b7a99]">퀴즈 카드가 없습니다.</p>
-          <a href={`/sessions/${session_id}`}
-            className="inline-block rounded-2xl bg-[#1a2744] px-6 py-3 text-sm font-extrabold text-white">
-            학습 목록으로 →
-          </a>
+          {from_chat ? (
+            <button
+              onClick={() => window.close()}
+              className="inline-block rounded-2xl bg-[#1a2744] px-6 py-3 text-sm font-extrabold text-white"
+            >
+              채팅으로 돌아가기 ✕
+            </button>
+          ) : (
+            <a href={`/sessions/${session_id}`}
+              className="inline-block rounded-2xl bg-[#1a2744] px-6 py-3 text-sm font-extrabold text-white">
+              학습 목록으로 →
+            </a>
+          )}
         </div>
       </div>
     );
@@ -215,23 +234,48 @@ function Quiz5Game({
       {/* Body */}
       <div className="flex-1 px-4 py-6">
         <div className="mx-auto max-w-md">
-          {step === "step1" && (
-            <Quiz5Step1
-              cards={cards}
-              onComplete={() => set_step("step2")}
-            />
-          )}
-          {step === "step2" && (
-            <Quiz5Step2
-              cards={cards}
-              onComplete={() => set_step("step3")}
-            />
-          )}
-          {step === "step3" && (
-            <Quiz5Step3
-              cards={cards}
-              onComplete={handleComplete}
-            />
+          {is_done ? (
+            /* from_chat result screen */
+            <div className="rounded-3xl bg-white p-8 text-center shadow-[0_8px_40px_rgba(26,39,68,0.10)]">
+              <div className="mb-3 text-5xl">🎉</div>
+              <h2 className="mb-2 font-display text-2xl font-black text-[#1a2744]">퀴즈 완료!</h2>
+              <p className="mb-6 text-sm text-[#6b7a99]">정말 잘하셨어요! Sehr gut! 👏</p>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => { set_step("step1"); result_fetcher.data = undefined as any; }}
+                  className="w-full rounded-2xl bg-[#4caf72] py-4 text-base font-extrabold text-white transition-all hover:bg-[#5ecb87]"
+                >
+                  ↺ 재도전
+                </button>
+                <button
+                  onClick={() => window.close()}
+                  className="flex w-full items-center justify-center rounded-2xl border-2 border-[#e8ecf5] bg-white py-4 text-base font-extrabold text-[#6b7a99] transition-colors hover:border-[#1a2744] hover:text-[#1a2744]"
+                >
+                  채팅으로 돌아가기 ✕
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {step === "step1" && (
+                <Quiz5Step1
+                  cards={cards}
+                  onComplete={() => set_step("step2")}
+                />
+              )}
+              {step === "step2" && (
+                <Quiz5Step2
+                  cards={cards}
+                  onComplete={() => set_step("step3")}
+                />
+              )}
+              {step === "step3" && (
+                <Quiz5Step3
+                  cards={cards}
+                  onComplete={handleComplete}
+                />
+              )}
+            </>
           )}
         </div>
       </div>
@@ -806,6 +850,7 @@ function Quiz10Game({
   card_pool,
   timer_seconds,
   covered_stage_ids,
+  from_chat = false,
 }: {
   stage_id: string;
   stage_type: string;
@@ -816,6 +861,7 @@ function Quiz10Game({
   card_pool: QuizCard[];
   timer_seconds: number;
   covered_stage_ids: string[];
+  from_chat?: boolean;
 }) {
   const result_fetcher = useFetcher();
   const vp = Math.min(Q10_VISIBLE_PAIRS, card_pool.length);
@@ -1141,12 +1187,21 @@ function Quiz10Game({
           <p className="mt-2 text-sm text-[#6b7a99]">
             이 세션에 학습 카드가 없어 퀴즈를 진행할 수 없습니다.
           </p>
-          <a
-            href={`/sessions/${session_id}`}
-            className="mt-6 inline-block rounded-xl bg-[#1a2744] px-6 py-3 text-sm font-extrabold text-white"
-          >
-            세션으로 돌아가기
-          </a>
+          {from_chat ? (
+            <button
+              onClick={() => window.close()}
+              className="mt-6 inline-block rounded-xl bg-[#1a2744] px-6 py-3 text-sm font-extrabold text-white"
+            >
+              채팅으로 돌아가기 ✕
+            </button>
+          ) : (
+            <a
+              href={`/sessions/${session_id}`}
+              className="mt-6 inline-block rounded-xl bg-[#1a2744] px-6 py-3 text-sm font-extrabold text-white"
+            >
+              세션으로 돌아가기
+            </a>
+          )}
         </div>
       </div>
     );
@@ -1214,6 +1269,7 @@ function Quiz10Game({
               session_id={session_id}
               is_submitting={result_fetcher.state !== "idle"}
               onRestart={handleRestart}
+              from_chat={from_chat}
             />
           ) : (
             <div className="grid grid-cols-2 gap-3">
@@ -1369,10 +1425,10 @@ function MeaningButton({
 // ---------------------------------------------------------------------------
 
 function ResultView({
-  score, matched_pairs, ranking, sns_id, session_id, is_submitting, onRestart,
+  score, matched_pairs, ranking, sns_id, session_id, is_submitting, onRestart, from_chat = false,
 }: {
   score: number; matched_pairs: number; ranking: QuizRankEntry[];
-  sns_id: string; session_id: string; is_submitting: boolean; onRestart: () => void;
+  sns_id: string; session_id: string; is_submitting: boolean; onRestart: () => void; from_chat?: boolean;
 }) {
   const my_rank_idx = ranking.findIndex((r) => r.sns_id === sns_id);
   const my_rank     = my_rank_idx >= 0 ? my_rank_idx + 1 : null;
@@ -1445,12 +1501,21 @@ function ResultView({
         >
           ↺ 재도전
         </button>
-        <a
-          href={`/sessions/${session_id}`}
-          className="flex w-full items-center justify-center rounded-2xl border-2 border-[#e8ecf5] bg-white py-4 text-base font-extrabold text-[#6b7a99] transition-colors hover:border-[#1a2744] hover:text-[#1a2744]"
-        >
-          학습 목록으로 →
-        </a>
+        {from_chat ? (
+          <button
+            onClick={() => window.close()}
+            className="flex w-full items-center justify-center rounded-2xl border-2 border-[#e8ecf5] bg-white py-4 text-base font-extrabold text-[#6b7a99] transition-colors hover:border-[#1a2744] hover:text-[#1a2744]"
+          >
+            채팅으로 돌아가기 ✕
+          </button>
+        ) : (
+          <a
+            href={`/sessions/${session_id}`}
+            className="flex w-full items-center justify-center rounded-2xl border-2 border-[#e8ecf5] bg-white py-4 text-base font-extrabold text-[#6b7a99] transition-colors hover:border-[#1a2744] hover:text-[#1a2744]"
+          >
+            학습 목록으로 →
+          </a>
+        )}
       </div>
     </div>
   );

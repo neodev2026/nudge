@@ -598,6 +598,47 @@ export type Database = {
           },
         ]
       }
+      nv2_chat_turns: {
+        Row: {
+          auth_user_id: string
+          content: string
+          created_at: string
+          id: string
+          message_type: Database["public"]["Enums"]["nv2_chat_message_type"]
+          role: Database["public"]["Enums"]["nv2_chat_role"]
+          session_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id: string
+          content: string
+          created_at?: string
+          id?: string
+          message_type?: Database["public"]["Enums"]["nv2_chat_message_type"]
+          role: Database["public"]["Enums"]["nv2_chat_role"]
+          session_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          message_type?: Database["public"]["Enums"]["nv2_chat_message_type"]
+          role?: Database["public"]["Enums"]["nv2_chat_role"]
+          session_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nv2_chat_turns_session_id_nv2_sessions_session_id_fk"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "nv2_sessions"
+            referencedColumns: ["session_id"]
+          },
+        ]
+      }
       nv2_learning_products: {
         Row: {
           category: Database["public"]["Enums"]["nv2_product_category"]
@@ -1080,6 +1121,36 @@ export type Database = {
           },
         ]
       }
+      nv2_turn_balance: {
+        Row: {
+          auth_user_id: string
+          charged_turns: number
+          created_at: string
+          id: string
+          subscription_reset_at: string | null
+          subscription_turns: number
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id: string
+          charged_turns?: number
+          created_at?: string
+          id?: string
+          subscription_reset_at?: string | null
+          subscription_turns?: number
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string
+          charged_turns?: number
+          created_at?: string
+          id?: string
+          subscription_reset_at?: string | null
+          subscription_turns?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           approved_at: string
@@ -1376,6 +1447,14 @@ export type Database = {
         | "etymology"
         | "example"
         | "option"
+      nv2_chat_message_type:
+        | "text"
+        | "card"
+        | "quiz"
+        | "writing_prompt"
+        | "dictation"
+        | "feedback"
+      nv2_chat_role: "leni" | "user"
       nv2_link_access_type: "public" | "members_only"
       nv2_product_category:
         | "language"
@@ -1584,6 +1663,15 @@ export const Constants = {
         "example",
         "option",
       ],
+      nv2_chat_message_type: [
+        "text",
+        "card",
+        "quiz",
+        "writing_prompt",
+        "dictation",
+        "feedback",
+      ],
+      nv2_chat_role: ["leni", "user"],
       nv2_link_access_type: ["public", "members_only"],
       nv2_product_category: [
         "language",

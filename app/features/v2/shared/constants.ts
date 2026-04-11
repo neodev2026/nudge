@@ -224,3 +224,38 @@ export function getRandomNudgeMessage(local_hour: number): string {
   const messages = NUDGE_MESSAGES[local_hour] ?? NUDGE_MESSAGES[9];
   return messages[Math.floor(Math.random() * messages.length)];
 }
+
+// ---------------------------------------------------------------------------
+// AI Chat (Leni)
+// ---------------------------------------------------------------------------
+
+/**
+ * Chat message roles.
+ *   leni — AI-generated message
+ *   user — user's message
+ */
+export const NV2_CHAT_ROLES = ["leni", "user"] as const;
+
+/**
+ * Chat message types.
+ *   text            — plain conversational message
+ *   card            — learning card bubble (rendered as a card component)
+ *   quiz            — quiz bubble (rendered as a quiz component)
+ *   writing_prompt  — Leni asks the user to write a sentence
+ *   dictation       — Leni reads aloud, user types what they hear
+ *   feedback        — Leni's response to user writing/dictation (with correction)
+ */
+export const NV2_CHAT_MESSAGE_TYPES = [
+  "text",
+  "card",
+  "quiz",
+  "writing_prompt",
+  "dictation",
+  "feedback",
+] as const;
+
+/**
+ * Default number of days to retain chat turns.
+ * Override with CHAT_TURN_RETENTION_DAYS environment variable.
+ */
+export const CHAT_TURN_RETENTION_DAYS_DEFAULT = 90;
