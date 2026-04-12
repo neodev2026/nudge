@@ -203,12 +203,13 @@ export default function SessionPage() {
       {/* Header */}
       <div className="border-b border-[#1a2744]/[0.07] bg-white/70 px-6 py-5 backdrop-blur-sm">
         <div className="mx-auto max-w-lg">
-          <Link
-            to="/products"
+          {/* Back button — browser history back */}
+          <button
+            onClick={() => window.history.back()}
             className="text-xs font-semibold text-[#6b7a99] hover:text-[#1a2744]"
           >
-            ← 상품 목록
-          </Link>
+            ← 뒤로
+          </button>
           <div className="mt-3 flex items-center justify-between">
             <div>
               <p className="text-xs font-extrabold uppercase tracking-wider text-[#4caf72]">
@@ -241,6 +242,29 @@ export default function SessionPage() {
               }}
             />
           </div>
+        </div>
+
+        {/* Tab menu */}
+        <div className="mx-auto flex max-w-lg border-t border-[#1a2744]/[0.06]">
+          {/* 학습 목록 tab — active */}
+          <div className="flex flex-1 items-center justify-center gap-1.5 border-b-2 border-[#1a2744] px-4 py-3">
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-[#1a2744]">
+              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+            </svg>
+            <span className="text-xs font-extrabold text-[#1a2744]">학습 목록</span>
+          </div>
+          {/* Leni와 학습 tab */}
+          <Link
+            to={`/sessions/${session_id}/chat`}
+            className="flex flex-1 items-center justify-center gap-1.5 border-b-2 border-transparent px-4 py-3 transition hover:border-[#c0589a]/40 hover:bg-[#fdf0f8]"
+          >
+            <img
+              src="/images/leni/leni-chat-profile.png"
+              alt="Leni"
+              className="h-4 w-4 rounded-full object-cover"
+            />
+            <span className="text-xs font-bold text-[#6b7a99]">Leni와 학습</span>
+          </Link>
         </div>
       </div>
 
@@ -385,6 +409,8 @@ const STAGE_TYPE_LABELS: Record<string, string> = {
   welcome: "안내",
   congratulations: "축하",
   sentence_practice: "문장 연습",
+  dictation: "받아쓰기",
+  writing: "작문 연습",
 };
 
 function StageRow({
@@ -410,6 +436,8 @@ function StageRow({
     stage_type === "quiz_5" || stage_type === "quiz_current_session";
   const is_quiz = is_matching_quiz || is_step_quiz;
   const is_sentence = stage_type === "sentence_practice";
+  const is_dictation = stage_type === "dictation";
+  const is_writing = stage_type === "writing";
 
   return (
     <Link
@@ -418,6 +446,10 @@ function StageRow({
           ? `/quiz/${stage_id}?session=${session_id}`
           : is_sentence
           ? `/sentence/${stage_id}?session=${session_id}`
+          : is_dictation
+          ? `/dictation/${stage_id}?session=${session_id}`
+          : is_writing
+          ? `/writing/${stage_id}?session=${session_id}`
           : `/stages/${stage_id}?session=${session_id}`
       }
       className={[
@@ -458,6 +490,8 @@ function StageRow({
           {is_matching_quiz && " · 매칭 게임"}
           {is_step_quiz && " · 3단계 퀴즈"}
           {is_sentence && " · 문장 만들기"}
+          {is_dictation && " · 듣고 받아쓰기"}
+          {is_writing && " · 작문 + AI 피드백"}
         </p>
       </div>
 

@@ -32,6 +32,7 @@ export default function AdminLayout({ loaderData }: Route.ComponentProps) {
 
   const nav_items = [
     { href: "/admin", label: "상품 목록", icon: "📦" },
+    { href: "/admin/users", label: "사용자 관리", icon: "👥" },
   ];
 
   return (

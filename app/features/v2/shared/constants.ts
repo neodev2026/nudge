@@ -37,6 +37,8 @@ export const V2_STAGE_TYPES = [
   "quiz_final",
   "congratulations",
   "sentence_practice",
+  "dictation",   // Listen to TTS and type what you hear
+  "writing",     // Compose sentences using session vocabulary with AI feedback
 ] as const;
 
 /**
