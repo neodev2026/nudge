@@ -40,8 +40,9 @@ export interface LeniBubble {
   type: "card" | "quiz";
   card_id?: string;
   stage_id?: string;
+  stage_type?: string;  // original stage_type for correct routing (quiz_5, sentence_practice, dictation, writing, etc.)
   cards?: unknown[];
-  title?: string;  // quiz bubble display title
+  title?: string;
 }
 
 export interface LeniResponse {
@@ -127,12 +128,17 @@ ${quiz_list}
 ### 1단계: 학습 카드 전시 (대화 시작 첫 메시지)
 모든 학습 카드를 bubbles에 담아 전시하세요.
 bubbles 값: [${all_card_ids}]
-텍스트: 세션 학습 목표를 간단히 소개하고 "위 내용을 모두 읽어보고, 기억나는 내용들을 저에게 이야기해주세요. 질문도 환영이에요!" 의미의 메시지를 Leni 캐릭터에 맞게 작성.
+텍스트: 세션 학습 목표를 간단히 소개하고,
+"위 카드를 읽어보세요! 다 읽으셨으면 기억나는 단어나 내용을 저한테 요약해서 말해주세요. 질문도 환영이에요!"
+의미의 메시지를 Leni 캐릭터에 맞게 작성.
 complete_stages: false
 
-### 2단계: 사용자 응답 대기
+### 2단계: 카드 요약 대기
+- 사용자가 카드를 읽고 내용을 요약/이야기할 때까지 유도합니다.
 - 학습 내용 관련 질문은 성실히 답변.
-- 다른 이야기 시도 시: 부드럽게 "그 이야기는 나중에요! 먼저 카드 내용을 이야기해주세요 😊"
+- 사용자가 퀴즈나 다른 활동을 먼저 요청하면:
+  "좋아요! 그 전에 카드 내용을 한 번 요약해주시면 더 효과적이에요. 기억나는 것만이라도 말해주세요 😊" 로 안내.
+- 완전히 다른 주제(오프-토픽)는 부드럽게 거절.
 complete_stages: false
 
 ### 3단계: 사용자가 기억 내용 입력 시 (complete_stages: true)

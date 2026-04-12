@@ -55,6 +55,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const [client] = makeServerClient(request);
 
   const session_id = new URL(request.url).searchParams.get("session");
+  const from_chat = new URL(request.url).searchParams.get("from") === "chat";
 
   if (!session_id) {
     throw new Response("session parameter is required", { status: 400 });
@@ -111,6 +112,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
   return {
     stage,
+    from_chat,
     sentence_cards,
     session_id,
     sns_type,
@@ -144,6 +146,7 @@ export default function SentencePage() {
     session_id,
     sns_type,
     sns_id,
+    from_chat,
   } = useLoaderData<typeof loader>();
 
   const [card_index, set_card_index] = useState(0);
@@ -156,13 +159,17 @@ export default function SentencePage() {
   const current_card = sentence_cards[card_index];
   const total = sentence_cards.length;
 
-  // When result is saved, redirect to session page
+  // When result is saved: close tab if from_chat, else redirect to session
   const result_data = result_fetcher.data as { ok?: boolean } | undefined;
   useEffect(() => {
-    if (result_data?.ok && session_id) {
-      window.location.href = `/sessions/${session_id}`;
+    if (result_data?.ok) {
+      if (from_chat) {
+        window.close();
+      } else if (session_id) {
+        window.location.href = `/sessions/${session_id}`;
+      }
     }
-  }, [result_data, session_id]);
+  }, [result_data, session_id, from_chat]);
 
   function handleOrderComplete() {
     // Move from word-ordering to shadowing

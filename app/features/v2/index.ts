@@ -15,3 +15,4 @@ export * from "./quiz/schema";
 export * from "./schedule/schema";
 export * from "./session/schema";
 export * from "./subscriptions/schema";
+export * from "./chat/schema";

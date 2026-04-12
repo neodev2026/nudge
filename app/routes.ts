@@ -45,9 +45,11 @@ export default [
       route("/stage/:stageId/retry",         "features/v2/stage/api/retry.tsx"),
       route("/products/:slug/start",         "features/v2/products/api/start-learning.tsx"),
       route("/sessions/:sessionId/complete", "features/v2/session/api/complete.tsx"),
-      route("/chat/:sessionId/message",         "features/v2/chat/api/message.tsx"),
       route("/quiz/:stageId/result",         "features/v2/quiz/api/result.tsx"),
       route("/sentence/:stageId/result",     "features/v2/sentence/api/result.tsx"),
+      route("/chat/:sessionId/message",        "features/v2/chat/api/message.tsx"),
+      route("/dictation/:stageId/result",      "features/v2/dictation/api/result.tsx"),
+      route("/writing/:stageId/result",        "features/v2/writing/api/result.tsx"),
     ]),
   ]),
 
@@ -84,10 +86,12 @@ export default [
     route("/products/:slug", "features/v2/products/screens/product-detail-page.tsx"),
 
     route("/stages/:stageId",     "features/v2/stage/screens/stage-page.tsx"),
-    route("/sessions/:sessionId",      "features/v2/session/screens/session-page.tsx"),
-    route("/sessions/:sessionId/chat", "features/v2/chat/screens/chat-page.tsx"),
+    route("/sessions/:sessionId", "features/v2/session/screens/session-page.tsx"),
     route("/quiz/:stageId",       "features/v2/quiz/screens/quiz-page.tsx"),
     route("/sentence/:stageId",   "features/v2/sentence/screens/sentence-page.tsx"),
+    route("/sessions/:sessionId/chat", "features/v2/chat/screens/chat-page.tsx"),
+    route("/dictation/:stageId",  "features/v2/dictation/screens/dictation-page.tsx"),
+    route("/writing/:stageId",    "features/v2/writing/screens/writing-page.tsx"),
 
     ...prefix("/auth", [
       route("/discord/start",       "features/v2/auth/screens/discord-start.tsx"),

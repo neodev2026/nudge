@@ -73,6 +73,8 @@ export async function action({ request, params }: Route.ActionArgs) {
     "quiz_10",
     "quiz_current_and_prev_session",
     "sentence_practice",
+    "dictation",
+    "writing",
   ];
   const quiz_stages: LeniQuizStage[] = stages
     .filter((s) => QUIZ_STAGE_TYPES.includes((s.nv2_stages as any)?.stage_type))
@@ -237,10 +239,16 @@ export async function action({ request, params }: Route.ActionArgs) {
           }
         }
       }
-      // For quiz bubbles: if title not set by Leni, fall back to quiz_stages list
-      if (bubble.type === "quiz" && !bubble.title && bubble.stage_id) {
+      // For quiz bubbles: enrich with stage_type and title from quiz_stages list
+      if (bubble.type === "quiz" && bubble.stage_id) {
         const matched = quiz_stages.find((q) => q.stage_id === bubble.stage_id);
-        if (matched) return { ...bubble, title: matched.title };
+        if (matched) {
+          return {
+            ...bubble,
+            stage_type: matched.stage_type,
+            title: bubble.title ?? matched.title,
+          };
+        }
       }
       return bubble;
     })
