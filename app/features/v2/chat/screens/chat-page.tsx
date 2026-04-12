@@ -340,6 +340,8 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [is_typing, set_is_typing] = useState(false);
   const [is_session_complete, set_is_session_complete] = useState(false);
+  const [remaining_turns, set_remaining_turns] = useState<number | null>(null);
+  const [out_of_turns, set_out_of_turns] = useState(false);
 
   const bottom_ref = useRef<HTMLDivElement>(null);
   const input_ref = useRef<HTMLTextAreaElement>(null);
@@ -391,7 +393,28 @@ export default function ChatPage() {
       });
 
       const data = await res.json();
+
+      // Turn exhausted — show payment prompt
+      if (data.out_of_turns) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `leni-no-turns-${Date.now()}`,
+            role: "leni",
+            bubble_type: "text",
+            text: data.text,
+          },
+        ]);
+        set_out_of_turns(true);
+        return;
+      }
+
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Unknown error");
+
+      // Update remaining turns display
+      if (typeof data.remaining_turns === "number") {
+        set_remaining_turns(data.remaining_turns);
+      }
 
       // Leni text message
       const new_messages: ChatMessage[] = [
@@ -574,18 +597,20 @@ export default function ChatPage() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              is_session_complete
+              out_of_turns
+                ? "대화 횟수를 모두 사용했어요 😢"
+                : is_session_complete
                 ? "오늘 학습이 완료됐어요 🎉"
                 : "메시지를 입력하세요… (Enter로 전송)"
             }
             rows={1}
-            disabled={is_typing || is_session_complete}
+            disabled={is_typing || is_session_complete || out_of_turns}
             className="flex-1 resize-none rounded-2xl border border-[#1a2744]/10 bg-[#f7f8fc] px-4 py-3 text-sm text-[#1a2744] placeholder:text-[#b0b8cc] focus:border-[#4caf72] focus:outline-none focus:ring-2 focus:ring-[#4caf72]/20 transition disabled:opacity-50"
             style={{ maxHeight: "120px", overflowY: "auto" }}
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() || is_typing || is_session_complete}
+            disabled={!input.trim() || is_typing || is_session_complete || out_of_turns}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#4caf72] text-white shadow-[0_4px_12px_rgba(76,175,114,0.30)] transition-all hover:-translate-y-px hover:bg-[#5ecb87] disabled:translate-y-0 disabled:bg-[#c8e6d4] disabled:shadow-none"
             aria-label="전송"
           >
@@ -594,9 +619,25 @@ export default function ChatPage() {
             </svg>
           </button>
         </div>
-        <p className="mx-auto mt-2 max-w-lg text-center text-[10px] text-[#b0b8cc]">
-          Shift+Enter로 줄바꿈 · 학습과 관련된 대화만 가능해요
-        </p>
+        {/* Turn info row */}
+        <div className="mx-auto mt-2 flex max-w-lg items-center justify-between">
+          <p className="text-[10px] text-[#b0b8cc]">
+            Shift+Enter로 줄바꿈 · 학습과 관련된 대화만 가능해요
+          </p>
+          {remaining_turns !== null && !out_of_turns && (
+            <p className="text-[10px] text-[#b0b8cc]">
+              💬 {remaining_turns}턴 남음
+            </p>
+          )}
+          {out_of_turns && (
+            <a
+              href="/pricing"
+              className="rounded-lg bg-[#4caf72] px-3 py-1 text-[10px] font-bold text-white"
+            >
+              충전하기 →
+            </a>
+          )}
+        </div>
       </footer>
     </div>
   );

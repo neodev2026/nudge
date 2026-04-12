@@ -46,10 +46,10 @@ export default [
       route("/products/:slug/start",         "features/v2/products/api/start-learning.tsx"),
       route("/sessions/:sessionId/complete", "features/v2/session/api/complete.tsx"),
       route("/quiz/:stageId/result",         "features/v2/quiz/api/result.tsx"),
-      route("/sentence/:stageId/result",     "features/v2/sentence/api/result.tsx"),
-      route("/chat/:sessionId/message",        "features/v2/chat/api/message.tsx"),
-      route("/dictation/:stageId/result",      "features/v2/dictation/api/result.tsx"),
-      route("/writing/:stageId/result",        "features/v2/writing/api/result.tsx"),
+      route("/sentence/:stageId/result",      "features/v2/sentence/api/result.tsx"),
+      route("/chat/:sessionId/message",         "features/v2/chat/api/message.tsx"),
+      route("/dictation/:stageId/result",       "features/v2/dictation/api/result.tsx"),
+      route("/writing/:stageId/result",         "features/v2/writing/api/result.tsx"),
     ]),
   ]),
 
@@ -59,6 +59,7 @@ export default [
   layout("core/layouts/admin.layout.tsx", [
     ...prefix("/admin", [
       index("features/admin/screens/dashboard.tsx"),
+      route("/users",                              "features/admin/screens/users.tsx"),
       route("/products/new",                        "features/admin/screens/product-new.tsx"),
       route("/products/:id",                        "features/admin/screens/product-detail.tsx"),
       route("/products/:id/stages/new",             "features/admin/screens/stage-new.tsx"),
@@ -75,6 +76,8 @@ export default [
     route("/cards/upsert",        "features/admin/api/cards.tsx"),
     route("/cards/:id/delete",    "features/admin/api/card-delete.tsx"),
     route("/sessions/:id/delete", "features/admin/api/session-delete.tsx"),
+    route("/turns/grant",            "features/admin/api/turn-grant.tsx"),
+    route("/users/:authUserId/update", "features/admin/api/user-update.tsx"),
   ]),
 
   // ── v2 Public layout ──────────────────────────────────────────────────
@@ -88,10 +91,10 @@ export default [
     route("/stages/:stageId",     "features/v2/stage/screens/stage-page.tsx"),
     route("/sessions/:sessionId", "features/v2/session/screens/session-page.tsx"),
     route("/quiz/:stageId",       "features/v2/quiz/screens/quiz-page.tsx"),
-    route("/sentence/:stageId",   "features/v2/sentence/screens/sentence-page.tsx"),
-    route("/sessions/:sessionId/chat", "features/v2/chat/screens/chat-page.tsx"),
-    route("/dictation/:stageId",  "features/v2/dictation/screens/dictation-page.tsx"),
-    route("/writing/:stageId",    "features/v2/writing/screens/writing-page.tsx"),
+    route("/sentence/:stageId",         "features/v2/sentence/screens/sentence-page.tsx"),
+    route("/sessions/:sessionId/chat",  "features/v2/chat/screens/chat-page.tsx"),
+    route("/dictation/:stageId",        "features/v2/dictation/screens/dictation-page.tsx"),
+    route("/writing/:stageId",          "features/v2/writing/screens/writing-page.tsx"),
 
     ...prefix("/auth", [
       route("/discord/start",       "features/v2/auth/screens/discord-start.tsx"),
