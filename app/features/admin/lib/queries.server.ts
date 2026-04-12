@@ -270,3 +270,205 @@ export async function adminSetSessionStages(
 
   if (ins_error) throw ins_error;
 }
+
+// ---------------------------------------------------------------------------
+// Turn balance — Leni AI chat quota management
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetches all users from auth.users (source of truth) with their
+ * nv2_profiles info and turn balance.
+ *
+ * Requires service_role client (adminClient) — auth.users is not accessible
+ * via the regular authenticated client.
+ */
+export async function adminGetUsersWithTurnBalance(
+  client: SupabaseClient<Database>
+) {
+  // auth.users — requires service_role
+  const { data: auth_users_data, error: auth_error } =
+    await (client as any).auth.admin.listUsers({ perPage: 1000 });
+
+  if (auth_error) throw auth_error;
+
+  const auth_users: Array<{
+    id: string;
+    email?: string;
+    created_at: string;
+  }> = auth_users_data?.users ?? [];
+
+  // nv2_profiles — display_name, sns info
+  const { data: profiles } = await client
+    .from("nv2_profiles")
+    .select("auth_user_id, sns_id, sns_type, display_name, avatar_url");
+
+  const profile_map = Object.fromEntries(
+    (profiles ?? [])
+      .filter((p) => !!p.auth_user_id)
+      .map((p) => [p.auth_user_id as string, p])
+  );
+
+  // nv2_turn_balance
+  const { data: balances } = await client
+    .from("nv2_turn_balance")
+    .select("auth_user_id, subscription_turns, charged_turns, subscription_reset_at");
+
+  const balance_map = Object.fromEntries(
+    (balances ?? []).map((b) => [b.auth_user_id, b])
+  );
+
+  return auth_users.map((u) => {
+    const profile = profile_map[u.id];
+    const balance = balance_map[u.id];
+    return {
+      auth_user_id: u.id,
+      email: u.email ?? null,
+      created_at: u.created_at,
+      // Profile info (null if user hasn't connected Discord yet)
+      display_name: profile?.display_name ?? null,
+      avatar_url: profile?.avatar_url ?? null,
+      sns_type: profile?.sns_type ?? null,
+      sns_id: profile?.sns_id ?? null,
+      // Turn balance
+      subscription_turns: balance?.subscription_turns ?? 0,
+      charged_turns: balance?.charged_turns ?? 0,
+      subscription_reset_at: balance?.subscription_reset_at ?? null,
+    };
+  });
+}
+
+/**
+ * Grants turns to a user (upserts nv2_turn_balance).
+ * grant_type: "subscription" resets subscription_turns + sets reset_at
+ *             "charged" adds to charged_turns (cumulative)
+ */
+export async function adminGrantTurns(
+  client: SupabaseClient<Database>,
+  auth_user_id: string,
+  amount: number,
+  grant_type: "subscription" | "charged"
+) {
+  // Get existing balance
+  const { data: existing } = await client
+    .from("nv2_turn_balance")
+    .select("id, subscription_turns, charged_turns")
+    .eq("auth_user_id", auth_user_id)
+    .maybeSingle();
+
+  if (existing) {
+    // Update existing row
+    const update =
+      grant_type === "subscription"
+        ? {
+            subscription_turns: amount,
+            subscription_reset_at: new Date(
+              Date.now() + 30 * 24 * 60 * 60 * 1000
+            ).toISOString(),
+          }
+        : { charged_turns: (existing.charged_turns ?? 0) + amount };
+
+    const { error } = await client
+      .from("nv2_turn_balance")
+      .update(update)
+      .eq("id", existing.id);
+
+    if (error) throw error;
+  } else {
+    // Insert new row
+    const insert =
+      grant_type === "subscription"
+        ? {
+            auth_user_id,
+            subscription_turns: amount,
+            charged_turns: 0,
+            subscription_reset_at: new Date(
+              Date.now() + 30 * 24 * 60 * 60 * 1000
+            ).toISOString(),
+          }
+        : {
+            auth_user_id,
+            subscription_turns: 0,
+            charged_turns: amount,
+          };
+
+    const { error } = await client
+      .from("nv2_turn_balance")
+      .insert(insert);
+
+    if (error) throw error;
+  }
+}
+
+/**
+ * Fetches a single user's full detail for admin:
+ *   auth.users (email, created_at) + nv2_profiles + nv2_turn_balance
+ *
+ * Requires service_role client (adminClient).
+ */
+export async function adminGetUserDetail(
+  client: SupabaseClient<Database>,
+  auth_user_id: string
+) {
+  // auth.users info
+  const { data: auth_user_data, error: auth_error } =
+    await (client as any).auth.admin.getUserById(auth_user_id);
+  if (auth_error) throw auth_error;
+
+  const auth_user = auth_user_data?.user as {
+    id: string;
+    email?: string;
+    created_at: string;
+  } | null;
+
+  if (!auth_user) return null;
+
+  const { data: profile } = await client
+    .from("nv2_profiles")
+    .select("sns_type, sns_id, auth_user_id, display_name, avatar_url, timezone, send_hour, is_active, created_at")
+    .eq("auth_user_id", auth_user_id)
+    .maybeSingle();
+
+  const { data: balance } = await client
+    .from("nv2_turn_balance")
+    .select("subscription_turns, charged_turns, subscription_reset_at")
+    .eq("auth_user_id", auth_user_id)
+    .maybeSingle();
+
+  return {
+    auth_user_id: auth_user.id,
+    email: auth_user.email ?? null,
+    auth_created_at: auth_user.created_at,
+    // Profile (may be null if user hasn't connected Discord)
+    sns_type: profile?.sns_type ?? null,
+    sns_id: profile?.sns_id ?? null,
+    display_name: profile?.display_name ?? null,
+    avatar_url: profile?.avatar_url ?? null,
+    timezone: profile?.timezone ?? "Asia/Seoul",
+    send_hour: profile?.send_hour ?? 5,
+    is_active: profile?.is_active ?? true,
+    // Turn balance
+    subscription_turns: balance?.subscription_turns ?? 0,
+    charged_turns: balance?.charged_turns ?? 0,
+    subscription_reset_at: balance?.subscription_reset_at ?? null,
+  };
+}
+
+/**
+ * Updates a user's profile settings (timezone, send_hour, is_active).
+ */
+export async function adminUpdateUserProfile(
+  client: SupabaseClient<Database>,
+  auth_user_id: string,
+  updates: {
+    timezone?: string;
+    send_hour?: number;
+    is_active?: boolean;
+  }
+) {
+  const { error } = await client
+    .from("nv2_profiles")
+    .update(updates)
+    .eq("auth_user_id", auth_user_id);
+
+  if (error) throw error;
+}

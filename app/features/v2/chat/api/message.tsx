@@ -173,6 +173,29 @@ export async function action({ request, params }: Route.ActionArgs) {
     return routeData({ error: "AI response failed" }, { status: 500, headers });
   }
 
+  // ── Turn balance check ───────────────────────────────────────────────────
+  // Fetch user's turn balance — if both buckets are 0, return payment prompt
+  const { data: balance_row } = await adminClient
+    .from("nv2_turn_balance")
+    .select("id, subscription_turns, charged_turns")
+    .eq("auth_user_id", auth_user.id)
+    .maybeSingle();
+
+  const subscription_turns = balance_row?.subscription_turns ?? 0;
+  const charged_turns = balance_row?.charged_turns ?? 0;
+  const total_turns = subscription_turns + charged_turns;
+
+  if (total_turns <= 0) {
+    return routeData(
+      {
+        ok: false,
+        out_of_turns: true,
+        text: "앗, 오늘 대화 횟수를 다 썼어요 😢 더 이야기하려면 턴을 충전해주세요!",
+      },
+      { headers }
+    );
+  }
+
   // ── Handle complete_stages flag — mark all learning stages done ─────────
   // When Leni sets complete_stages:true (step 3), mark all learning stages complete.
   if (leni_response.complete_stages) {
@@ -281,6 +304,23 @@ export async function action({ request, params }: Route.ActionArgs) {
     }),
   });
 
+  // ── Deduct 1 turn ─────────────────────────────────────────────────────────
+  if (balance_row) {
+    if (subscription_turns > 0) {
+      await adminClient
+        .from("nv2_turn_balance")
+        .update({ subscription_turns: subscription_turns - 1 })
+        .eq("id", balance_row.id);
+    } else if (charged_turns > 0) {
+      await adminClient
+        .from("nv2_turn_balance")
+        .update({ charged_turns: charged_turns - 1 })
+        .eq("id", balance_row.id);
+    }
+  }
+
+  const remaining_turns = Math.max(0, total_turns - 1);
+
   return routeData(
     {
       ok: true,
@@ -288,6 +328,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       bubbles: resolved_bubbles,
       complete_stages: leni_response.complete_stages,
       session_complete: leni_response.session_complete,
+      remaining_turns,
     },
     { headers }
   );
