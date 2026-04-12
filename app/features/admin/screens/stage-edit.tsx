@@ -40,11 +40,16 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 const STAGE_TYPE_LABELS: Record<string, string> = {
   welcome: "안내 (welcome)",
   learning: "학습 (learning)",
-  quiz_5: "퀴즈 — 5개 (quiz_5)",
-  quiz_10: "퀴즈 — 10개 (quiz_10)",
+  quiz_5: "퀴즈 3단계 (quiz_5)",
+  quiz_10: "퀴즈 매칭 (quiz_10)",
+  quiz_current_session: "퀴즈 — 현재 세션 (quiz_current_session)",
+  quiz_current_and_prev_session: "퀴즈 — 현재+이전 세션 (quiz_current_and_prev_session)",
   quiz_daily: "일일 퀴즈 (quiz_daily)",
   quiz_final: "최종 퀴즈 (quiz_final)",
   congratulations: "축하 (congratulations)",
+  sentence_practice: "문장 연습 (sentence_practice)",
+  dictation: "받아쓰기 (dictation)",
+  writing: "작문 연습 (writing)",
 };
 
 const CARD_TYPE_LABELS: Record<string, string> = {
@@ -162,7 +167,7 @@ export default function AdminStageEdit() {
                 {cards.length}개
               </span>
             </h2>
-            {stage.stage_type.startsWith("quiz") || stage.stage_type === "congratulations" ? null : (
+            {stage.stage_type.startsWith("quiz") || stage.stage_type === "congratulations" || stage.stage_type === "dictation" ? null : (
               <button
                 onClick={() => set_adding_card(true)}
                 className="rounded-xl bg-[#4caf72] px-4 py-2 text-xs font-extrabold text-white hover:bg-[#5ecb87]"
@@ -172,11 +177,13 @@ export default function AdminStageEdit() {
             )}
           </div>
 
-          {/* Quiz / congratulations stage notice */}
-          {(stage.stage_type.startsWith("quiz") || stage.stage_type === "congratulations") && (
+          {/* Quiz / congratulations / dictation stage notice */}
+          {(stage.stage_type.startsWith("quiz") || stage.stage_type === "congratulations" || stage.stage_type === "dictation") && (
             <div className="rounded-2xl border border-[#4caf72]/30 bg-[#4caf72]/5 px-5 py-4 text-sm text-[#4caf72] font-semibold">
               {stage.stage_type.startsWith("quiz")
                 ? "퀴즈 스테이지는 카드를 추가할 필요가 없습니다. 세션 내 앞선 learning 스테이지의 카드를 자동으로 가져와 퀴즈를 구성합니다."
+                : stage.stage_type === "dictation"
+                ? "받아쓰기 스테이지는 카드가 필요 없습니다. 세션 내 learning 스테이지의 예문 카드를 자동으로 사용합니다."
                 : "congratulations 스테이지는 카드가 필요 없습니다. 전체 학습 완료 시 자동으로 표시됩니다."}
             </div>
           )}
