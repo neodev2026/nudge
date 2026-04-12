@@ -409,6 +409,8 @@ const STAGE_TYPE_LABELS: Record<string, string> = {
   welcome: "안내",
   congratulations: "축하",
   sentence_practice: "문장 연습",
+  dictation: "받아쓰기",
+  writing: "작문 연습",
 };
 
 function StageRow({
@@ -434,6 +436,8 @@ function StageRow({
     stage_type === "quiz_5" || stage_type === "quiz_current_session";
   const is_quiz = is_matching_quiz || is_step_quiz;
   const is_sentence = stage_type === "sentence_practice";
+  const is_dictation = stage_type === "dictation";
+  const is_writing = stage_type === "writing";
 
   return (
     <Link
@@ -442,6 +446,10 @@ function StageRow({
           ? `/quiz/${stage_id}?session=${session_id}`
           : is_sentence
           ? `/sentence/${stage_id}?session=${session_id}`
+          : is_dictation
+          ? `/dictation/${stage_id}?session=${session_id}`
+          : is_writing
+          ? `/writing/${stage_id}?session=${session_id}`
           : `/stages/${stage_id}?session=${session_id}`
       }
       className={[
@@ -482,6 +490,8 @@ function StageRow({
           {is_matching_quiz && " · 매칭 게임"}
           {is_step_quiz && " · 3단계 퀴즈"}
           {is_sentence && " · 문장 만들기"}
+          {is_dictation && " · 듣고 받아쓰기"}
+          {is_writing && " · 작문 + AI 피드백"}
         </p>
       </div>
 

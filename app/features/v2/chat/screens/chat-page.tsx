@@ -44,6 +44,7 @@ interface ChatMessage {
   text: string;
   cards?: CardObject[];
   stage_id?: string;
+  stage_type?: string;   // for quiz bubble URL routing
   stage_title?: string;  // for quiz bubble display
   session_id?: string;
 }
@@ -162,13 +163,56 @@ function speakOnce(text: string, lang: string) {
 // Build initial messages from loader data
 // ---------------------------------------------------------------------------
 
+function buildIntroMessages(
+  intro_cards: Array<{ stage_id: string; cards: CardObject[] }>,
+  session_id: string,
+  quiz_stage_id: string | null
+): ChatMessage[] {
+  const messages: ChatMessage[] = [];
+
+  const word_count = intro_cards.length;
+  messages.push({
+    id: "leni-intro-text",
+    role: "leni",
+    bubble_type: "text",
+    text: `오늘 세션에서 ${word_count}개 단어를 학습해요! 아래 카드들을 먼저 살펴보고, 어떻게 진행할지 골라주세요 😊`,
+  });
+
+  intro_cards.forEach((entry, i) => {
+    messages.push({
+      id: `intro-card-${i}`,
+      role: "leni",
+      bubble_type: "card",
+      text: "",
+      cards: entry.cards,
+      session_id,
+    });
+  });
+
+  const choices = quiz_stage_id
+    ? "위 카드를 한 번씩 읽어보세요! 준비가 되면 퀴즈로 연습하거나, 오늘 있었던 일을 이야기하면서 단어를 써봐요 😊"
+    : "위 카드를 한 번씩 읽어보세요! 준비가 되면 오늘 있었던 일을 이야기하면서 단어를 써보거나, 예문 연습을 해봐요 😊";
+
+  messages.push({
+    id: "leni-choices",
+    role: "leni",
+    bubble_type: "text",
+    text: choices,
+  });
+
+  return messages;
+}
+
 function buildInitialMessages(
   history_rows: Array<{ id: string; role: string; message_type: string; content: string }>,
   intro_cards: Array<{ stage_id: string; cards: CardObject[] }>,
   session_id: string,
   quiz_stage_id: string | null
 ): ChatMessage[] {
-  // If there is existing history, restore it — including card/quiz bubbles
+  // Always show intro cards at the top (cards + guidance message)
+  const intro = buildIntroMessages(intro_cards, session_id, quiz_stage_id);
+
+  // If there is existing history, append it below the intro
   if (history_rows.length > 0) {
     const restored: ChatMessage[] = [];
 
@@ -214,6 +258,7 @@ function buildInitialMessages(
               bubble_type: "quiz",
               text: "",
               stage_id: bubble.stage_id,
+              stage_type: typeof bubble.stage_type === "string" ? bubble.stage_type : undefined,
               stage_title: typeof bubble.title === "string" ? bubble.title : undefined,
               session_id,
             });
@@ -252,55 +297,26 @@ function buildInitialMessages(
     }
 
     if (restored.length > 0) {
-      restored.push({
-        id: "history-sep",
-        role: "leni",
-        bubble_type: "text",
-        text: "이전 대화를 불러왔어요! 이어서 진행해봐요 😊",
-        session_id,
-      });
+      // intro + history + separator
+      return [
+        ...intro,
+        ...restored,
+        {
+          id: "history-end",
+          role: "leni",
+          bubble_type: "text",
+          text: "이전 대화를 불러왔어요! 이어서 진행해봐요 😊",
+          session_id,
+        },
+      ];
     }
 
-    return restored;
+    // History exists but all rows were empty — just show intro
+    return intro;
   }
 
-  // No history — build intro messages
-  const messages: ChatMessage[] = [];
-
-  // Leni intro text (no greeting — straight to content)
-  const word_count = intro_cards.length;
-  messages.push({
-    id: "leni-intro-text",
-    role: "leni",
-    bubble_type: "text",
-    text: `오늘 세션에서 ${word_count}개 단어를 학습해요! 아래 카드들을 먼저 살펴보고, 어떻게 진행할지 골라주세요 😊`,
-  });
-
-  // One card bubble per learning stage
-  intro_cards.forEach((entry, i) => {
-    messages.push({
-      id: `intro-card-${i}`,
-      role: "leni",
-      bubble_type: "card",
-      text: "",
-      cards: entry.cards,
-      session_id,
-    });
-  });
-
-  // Choices bubble
-  const choices = quiz_stage_id
-    ? "위 카드를 한 번씩 읽어보세요! 준비가 되면 퀴즈로 연습하거나, 오늘 있었던 일을 이야기하면서 단어를 써봐요 😊"
-    : "위 카드를 한 번씩 읽어보세요! 준비가 되면 오늘 있었던 일을 이야기하면서 단어를 써보거나, 예문 연습을 해봐요 😊";
-
-  messages.push({
-    id: "leni-choices",
-    role: "leni",
-    bubble_type: "text",
-    text: choices,
-  });
-
-  return messages;
+  // No history — intro only
+  return intro;
 }
 
 // ---------------------------------------------------------------------------
@@ -411,6 +427,7 @@ export default function ChatPage() {
             bubble_type: "quiz",
             text: "",
             stage_id: bubble.stage_id,
+            stage_type: (bubble as any).stage_type,
             stage_title: (bubble as any).title,
             session_id,
           });
@@ -521,6 +538,7 @@ export default function ChatPage() {
                 <QuizBubble
                   key={msg.id}
                   stage_id={msg.stage_id}
+                  stage_type={msg.stage_type}
                   session_id={msg.session_id ?? session_id}
                   title={msg.stage_title}
                 />
@@ -699,18 +717,31 @@ function CardBubble({ cards }: { cards: CardObject[] }) {
 // QuizBubble — opens in new tab with ?from=chat
 // ---------------------------------------------------------------------------
 
+// Stage types that use their own dedicated page (not /quiz/)
+const DEDICATED_STAGE_ROUTES: Record<string, string> = {
+  sentence_practice: "sentence",
+  dictation: "dictation",
+  writing: "writing",
+};
+
 function QuizBubble({
   stage_id,
+  stage_type,
   session_id,
   title,
 }: {
   stage_id: string;
+  stage_type?: string;
   session_id: string;
   title?: string;
 }) {
   function openQuiz() {
+    // Route to the correct page based on stage_type
+    const route = (stage_type && DEDICATED_STAGE_ROUTES[stage_type])
+      ? DEDICATED_STAGE_ROUTES[stage_type]
+      : "quiz";
     window.open(
-      `/quiz/${stage_id}?session=${session_id}&from=chat`,
+      `/${route}/${stage_id}?session=${session_id}&from=chat`,
       "_blank",
       "noopener,noreferrer"
     );

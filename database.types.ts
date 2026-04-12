@@ -1486,6 +1486,8 @@ export type Database = {
         | "quiz_final"
         | "congratulations"
         | "sentence_practice"
+        | "dictation"
+        | "writing"
       push_channel: "discord" | "kakao" | "email" | "telegram"
       sns_type: "discord" | "kakao" | "email" | "telegram"
       subscription_tier: "basic" | "premium" | "vip"
@@ -1705,6 +1707,8 @@ export const Constants = {
         "quiz_final",
         "congratulations",
         "sentence_practice",
+        "dictation",
+        "writing",
       ],
       push_channel: ["discord", "kakao", "email", "telegram"],
       sns_type: ["discord", "kakao", "email", "telegram"],
