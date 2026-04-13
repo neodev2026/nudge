@@ -154,30 +154,44 @@ export async function sendWelcomeDm(
 /**
  * Sends a session link DM to a user.
  *
- * Used by start-learning.tsx and cron/dispatch to deliver a session link.
- * A session contains multiple stages — the link points to the session page.
+ * Used by dispatch.tsx (cron) to deliver a new or review session link.
  *
- * @param sns_id      - Discord user ID
- * @param session_url - Full URL to the session page (/sessions/:sessionId)
- * @param title       - Session title shown as the embed heading
- * @param stage_count - Number of stages in the session (shown in description)
+ * @param sns_id        - Discord user ID
+ * @param session_url   - Full URL to the session page
+ * @param product_name  - Product name shown in embed (e.g. "Deutsch B1")
+ * @param session_title - Session title (e.g. "Session 14")
+ * @param review_round  - Review round number (null for new sessions)
  */
 export async function sendSessionDm(
   sns_id: string,
   session_url: string,
-  title: string,
-  stage_count: number
+  product_name: string,
+  session_title: string,
+  review_round: number | null = null
 ): Promise<void> {
   const channel_id = await openDmChannel(sns_id);
 
+  const is_review = review_round !== null;
+  const context_line = product_name
+    ? `📌 ${product_name}${session_title ? ` · ${session_title}` : ""}`
+    : session_title || "오늘의 학습";
+
+  const embed_title = is_review
+    ? `🔁 복습 ${review_round}회차`
+    : "📚 새 학습 세션";
+
+  const embed_desc = is_review
+    ? `${context_line}\n잊기 전에 복습해봐요! 아래 버튼을 눌러 시작하세요.`
+    : `${context_line}\n새 단어들이 기다리고 있어요. 아래 버튼을 눌러 시작하세요!`;
+
   await postEmbedWithButton(channel_id, {
-    content: "📚 새 학습 세션이 준비됐어요!",
+    content: is_review ? "🔁 복습 시간이에요!" : "📚 새 학습 세션이 준비됐어요!",
     embed: {
-      title,
-      description: `총 ${stage_count}개 단계로 구성되어 있어요. 아래 버튼을 눌러 시작하세요!`,
-      color: 0x5865f2, // Discord blurple
+      title: embed_title,
+      description: embed_desc,
+      color: is_review ? 0x5865f2 : 0x4caf72,
     },
-    button_label: "학습 시작 →",
+    button_label: is_review ? "복습 시작 →" : "학습 시작 →",
     button_url: session_url,
   });
 }
@@ -190,31 +204,37 @@ export async function sendSessionDm(
  *
  * @param sns_id           - Discord user ID
  * @param next_session_url - Full URL to the next session (null if last session)
+ * @param product_name     - Product name (e.g. "Deutsch B1")
+ * @param session_number   - Completed session number
  */
 export async function sendSessionCompleteDm(
   sns_id: string,
-  next_session_url: string | null
+  next_session_url: string | null,
+  product_name: string = "",
+  session_number: number = 0
 ): Promise<void> {
   const channel_id = await openDmChannel(sns_id);
 
+  const context = product_name
+    ? `${product_name}${session_number ? ` · Session ${session_number}` : ""}`
+    : session_number ? `Session ${session_number}` : "";
+
   if (next_session_url) {
     await postEmbedWithButton(channel_id, {
-      content: "🎉 세션 완료! 정말 잘하셨어요!",
+      content: `🎉 ${context ? `${context} 완료!` : "세션 완료!"} 정말 잘하셨어요!`,
       embed: {
         title: "다음 세션도 도전해볼까요?",
         description:
           "내일 아침에 자동으로 발송되지만,\n지금 바로 시작하고 싶다면 아래 버튼을 눌러보세요!",
-        color: 0x4caf72, // Nudge green
+        color: 0x4caf72,
       },
       button_label: "다음 세션 시작 →",
       button_url: next_session_url,
     });
   } else {
-    // Last session — no next session link
-    const channel_id_final = await openDmChannel(sns_id);
     await postMessage(
-      channel_id_final,
-      "🏆 모든 학습을 완료했습니다! 정말 대단해요!\n복습 일정이 자동으로 진행됩니다. 수고하셨습니다!"
+      channel_id,
+      `🏆 ${context ? `${context}` : "모든 학습"}을 완료했습니다! 정말 대단해요!\n복습 일정이 자동으로 진행됩니다. 수고하셨습니다!`
     );
   }
 }
@@ -257,23 +277,33 @@ export async function addUserToGuild(
 /**
  * Sends a Leni cheer (nudge) DM to a user with an incomplete session.
  *
- * @param sns_id      - Discord user ID
- * @param session_url - Full URL to the incomplete session
- * @param message     - Leni's cheer message (selected randomly by enqueue-nudge)
+ * @param sns_id        - Discord user ID
+ * @param session_url   - Full URL to the incomplete session
+ * @param message       - Leni's cheer message (selected randomly by enqueue-nudge)
+ * @param product_name  - Product name for context (optional)
+ * @param session_label - Session label for context (optional)
  */
 export async function sendCheerDm(
   sns_id: string,
   session_url: string,
-  message: string
+  message: string,
+  product_name?: string,
+  session_label?: string
 ): Promise<void> {
   const channel_id = await openDmChannel(sns_id);
+
+  const context = product_name
+    ? `${product_name}${session_label ? ` · ${session_label}` : ""}`
+    : "";
 
   await postEmbedWithButton(channel_id, {
     content: message,
     embed: {
       title: "📖 학습을 계속해봐요!",
-      description: "아래 버튼을 눌러 이어서 학습하세요. 금방 끝나요!",
-      color: 0xffa500, // Orange — warm encouragement
+      description: context
+        ? `${context}\n아래 버튼을 눌러 이어서 학습하세요. 금방 끝나요!`
+        : "아래 버튼을 눌러 이어서 학습하세요. 금방 끝나요!",
+      color: 0xffa500,
     },
     button_label: "학습 이어하기 →",
     button_url: session_url,

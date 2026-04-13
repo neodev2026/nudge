@@ -62,20 +62,61 @@ export async function action({ request }: Route.ActionArgs) {
 
       try {
         if (schedule.schedule_type === "cheer") {
-          // cheer: message_body is "cheer:HH|<actual message>"
+          // cheer message_body format: "cheer:HH|product_name|session_label|message"
+          // Legacy format (no product info): "cheer:HH|message"
           const raw_body = schedule.message_body ?? "";
-          const message = raw_body.includes("|")
-            ? raw_body.split("|").slice(1).join("|")
-            : raw_body;
+          const parts = raw_body.split("|");
+          // parts[0] = "cheer:HH", parts[1..] = product_name?, session_label?, message
+          let product_name = "";
+          let session_label = "";
+          let message = "";
+          if (parts.length >= 4) {
+            // New format: cheer:HH|product_name|session_label|message
+            product_name = parts[1] ?? "";
+            session_label = parts[2] ?? "";
+            message = parts.slice(3).join("|");
+          } else {
+            // Legacy format: cheer:HH|message
+            message = parts.slice(1).join("|");
+          }
 
-          await sendCheerDm(schedule.sns_id, schedule.delivery_url, message);
+          await sendCheerDm(
+            schedule.sns_id,
+            schedule.delivery_url,
+            message,
+            product_name || undefined,
+            session_label || undefined
+          );
         } else {
-          // new / review / welcome — send session DM
+          // new / review / welcome
+          // message_body format: "product_name|session_title|kind"
+          //   kind = "new" | "review_N" (N = round number)
+          // Legacy format (no pipes): plain session title string
+          const raw_body = schedule.message_body ?? "";
+          const parts = raw_body.split("|");
+          let product_name = "";
+          let session_title = "";
+          let review_round: number | null = null;
+
+          if (parts.length >= 3) {
+            // New structured format
+            product_name = parts[0] ?? "";
+            session_title = parts[1] ?? "";
+            const kind = parts[2] ?? "new";
+            if (kind.startsWith("review_")) {
+              review_round = parseInt(kind.split("_")[1] ?? "1", 10);
+            }
+          } else {
+            // Legacy: just a plain title
+            session_title = raw_body || "오늘의 학습";
+          }
+
           await sendSessionDm(
             schedule.sns_id,
             schedule.delivery_url,
-            schedule.message_body ?? "오늘의 학습",
-            0
+            product_name,
+            session_title,
+            review_round
           );
         }
 

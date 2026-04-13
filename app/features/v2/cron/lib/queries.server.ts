@@ -129,13 +129,19 @@ export async function getCronUserSubscriptions(
 ) {
   const { data, error } = await client
     .from("nv2_subscriptions")
-    .select("id, product_id, is_active")
+    .select(`
+      id, product_id, is_active,
+      nv2_learning_products!inner(name)
+    `)
     .eq("sns_type", sns_type)
     .eq("sns_id", sns_id)
     .eq("is_active", true);
 
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((s) => ({
+    ...s,
+    product_name: (s.nv2_learning_products as any)?.name ?? "",
+  }));
 }
 
 /**
@@ -403,19 +409,42 @@ export async function getCronUsersWithIncompleteSessions(
 ) {
   const { data, error } = await client
     .from("nv2_sessions")
-    .select("sns_type, sns_id, session_id, product_session_id")
+    .select(`
+      sns_type, sns_id, session_id, product_session_id,
+      nv2_product_sessions!inner(
+        session_number, title,
+        nv2_learning_products!inner(name)
+      )
+    `)
     .in("status", ["pending", "in_progress"]);
 
   if (error) throw error;
 
   // Deduplicate by (sns_type, sns_id) — keep first session per user
   const seen = new Set<string>();
-  const unique: typeof data = [];
+  const unique: Array<{
+    sns_type: string;
+    sns_id: string;
+    session_id: string;
+    product_session_id: string;
+    product_name: string;
+    session_number: number;
+    session_title: string;
+  }> = [];
   for (const row of data ?? []) {
     const key = `${row.sns_type}:${row.sns_id}`;
     if (!seen.has(key)) {
       seen.add(key);
-      unique.push(row);
+      const ps = (row.nv2_product_sessions as any);
+      unique.push({
+        sns_type: row.sns_type,
+        sns_id: row.sns_id,
+        session_id: row.session_id,
+        product_session_id: row.product_session_id,
+        product_name: ps?.nv2_learning_products?.name ?? "",
+        session_number: ps?.session_number ?? 0,
+        session_title: ps?.title ?? "",
+      });
     }
   }
   return unique;
@@ -469,7 +498,10 @@ export async function getProductSessionContainingStage(
     .select(
       `
       product_session_id,
-      nv2_product_sessions!inner ( id, product_id, session_number, title, is_active )
+      nv2_product_sessions!inner (
+        id, product_id, session_number, title, is_active,
+        nv2_learning_products!inner(name)
+      )
     `
     )
     .eq("stage_id", stage_id)
