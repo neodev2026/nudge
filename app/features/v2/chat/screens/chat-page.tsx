@@ -532,7 +532,7 @@ export default function ChatPage() {
         <div className="mx-auto flex max-w-lg border-t border-[#1a2744]/[0.06]">
           {/* 학습 목록 tab */}
           <Link
-            to={`/sessions/${session_id}`}
+            to={`/sessions/${session_id}/list`}
             className="flex flex-1 items-center justify-center gap-1.5 border-b-2 border-transparent px-4 py-3 transition hover:border-[#1a2744]/30 hover:bg-[#f7f8fc]"
           >
             <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 text-[#6b7a99]">
