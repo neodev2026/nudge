@@ -110,7 +110,12 @@ export async function action({ request }: Route.ActionArgs) {
 
         const message = getRandomNudgeMessage(matched_slot.hour);
         const hour_tag = `cheer:${String(matched_slot.hour).padStart(2, "0")}`;
-        const message_body = `${hour_tag}|${message}`;
+        // message_body format: "cheer:HH|product_name|session_label|message"
+        // parsed by dispatch.tsx — product_name and session_label shown in embed footer
+        const session_label = candidate.session_title
+          ? `Session ${candidate.session_number}`
+          : "";
+        const message_body = `${hour_tag}|${candidate.product_name}|${session_label}|${message}`;
 
         await insertCronSchedule(client as any, {
           sns_type,

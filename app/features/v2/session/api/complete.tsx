@@ -69,6 +69,14 @@ export async function action({ request, params }: Route.ActionArgs) {
     return routeData({ ok: true, next_session_id: null });
   }
 
+  // Fetch product name for DM context
+  const { data: product_row } = await service_client
+    .from("nv2_learning_products")
+    .select("name")
+    .eq("id", product_session.product_id)
+    .maybeSingle();
+  const product_name = product_row?.name ?? "";
+
   // Learning stage IDs in this session (exclude quiz/welcome/congratulations)
   const learning_stage_ids = (
     product_session.nv2_product_session_stages ?? []
@@ -122,7 +130,12 @@ export async function action({ request, params }: Route.ActionArgs) {
       ? `${origin}/sessions/${next_user_session_id}`
       : null;
 
-    sendSessionCompleteDm(sns_id, next_session_url).catch((err) => {
+    sendSessionCompleteDm(
+      sns_id,
+      next_session_url,
+      product_name,
+      product_session.session_number
+    ).catch((err) => {
       console.error("[session-complete] sendSessionCompleteDm failed:", err);
     });
 
@@ -140,7 +153,12 @@ export async function action({ request, params }: Route.ActionArgs) {
       console.error("[session-complete] advanceCronReviewProgress failed:", err);
     });
 
-    sendSessionCompleteDm(sns_id, null).catch((err) => {
+    sendSessionCompleteDm(
+      sns_id,
+      null,
+      product_name,
+      product_session.session_number
+    ).catch((err) => {
       console.error("[session-complete] review complete DM failed:", err);
     });
   }
