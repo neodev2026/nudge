@@ -166,7 +166,7 @@ export default function SentencePage() {
       if (from_chat) {
         window.close();
       } else if (session_id) {
-        window.location.href = `/sessions/${session_id}`;
+        window.location.href = `/sessions/${session_id}/list`;
       }
     }
   }, [result_data, session_id, from_chat]);
@@ -226,7 +226,7 @@ export default function SentencePage() {
       {/* Header */}
       <div className="mb-8 w-full max-w-md">
         <Link
-          to={session_id ? `/sessions/${session_id}` : "/products"}
+          to={session_id ? `/sessions/${session_id}/list` : "/products"}
           className="text-xs font-semibold text-[#6b7a99] hover:text-[#1a2744]"
           onClick={stopTts}
         >
@@ -607,7 +607,7 @@ function EmptyState({
         연습할 예문이 없어요. 앞선 학습 단계에 예문 카드가 있는지 확인해 주세요.
       </p>
       <Link
-        to={session_id ? `/sessions/${session_id}` : "/products"}
+        to={session_id ? `/sessions/${session_id}/list` : "/products"}
         className="text-sm font-bold text-[#4caf72] hover:underline"
       >
         ← 학습 목록으로

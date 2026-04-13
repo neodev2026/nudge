@@ -186,7 +186,7 @@ export default function DictationPage() {
       if (from_chat) {
         window.close();
       } else {
-        window.location.href = `/sessions/${session_id}`;
+        window.location.href = `/sessions/${session_id}/list`;
       }
     }
   }, [is_done, from_chat]);
@@ -225,7 +225,7 @@ export default function DictationPage() {
             받아쓰기 문항이 없습니다. 세션에 예문 카드가 있는 학습 스테이지를 추가해주세요.
           </p>
           <Link
-            to={`/sessions/${session_id}`}
+            to={`/sessions/${session_id}/list`}
             className="inline-block rounded-2xl bg-[#1a2744] px-6 py-3 text-sm font-extrabold text-white"
           >
             세션으로 돌아가기
