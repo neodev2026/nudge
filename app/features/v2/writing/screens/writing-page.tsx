@@ -169,7 +169,7 @@ export default function WritingPage() {
     if (from_chat) {
       window.close();
     } else {
-      window.location.href = `/sessions/${session_id}`;
+      window.location.href = `/sessions/${session_id}/list`;
     }
   }
 

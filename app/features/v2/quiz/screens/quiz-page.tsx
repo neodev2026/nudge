@@ -176,7 +176,7 @@ function Quiz5Game({
   const result_data = result_fetcher.data as { ok?: boolean } | undefined;
   useEffect(() => {
     if (result_data?.ok && !from_chat) {
-      window.location.href = `/sessions/${session_id}`;
+      window.location.href = `/sessions/${session_id}/list`;
     }
   }, [result_data]);
 
@@ -196,7 +196,7 @@ function Quiz5Game({
               채팅으로 돌아가기 ✕
             </button>
           ) : (
-            <a href={`/sessions/${session_id}`}
+            <a href={`/sessions/${session_id}/list`}
               className="inline-block rounded-2xl bg-[#1a2744] px-6 py-3 text-sm font-extrabold text-white">
               학습 목록으로 →
             </a>
@@ -1196,7 +1196,7 @@ function Quiz10Game({
             </button>
           ) : (
             <a
-              href={`/sessions/${session_id}`}
+              href={`/sessions/${session_id}/list`}
               className="mt-6 inline-block rounded-xl bg-[#1a2744] px-6 py-3 text-sm font-extrabold text-white"
             >
               세션으로 돌아가기
@@ -1510,7 +1510,7 @@ function ResultView({
           </button>
         ) : (
           <a
-            href={`/sessions/${session_id}`}
+            href={`/sessions/${session_id}/list`}
             className="flex w-full items-center justify-center rounded-2xl border-2 border-[#e8ecf5] bg-white py-4 text-base font-extrabold text-[#6b7a99] transition-colors hover:border-[#1a2744] hover:text-[#1a2744]"
           >
             학습 목록으로 →
