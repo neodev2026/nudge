@@ -80,6 +80,9 @@ export default [
     route("/users/:authUserId/update", "features/admin/api/user-update.tsx"),
   ]),
 
+  // ── Print (outside v2.layout — no header/footer) ─────────────────────────
+  route("/sessions/:sessionId/print", "features/v2/session/screens/print-page.tsx"),
+
   // ── v2 Public layout ──────────────────────────────────────────────────
   layout("core/layouts/v2.layout.tsx", [
 
