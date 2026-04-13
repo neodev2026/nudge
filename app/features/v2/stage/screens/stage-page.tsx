@@ -54,6 +54,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const is_authenticated = !!auth_user;
 
   const session_id = new URL(request.url).searchParams.get("session");
+  const from_chat = new URL(request.url).searchParams.get("from") === "chat";
 
   let sns_type: string | null = null;
   let sns_id: string | null = null;
@@ -98,6 +99,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     sns_type,
     sns_id,
     session_id,
+    from_chat,
     link_access,
   };
 }
@@ -120,7 +122,7 @@ function stopTts() {
 // ---------------------------------------------------------------------------
 
 export default function StagePage() {
-  const { stage, is_authenticated, sns_type, sns_id, session_id, link_access } =
+  const { stage, is_authenticated, sns_type, sns_id, session_id, from_chat, link_access } =
     useLoaderData<typeof loader>();
 
   const cards = stage.nv2_cards;
@@ -175,8 +177,10 @@ export default function StagePage() {
     | undefined;
 
   if (complete_data?.ok) {
-    if (session_id) {
-      window.location.href = `/sessions/${session_id}`;
+    if (from_chat) {
+      window.close();
+    } else if (session_id) {
+      window.location.href = `/sessions/${session_id}/list`;
     } else if (complete_data.next_stage_id) {
       window.location.href = `/stages/${complete_data.next_stage_id}`;
     }
@@ -192,7 +196,7 @@ export default function StagePage() {
       <div className="mb-8 w-full max-w-md">
         {/* 학습 목록으로 이동 시 TTS 중지 */}
         <Link
-          to={session_id ? `/sessions/${session_id}` : "/products"}
+          to={session_id ? `/sessions/${session_id}/list` : "/products"}
           className="text-xs font-semibold text-[#6b7a99] hover:text-[#1a2744]"
           onClick={stopTts}
         >
