@@ -8,6 +8,7 @@ import type { Route } from "./+types/dashboard";
 import { Link, useLoaderData, useFetcher } from "react-router";
 
 import makeServerClient from "~/core/lib/supa-client.server";
+import adminClient from "~/core/lib/supa-admin-client.server";
 import { requireAdmin } from "~/features/admin/lib/guards.server";
 import { adminGetAllProducts, adminGetUsersWithTurnBalance } from "~/features/admin/lib/queries.server";
 
@@ -27,7 +28,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   const [client] = makeServerClient(request);
   await requireAdmin(client, request);
   const products = await adminGetAllProducts(client);
-  const users = await adminGetUsersWithTurnBalance(client);
+  // adminGetUsersWithTurnBalance calls auth.admin.listUsers — requires service_role client
+  const users = await adminGetUsersWithTurnBalance(adminClient);
   return { products, users };
 }
 
