@@ -198,6 +198,11 @@ export default function SessionPage() {
   const is_done = !!complete_data?.ok && all_completed;
   const next_session_id = complete_data?.next_session_id ?? null;
 
+  // ── Print handler — opens print page in a new tab ─────────────────────────
+  function handlePrint() {
+    window.open(`/sessions/${session_id}/print`, "_blank");
+  }
+
   return (
     <div className="min-h-screen bg-[#fdf8f0]">
       {/* Header */}
@@ -219,15 +224,26 @@ export default function SessionPage() {
                 {session_title}
               </h1>
             </div>
-            {/* Progress count */}
-            <div className="text-right">
-              <p className="font-display text-2xl font-black text-[#1a2744]">
-                {completed_count}
-                <span className="text-sm font-normal text-[#6b7a99]">
-                  /{total_count}
-                </span>
-              </p>
-              <p className="text-xs text-[#6b7a99]">완료</p>
+            {/* Right side: progress count + print button */}
+            <div className="flex items-center gap-3">
+              {/* Print button */}
+              <button
+                onClick={handlePrint}
+                title="학습지 인쇄"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#e8ecf5] bg-white text-base text-[#6b7a99] transition hover:border-[#1a2744] hover:text-[#1a2744]"
+              >
+                🖨️
+              </button>
+              {/* Progress count */}
+              <div className="text-right">
+                <p className="font-display text-2xl font-black text-[#1a2744]">
+                  {completed_count}
+                  <span className="text-sm font-normal text-[#6b7a99]">
+                    /{total_count}
+                  </span>
+                </p>
+                <p className="text-xs text-[#6b7a99]">완료</p>
+              </div>
             </div>
           </div>
 
