@@ -2,14 +2,15 @@
  * /sessions/:sessionId/print
  *
  * A4 print sheet for a session's learning cards.
- * Layout: word | meaning (coverable) | example / gap-fill | write ×3
+ * Layout: # | word | meaning (coverable) | example sentence | write ×3
  *
- * Card structure per stage (stage_type = "learning"):
- *   display_order 1 → card_type "title"       → presentation.front = 단어, presentation.back = 의미
- *   display_order 2 → card_type "description" → presentation.back  = 설명
- *   display_order 3 → card_type "example"     → presentation.front = 예문, presentation.back = 번역
+ * Card structure per learning stage:
+ *   card_type "title"       display_order=1  → presentation.front = word, .back = meaning
+ *   card_type "description" display_order=2  → presentation.back  = explanation
+ *   card_type "example"     display_order=3  → presentation.front = sentence, .back = translation
  *
- * No auth required — uses the same public access policy as session pages.
+ * The example sentence is rendered as-is (no gap-fill transformation).
+ * No auth required — same public access policy as session pages.
  */
 import { useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
@@ -24,7 +25,7 @@ interface PrintRow {
   word: string;
   meaning: string;
   hint?: string;
-  sentence?: string;       // example card: presentation.front
+  sentence?: string;       // example card: presentation.front (target language)
   translation?: string;    // example card: presentation.back
 }
 
@@ -76,7 +77,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   if (pss_err) throw pss_err;
 
-  // Keep only learning stages
   const learning_stages = (pss_rows ?? [])
     .filter((r) => (r.nv2_stages as any)?.stage_type === "learning")
     .map((r) => ({ id: r.stage_id, title: (r.nv2_stages as any)?.title ?? "" }));
@@ -108,8 +108,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
   }
 
   // 5. Build one print row per learning stage
-  //    title card  → word / meaning / hint
-  //    example card → sentence (presentation.front) / translation (presentation.back)
   const rows: PrintRow[] = [];
   let global_index = 1;
 
@@ -117,14 +115,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
     const stage = learning_stages[si];
     const cards = cards_by_stage[stage.id] ?? [];
 
-    const title_card   = cards.find((c) => c.card_type === "title");
+    // title card → word / meaning / hint
+    const title_card = cards.find((c) => c.card_type === "title");
+    // example card → sentence (as-is) / translation
     const example_card = cards.find((c) => c.card_type === "example");
 
-    const word: string        = title_card?.card_data?.presentation?.front ?? stage.title;
-    const meaning: string     = title_card?.card_data?.presentation?.back  ?? "";
+    const word: string = title_card?.card_data?.presentation?.front ?? stage.title;
+    const meaning: string = title_card?.card_data?.presentation?.back ?? "";
     const hint: string | undefined = title_card?.card_data?.presentation?.hint || undefined;
-    const sentence: string | undefined    = example_card?.card_data?.presentation?.front || undefined;
-    const translation: string | undefined = example_card?.card_data?.presentation?.back  || undefined;
+    const sentence: string | undefined = example_card?.card_data?.presentation?.front || undefined;
+    const translation: string | undefined = example_card?.card_data?.presentation?.back || undefined;
 
     rows.push({
       index: global_index++,
@@ -141,32 +141,6 @@ export async function loader({ params }: LoaderFunctionArgs) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper — gap-fill
-// ---------------------------------------------------------------------------
-
-/**
- * Replaces the target word (or its inflected form) with a blank in a sentence.
- * Strategy:
- *   1. Exact whole-word match (case-insensitive)
- *   2. Stem match — first 60% of chars, minimum 4 (catches inflections)
- *   3. No match — return sentence unchanged (shown as plain example)
- */
-function toGapFill(word: string, sentence: string): string {
-  if (!word || !sentence) return sentence;
-
-  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-  const exact_re = new RegExp(`\\b${esc(word)}\\b`, "i");
-  if (exact_re.test(sentence)) return sentence.replace(exact_re, "____________");
-
-  const stem_len = Math.max(4, Math.floor(word.length * 0.6));
-  const stem_re  = new RegExp(`\\b${esc(word.slice(0, stem_len))}\\S*`, "i");
-  if (stem_re.test(sentence)) return sentence.replace(stem_re, "____________");
-
-  return sentence;
-}
-
-// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -176,7 +150,6 @@ export default function PrintPage() {
 
   return (
     <>
-      {/* ── Styles ── */}
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -213,9 +186,8 @@ export default function PrintPage() {
         }
 
         /* Table */
-        .vocab-table {
-          width: 100%; border-collapse: collapse; table-layout: fixed;
-        }
+        .vocab-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+
         .vocab-table thead tr { background: #1a2744; color: white; }
         .vocab-table thead th {
           padding: 5px 8px; font-size: 9.5px; font-weight: 700;
@@ -232,7 +204,7 @@ export default function PrintPage() {
           page-break-inside: avoid;
         }
         .vocab-table tbody tr:nth-child(even) { background: #f5f0e8; }
-        .vocab-table tbody tr.stage-first td { border-top: 2px solid #4caf72; }
+        .vocab-table tbody tr.stage-first td  { border-top: 2px solid #4caf72; }
 
         .vocab-table td { padding: 6px 8px; vertical-align: top; line-height: 1.5; }
 
@@ -243,12 +215,8 @@ export default function PrintPage() {
 
         .meaning-text { font-size: 11px; color: #374151; }
 
-        .sentence-text  { font-size: 10.5px; color: #374151; margin-bottom: 2px; }
+        .sentence-text    { font-size: 10.5px; color: #374151; margin-bottom: 2px; }
         .translation-text { font-size: 9.5px; color: #9aa3b5; font-style: italic; }
-        .gap-blank {
-          color: #1a2744; border-bottom: 1.5px solid #1a2744;
-          letter-spacing: 1.5px; font-weight: 700;
-        }
 
         /* Writing lines */
         .write-lines { display: flex; flex-direction: column; gap: 7px; padding-top: 3px; }
@@ -325,75 +293,52 @@ export default function PrintPage() {
                 <th className="col-num">#</th>
                 <th className="col-word">단어</th>
                 <th className="col-meaning">의미 ◀ 가리기</th>
-                <th className="col-sentence">예문 / 빈칸 채우기</th>
+                <th className="col-sentence">예문</th>
                 <th className="col-write">쓰기 ×3</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, i) => {
-                const gap = row.sentence ? toGapFill(row.word, row.sentence) : null;
-                // gap === null  → no sentence
-                // gap === sentence → word not found in sentence (show plain)
-                // gap !== sentence → blank inserted
-                const has_gap = gap !== null && gap !== row.sentence;
+              {rows.map((row, i) => (
+                <tr
+                  key={i}
+                  className={row.is_first_in_stage && i > 0 ? "stage-first" : ""}
+                >
+                  {/* # */}
+                  <td className="td-num">{row.index}</td>
 
-                return (
-                  <tr
-                    key={i}
-                    className={row.is_first_in_stage && i > 0 ? "stage-first" : ""}
-                  >
-                    {/* # */}
-                    <td className="td-num">{row.index}</td>
+                  {/* 단어 */}
+                  <td>
+                    <div className="word-main">{row.word}</div>
+                    {row.hint && <span className="word-hint">{row.hint}</span>}
+                  </td>
 
-                    {/* 단어 */}
-                    <td>
-                      <div className="word-main">{row.word}</div>
-                      {row.hint && <span className="word-hint">{row.hint}</span>}
-                    </td>
+                  {/* 의미 */}
+                  <td>
+                    <span className="meaning-text">{row.meaning}</span>
+                  </td>
 
-                    {/* 의미 */}
-                    <td>
-                      <span className="meaning-text">{row.meaning}</span>
-                    </td>
+                  {/* 예문 — as-is from example card */}
+                  <td>
+                    {row.sentence && (
+                      <>
+                        <div className="sentence-text">{row.sentence}</div>
+                        {row.translation && (
+                          <div className="translation-text">{row.translation}</div>
+                        )}
+                      </>
+                    )}
+                  </td>
 
-                    {/* 예문 */}
-                    <td>
-                      {has_gap ? (
-                        <>
-                          <div
-                            className="sentence-text"
-                            dangerouslySetInnerHTML={{
-                              __html: gap!.replace(
-                                /____________/g,
-                                '<span class="gap-blank">____________</span>'
-                              ),
-                            }}
-                          />
-                          {row.translation && (
-                            <div className="translation-text">{row.translation}</div>
-                          )}
-                        </>
-                      ) : row.sentence ? (
-                        <>
-                          <div className="sentence-text">{row.sentence}</div>
-                          {row.translation && (
-                            <div className="translation-text">{row.translation}</div>
-                          )}
-                        </>
-                      ) : null}
-                    </td>
-
-                    {/* 쓰기 */}
-                    <td>
-                      <div className="write-lines">
-                        <div className="write-line" />
-                        <div className="write-line" />
-                        <div className="write-line" />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                  {/* 쓰기 */}
+                  <td>
+                    <div className="write-lines">
+                      <div className="write-line" />
+                      <div className="write-line" />
+                      <div className="write-line" />
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}
