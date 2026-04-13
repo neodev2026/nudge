@@ -119,11 +119,7 @@ export default function SessionChoicePage() {
 
           {/* Banner A: 학습 목록 */}
           <BannerCard
-            gradient="linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)"
-            imageSlot={
-              // TODO: replace with <img src="/images/leni-study.png" alt="" className="w-full h-full object-cover rounded-t-lg" />
-              <LeniPlaceholder label="집중 모드" textColor="#2563EB" />
-            }
+            imageSrc="/images/leni/leni-study.jpg"
             badge={{ label: "자기주도", className: "bg-blue-50 text-blue-600" }}
             title="학습 목록"
             description={<>카드 학습부터 퀴즈, 받아쓰기, 작문까지<br />내 페이스로 직접 진행해요.</>}
@@ -139,11 +135,7 @@ export default function SessionChoicePage() {
 
           {/* Banner B: Leni와 학습 */}
           <BannerCard
-            gradient="linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)"
-            imageSlot={
-              // TODO: replace with <img src="/images/leni-chat.png" alt="" className="w-full h-full object-cover rounded-t-lg" />
-              <LeniPlaceholder label="대화 모드" textColor="#D97706" />
-            }
+            imageSrc="/images/leni/leni-chat.jpg"
             badge={{ label: "AI 튜터", className: "bg-amber-50 text-amber-600" }}
             title="Leni와 학습"
             description={<>Leni가 카드를 보여주고, 퀴즈도 내주고,<br />대화로 실력을 확인해줘요.</>}
@@ -179,10 +171,9 @@ export default function SessionChoicePage() {
 }
 
 function BannerCard({
-  gradient, imageSlot, badge, title, description, cta,
+  imageSrc, badge, title, description, cta,
 }: {
-  gradient: string;
-  imageSlot: React.ReactNode;
+  imageSrc: string;
   badge: { label: string; className: string };
   title: string;
   description: React.ReactNode;
@@ -190,8 +181,8 @@ function BannerCard({
 }) {
   return (
     <div className="rounded-2xl border border-gray-100 overflow-hidden bg-white">
-      <div className="relative h-40" style={{ background: gradient }}>
-        <div className="absolute bottom-0 right-4 w-[90px] h-[130px]">{imageSlot}</div>
+      <div className="h-40">
+        <img src={imageSrc} alt="" className="w-full h-full object-cover" />
       </div>
       <div className="px-4 py-4">
         <div className="flex items-center gap-2 mb-2">
@@ -216,16 +207,16 @@ function TurnStat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function LeniPlaceholder({ label, textColor }: { label: string; textColor: string }) {
-  return (
-    <div
-      className="w-full h-full rounded-t-lg flex items-center justify-center"
-      style={{ background: "rgba(255,255,255,0.25)" }}
-      aria-hidden="true"
-    >
-      <span className="text-xs text-center leading-4" style={{ color: textColor }}>
-        Leni<br />{label}
-      </span>
-    </div>
-  );
-}
+// function LeniPlaceholder({ label, textColor }: { label: string; textColor: string }) {
+//   return (
+//     <div
+//       className="w-full h-full rounded-t-lg flex items-center justify-center"
+//       style={{ background: "rgba(255,255,255,0.25)" }}
+//       aria-hidden="true"
+//     >
+//       <span className="text-xs text-center leading-4" style={{ color: textColor }}>
+//         Leni<br />{label}
+//       </span>
+//     </div>
+//   );
+// }
