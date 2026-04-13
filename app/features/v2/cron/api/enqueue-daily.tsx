@@ -153,12 +153,21 @@ export async function action({ request }: Route.ActionArgs) {
 
             if (!session_id) continue;
 
+            // message_body format: "product_name|session_title|kind"
+            // parsed by dispatch.tsx to build embed with product/session context
+            const active_ps = active_for_product[0]?.nv2_product_sessions as any;
+            const session_number = active_ps?.session_number
+              ?? (await getCronNextUnstartedProductSession(client as any, sns_type, sns_id, sub.product_id).catch(() => null))?.session_number
+              ?? 0;
+            const display_title = session_title !== "오늘의 학습" ? session_title : `Session ${session_number}`;
+            const message_body = `${sub.product_name}|${display_title}|new`;
+
             await insertCronSchedule(client as any, {
               sns_type,
               sns_id,
               schedule_type: "new",
               delivery_url: `${origin}/sessions/${session_id}`,
-              message_body: session_title,
+              message_body,
               scheduled_at,
             });
 
@@ -197,6 +206,8 @@ export async function action({ request }: Route.ActionArgs) {
         const send_hour = profile_row?.send_hour ?? 5;
 
         if (!review_map.has(key)) {
+          const product_name = (ps?.nv2_learning_products as any)?.name ?? "";
+          const session_label = ps?.title ? `${ps.title}` : `Session ${ps?.session_number ?? ""}`;
           review_map.set(key, {
             sns_type: row.sns_type,
             sns_id: row.sns_id,
@@ -205,7 +216,8 @@ export async function action({ request }: Route.ActionArgs) {
             product_session_id: pss.product_session_id,
             review_round: round,
             stage_ids: [],
-            session_title: ps?.title ? `${round}차 복습 — ${ps.title}` : `${round}차 복습`,
+            // message_body format: "product_name|session_title|review_N"
+            session_title: `${product_name}|${session_label}|review_${round}`,
           });
         }
         review_map.get(key)!.stage_ids.push(row.stage_id);
