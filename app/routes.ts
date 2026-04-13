@@ -89,7 +89,8 @@ export default [
     route("/products/:slug", "features/v2/products/screens/product-detail-page.tsx"),
 
     route("/stages/:stageId",     "features/v2/stage/screens/stage-page.tsx"),
-    route("/sessions/:sessionId", "features/v2/session/screens/session-page.tsx"),
+    route("/sessions/:sessionId", "features/v2/session/screens/session-choice-page.tsx"),
+    route("/sessions/:sessionId/list", "features/v2/session/screens/session-page.tsx"),
     route("/quiz/:stageId",       "features/v2/quiz/screens/quiz-page.tsx"),
     route("/sentence/:stageId",         "features/v2/sentence/screens/sentence-page.tsx"),
     route("/sessions/:sessionId/chat",  "features/v2/chat/screens/chat-page.tsx"),
