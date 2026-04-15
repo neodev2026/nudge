@@ -11,7 +11,7 @@ import {
   boolean,
 } from "drizzle-orm/pg-core";
 import { authenticatedRole } from "drizzle-orm/supabase";
-import { tstz, eventTstz, snsIdentity } from "~/core/db/helpers.server";
+import { tstz, eventTstz, userIdentity } from "~/core/db/helpers.server";
 import { isAdmin } from "~/core/db/helpers.rls";
 import { V2_SESSION_STATUSES, V2_SESSION_KINDS } from "~/features/v2/shared/constants";
 import { nv2_learning_products } from "~/features/v2/products/schema";
@@ -208,8 +208,8 @@ export const nv2_sessions = pgTable(
     // UUID PK — acts as a security token (unguessable link)
     session_id: uuid("session_id").primaryKey().defaultRandom(),
 
-    // Profile reference — composite FK to nv2_profiles(sns_type, sns_id)
-    ...snsIdentity,
+    // Profile reference — FK to nv2_profiles(auth_user_id)
+    ...userIdentity,
 
     product_session_id: uuid("product_session_id")
       .notNull()
@@ -235,55 +235,34 @@ export const nv2_sessions = pgTable(
     ...tstz,
   },
   (table) => [
-    index("nv2_sessions_profile_idx").on(table.sns_type, table.sns_id),
+    index("nv2_sessions_user_idx").on(table.auth_user_id),
     index("nv2_sessions_product_session_idx").on(table.product_session_id),
     index("nv2_sessions_status_idx").on(table.status),
 
     // Cron query: find pending/in_progress sessions for nudge DMs
     index("nv2_sessions_active_idx")
-      .on(table.sns_type, table.sns_id, table.status)
+      .on(table.auth_user_id, table.status)
       .where(sql`${table.status} != 'completed'`),
 
     // RLS: Users can read their own sessions
     pgPolicy("nv2_sessions_select_own", {
       for: "select",
       to: authenticatedRole,
-      using: sql`
-        EXISTS (
-          SELECT 1 FROM nv2_profiles p
-          WHERE p.sns_type::text = ${table.sns_type}::text
-            AND p.sns_id         = ${table.sns_id}
-            AND p.auth_user_id   = auth.uid()::text
-        )
-      `,
+      using: sql`${table.auth_user_id} = auth.uid()::text`,
     }),
 
     // RLS: Users can insert their own sessions
     pgPolicy("nv2_sessions_insert_own", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`
-        EXISTS (
-          SELECT 1 FROM nv2_profiles p
-          WHERE p.sns_type::text = ${table.sns_type}::text
-            AND p.sns_id         = ${table.sns_id}
-            AND p.auth_user_id   = auth.uid()::text
-        )
-      `,
+      withCheck: sql`${table.auth_user_id} = auth.uid()::text`,
     }),
 
     // RLS: Users can update their own sessions
     pgPolicy("nv2_sessions_update_own", {
       for: "update",
       to: authenticatedRole,
-      using: sql`
-        EXISTS (
-          SELECT 1 FROM nv2_profiles p
-          WHERE p.sns_type::text = ${table.sns_type}::text
-            AND p.sns_id         = ${table.sns_id}
-            AND p.auth_user_id   = auth.uid()::text
-        )
-      `,
+      using: sql`${table.auth_user_id} = auth.uid()::text`,
     }),
 
     // RLS: Admin full access

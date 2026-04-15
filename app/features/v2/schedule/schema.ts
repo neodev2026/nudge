@@ -16,7 +16,6 @@ import { tstz } from "~/core/db/helpers.server";
 import { isAdmin } from "~/core/db/helpers.rls";
 import {
   SCHEDULE_STATUSES,
-  SNS_TYPES,
   V2_SCHEDULE_TYPES,
 } from "~/features/v2/shared/constants";
 import { nv2_stages } from "~/features/v2/stage/schema";
@@ -50,10 +49,8 @@ export const nv2_schedules = pgTable(
   {
     schedule_id: bigserial("schedule_id", { mode: "bigint" }).primaryKey(),
 
-    sns_type: text("sns_type")
-      .notNull()
-      .$type<(typeof SNS_TYPES)[number]>(),
-    sns_id: text("sns_id").notNull(),
+    // Profile reference — FK to nv2_profiles(auth_user_id)
+    auth_user_id: text("auth_user_id").notNull(),
 
     schedule_type: nv2ScheduleType("schedule_type").notNull(),
 
@@ -113,22 +110,15 @@ export const nv2_schedules = pgTable(
       .on(table.scheduled_at, table.status)
       .where(sql`${table.status} = 'pending'`),
 
-    index("nv2_schedules_profile_idx").on(table.sns_type, table.sns_id),
+    index("nv2_schedules_user_idx").on(table.auth_user_id),
     index("nv2_schedules_stage_idx").on(table.stage_id),
     index("nv2_schedules_type_idx").on(table.schedule_type),
 
-    // RLS: Users can read their own schedules (e.g. for a delivery history UI)
+    // RLS: Users can read their own schedules
     pgPolicy("nv2_schedules_select_own", {
       for: "select",
       to: authenticatedRole,
-      using: sql`
-        EXISTS (
-          SELECT 1 FROM nv2_profiles p
-          WHERE p.sns_type::text = ${table.sns_type}::text
-            AND p.sns_id         = ${table.sns_id}
-            AND p.auth_user_id   = auth.uid()::text
-        )
-      `,
+      using: sql`${table.auth_user_id} = auth.uid()::text`,
     }),
 
     // RLS: Admin full access

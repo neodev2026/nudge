@@ -13,7 +13,7 @@ import {
 import { authenticatedRole } from "drizzle-orm/supabase";
 import { tstz } from "~/core/db/helpers.server";
 import { isAdmin } from "~/core/db/helpers.rls";
-import { REVIEW_STATUSES, SNS_TYPES } from "~/features/v2/shared/constants";
+import { REVIEW_STATUSES } from "~/features/v2/shared/constants";
 import { nv2_stages } from "~/features/v2/stage/schema";
 
 export const nv2ReviewStatus = pgEnum("nv2_review_status", REVIEW_STATUSES);
@@ -40,11 +40,8 @@ export const nv2_stage_progress = pgTable(
   {
     progress_id: bigserial("progress_id", { mode: "bigint" }).primaryKey(),
 
-    // Profile reference — composite FK to nv2_profiles(sns_type, sns_id)
-    sns_type: text("sns_type")
-      .notNull()
-      .$type<(typeof SNS_TYPES)[number]>(),
-    sns_id: text("sns_id").notNull(),
+    // Profile reference — FK to nv2_profiles(auth_user_id)
+    auth_user_id: text("auth_user_id").notNull(),
 
     stage_id: uuid("stage_id")
       .notNull()
@@ -80,7 +77,7 @@ export const nv2_stage_progress = pgTable(
     ...tstz,
   },
   (table) => [
-    index("nv2_stage_progress_profile_idx").on(table.sns_type, table.sns_id),
+    index("nv2_stage_progress_user_idx").on(table.auth_user_id),
     index("nv2_stage_progress_stage_idx").on(table.stage_id),
 
     // Cron query: find rows due for review dispatch
@@ -90,14 +87,11 @@ export const nv2_stage_progress = pgTable(
 
     // Logical unique constraint — one progress row per (user, stage)
     index("nv2_stage_progress_user_stage_uidx").on(
-      table.sns_type,
-      table.sns_id,
+      table.auth_user_id,
       table.stage_id
     ),
 
-    // RLS: Users can read/write their own progress rows
-    // RLS: Anyone can read progress for public session links
-    // (session UUID acts as security token)
+    // RLS: Anyone can read (session UUID acts as security token)
     pgPolicy("nv2_stage_progress_select_own", {
       for: "select",
       to: "public",
@@ -107,27 +101,13 @@ export const nv2_stage_progress = pgTable(
     pgPolicy("nv2_stage_progress_insert_own", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`
-        EXISTS (
-          SELECT 1 FROM nv2_profiles p
-          WHERE p.sns_type::text = ${table.sns_type}::text
-            AND p.sns_id         = ${table.sns_id}
-            AND p.auth_user_id   = auth.uid()::text
-        )
-      `,
+      withCheck: sql`${table.auth_user_id} = auth.uid()::text`,
     }),
 
     pgPolicy("nv2_stage_progress_update_own", {
       for: "update",
       to: authenticatedRole,
-      using: sql`
-        EXISTS (
-          SELECT 1 FROM nv2_profiles p
-          WHERE p.sns_type::text = ${table.sns_type}::text
-            AND p.sns_id         = ${table.sns_id}
-            AND p.auth_user_id   = auth.uid()::text
-        )
-      `,
+      using: sql`${table.auth_user_id} = auth.uid()::text`,
     }),
 
     // RLS: Admin full access
