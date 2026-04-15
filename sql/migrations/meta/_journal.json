@@ -372,6 +372,13 @@
       "when": 1776236434117,
       "tag": "0052_grey_longshot",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1776247569658,
+      "tag": "0053_nostalgic_norrin_radd",
+      "breakpoints": true
     }
   ]
 }
