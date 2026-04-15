@@ -991,6 +991,33 @@ export type Database = {
           },
         ]
       }
+      nv2_site_settings: {
+        Row: {
+          created_at: string
+          id: number
+          maintenance_message: string
+          maintenance_mode: boolean
+          maintenance_until: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          maintenance_message?: string
+          maintenance_mode?: boolean
+          maintenance_until?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          maintenance_message?: string
+          maintenance_mode?: boolean
+          maintenance_until?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       nv2_stage_progress: {
         Row: {
           completed_at: string | null

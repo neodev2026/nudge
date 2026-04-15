@@ -92,6 +92,31 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw new Error("Missing Supabase environment variables");
   }
 
+  const { createClient } = await import("@supabase/supabase-js");
+  const adminClient = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // ── Maintenance mode check ─────────────────────────────────────────────────
+  // Skip for /maintenance itself and all /admin/** routes
+  const pathname = new URL(request.url).pathname;
+  const is_admin_route = pathname.startsWith("/admin");
+  const is_maintenance_page = pathname === "/maintenance";
+
+  if (!is_admin_route && !is_maintenance_page) {
+    const { data: settings } = await adminClient
+      .from("nv2_site_settings" as any)
+      .select("maintenance_mode")
+      .eq("id", 1)
+      .maybeSingle();
+
+    if ((settings as any)?.maintenance_mode === true) {
+      const { redirect } = await import("react-router");
+      throw redirect("/maintenance");
+    }
+  }
+
   // Concurrently load theme and locale preferences for better performance
   const [{ getTheme }, locale] = await Promise.all([
     themeSessionResolver(request),
