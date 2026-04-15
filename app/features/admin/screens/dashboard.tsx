@@ -28,9 +28,22 @@ export async function loader({ request }: Route.LoaderArgs) {
   const [client] = makeServerClient(request);
   await requireAdmin(client, request);
   const products = await adminGetAllProducts(client);
-  // adminGetUsersWithTurnBalance calls auth.admin.listUsers — requires service_role client
   const users = await adminGetUsersWithTurnBalance(adminClient);
-  return { products, users };
+
+  // Fetch current maintenance mode state
+  const { data: settings } = await adminClient
+    .from("nv2_site_settings" as any)
+    .select("maintenance_mode, maintenance_message, maintenance_until")
+    .eq("id", 1)
+    .maybeSingle();
+
+  return {
+    products,
+    users,
+    maintenance_mode: (settings as any)?.maintenance_mode ?? false,
+    maintenance_message: (settings as any)?.maintenance_message ?? "서비스 점검 중입니다. 잠시 후 다시 이용해주세요.",
+    maintenance_until: (settings as any)?.maintenance_until ?? null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -46,7 +59,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function AdminDashboard() {
-  const { products, users } = useLoaderData<typeof loader>();
+  const { products, users, maintenance_mode, maintenance_message, maintenance_until } = useLoaderData<typeof loader>();
 
   return (
     <div className="p-8">
@@ -73,6 +86,13 @@ export default function AdminDashboard() {
           + 상품 추가
         </Link>
       </div>
+
+      {/* ── Maintenance Mode ── */}
+      <MaintenanceToggle
+        maintenance_mode={maintenance_mode}
+        maintenance_message={maintenance_message}
+        maintenance_until={maintenance_until}
+      />
 
       {/* Product table */}
       {products.length === 0 ? (
@@ -237,5 +257,85 @@ function TurnRow({ user }: {
         </fetcher.Form>
       </td>
     </tr>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MaintenanceToggle
+// ---------------------------------------------------------------------------
+
+function MaintenanceToggle({
+  maintenance_mode,
+  maintenance_message,
+  maintenance_until,
+}: {
+  maintenance_mode: boolean;
+  maintenance_message: string;
+  maintenance_until: string | null;
+}) {
+  const fetcher = useFetcher<{ ok?: boolean; maintenance_mode?: boolean }>();
+  const is_submitting = fetcher.state !== "idle";
+
+  // Optimistic UI — show toggled state immediately
+  const current_mode =
+    fetcher.data?.maintenance_mode !== undefined
+      ? fetcher.data.maintenance_mode
+      : maintenance_mode;
+
+  function handleToggle() {
+    fetcher.submit(
+      JSON.stringify({
+        maintenance_mode: !current_mode,
+        maintenance_message,
+        maintenance_until,
+      }),
+      {
+        method: "POST",
+        action: "/admin/api/maintenance/toggle",
+        encType: "application/json",
+      }
+    );
+  }
+
+  return (
+    <div className={[
+      "mb-10 rounded-2xl border p-5 transition-colors",
+      current_mode
+        ? "border-red-200 bg-red-50"
+        : "border-[#e8ecf5] bg-white",
+    ].join(" ")}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">{current_mode ? "🔧" : "✅"}</span>
+          <div>
+            <p className="font-display text-sm font-black text-[#1a2744]">
+              점검 모드
+            </p>
+            <p className={[
+              "text-xs mt-0.5",
+              current_mode ? "text-red-500 font-bold" : "text-[#6b7a99]",
+            ].join(" ")}>
+              {current_mode ? "현재 점검 중 — 사용자에게 점검 화면 표시됨" : "정상 운영 중"}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={handleToggle}
+          disabled={is_submitting}
+          className={[
+            "rounded-xl px-5 py-2.5 text-sm font-extrabold transition-all disabled:opacity-50",
+            current_mode
+              ? "bg-[#4caf72] text-white hover:bg-[#5ecb87]"
+              : "bg-red-500 text-white hover:bg-red-600",
+          ].join(" ")}
+        >
+          {is_submitting
+            ? "처리 중..."
+            : current_mode
+            ? "✅ 점검 해제"
+            : "🔧 점검 모드 ON"}
+        </button>
+      </div>
+    </div>
   );
 }

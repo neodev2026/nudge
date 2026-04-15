@@ -78,7 +78,14 @@ export default [
     route("/sessions/:id/delete", "features/admin/api/session-delete.tsx"),
     route("/turns/grant",            "features/admin/api/turn-grant.tsx"),
     route("/users/:authUserId/update", "features/admin/api/user-update.tsx"),
+    route("/maintenance/toggle",  "features/admin/api/maintenance.tsx"),
   ]),
+
+  // ── Maintenance page (outside v2.layout — no header/footer) ──────────────
+  route("/maintenance", "features/v2/home/screens/maintenance-page.tsx"),
+
+  // ── Print (outside v2.layout — no header/footer) ─────────────────────────
+  route("/sessions/:sessionId/print", "features/v2/session/screens/print-page.tsx"),
 
   // ── v2 Public layout ──────────────────────────────────────────────────
   layout("core/layouts/v2.layout.tsx", [
