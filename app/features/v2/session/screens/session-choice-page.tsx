@@ -12,12 +12,12 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const { sessionId } = params;
   if (!sessionId) throw new Response("Not Found", { status: 404 });
 
-  // 1. session row — sns_id is a direct column
+  // 1. session row — auth_user_id is now the user identifier
   const { data: session, error: sessionErr } = await adminClient
     .from("nv2_sessions")
     .select(
       `session_id,
-       sns_id,
+       auth_user_id,
        nv2_product_sessions!inner(
          title,
          session_number,
@@ -29,32 +29,22 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
   if (sessionErr || !session) throw new Response("Not Found", { status: 404 });
 
-  const snsId = session.sns_id as string | null;
+  const authUserId = (session as any).auth_user_id as string | null;
 
   let subscriptionTurns = 0;
   let chargedTurns = 0;
 
-  if (snsId) {
+  if (authUserId) {
     try {
-      // nv2_turn_balance uses auth_user_id as the key (not sns_id)
-      // resolve: sns_id → nv2_profiles.auth_user_id → nv2_turn_balance
-      const { data: profile } = await adminClient
-        .from("nv2_profiles")
-        .select("auth_user_id")
-        .eq("sns_id", snsId)
+      const { data: balance } = await adminClient
+        .from("nv2_turn_balance")
+        .select("subscription_turns, charged_turns")
+        .eq("auth_user_id", authUserId)
         .maybeSingle();
 
-      if (profile?.auth_user_id) {
-        const { data: balance } = await adminClient
-          .from("nv2_turn_balance")
-          .select("subscription_turns, charged_turns")
-          .eq("auth_user_id", profile.auth_user_id)
-          .maybeSingle();
-
-        if (balance) {
-          subscriptionTurns = balance.subscription_turns ?? 0;
-          chargedTurns = balance.charged_turns ?? 0;
-        }
+      if (balance) {
+        subscriptionTurns = balance.subscription_turns ?? 0;
+        chargedTurns = balance.charged_turns ?? 0;
       }
     } catch {
       // non-critical — render with 0 turns
@@ -206,17 +196,3 @@ function TurnStat({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
-
-// function LeniPlaceholder({ label, textColor }: { label: string; textColor: string }) {
-//   return (
-//     <div
-//       className="w-full h-full rounded-t-lg flex items-center justify-center"
-//       style={{ background: "rgba(255,255,255,0.25)" }}
-//       aria-hidden="true"
-//     >
-//       <span className="text-xs text-center leading-4" style={{ color: textColor }}>
-//         Leni<br />{label}
-//       </span>
-//     </div>
-//   );
-// }

@@ -58,10 +58,9 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const identity = await getSessionIdentity(client, params.sessionId);
   if (!identity) throw new Response("Session not found", { status: 404 });
 
-  const { sns_type, sns_id, link_access } = identity;
+  const { auth_user_id, link_access } = identity;
 
-  const { data: auth_session } = await client.auth.getSession();
-  const auth_user = auth_session.session?.user ?? null;
+  const { data: { user: auth_user } } = await client.auth.getUser();
   const is_authenticated = !!auth_user;
 
   if (link_access === "members_only" && !is_authenticated) {
@@ -87,7 +86,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const stage_progresses = await Promise.all(
     stages.map(async (s) => {
       const progress = await getNv2StageProgress(
-        client, sns_type, sns_id, s.stage_id
+        client, auth_user_id, s.stage_id
       ).catch(() => null);
       return { stage_id: s.stage_id, completed: !!progress?.completed_at };
     })
@@ -118,8 +117,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     all_completed,
     all_learning_completed,
     is_authenticated,
-    sns_type,
-    sns_id,
+    auth_user_id,
     link_access,
   };
 }
@@ -140,8 +138,7 @@ export default function SessionPage() {
     all_completed,
     all_learning_completed,
     is_authenticated,
-    sns_type,
-    sns_id,
+    auth_user_id,
     link_access,
   } = useLoaderData<typeof loader>();
 
@@ -168,7 +165,7 @@ export default function SessionPage() {
   const [is_force_completing, set_is_force_completing] = React.useState(false);
 
   async function handleForceComplete() {
-    if (!sns_type || !sns_id || is_force_completing) return;
+    if (!auth_user_id || is_force_completing) return;
     set_is_force_completing(true);
 
     // Mark every incomplete stage as complete via the existing stage API
@@ -181,7 +178,7 @@ export default function SessionPage() {
         fetch(`/api/v2/stage/${stage_id}/complete`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sns_type, sns_id }),
+          body: JSON.stringify({ auth_user_id }),
         })
       )
     );
@@ -197,11 +194,6 @@ export default function SessionPage() {
   // all_completed ensures the completion state reflects the current session.
   const is_done = !!complete_data?.ok && all_completed;
   const next_session_id = complete_data?.next_session_id ?? null;
-
-  // ── Print handler — opens print page in a new tab ─────────────────────────
-  function handlePrint() {
-    window.open(`/sessions/${session_id}/print`, "_blank");
-  }
 
   return (
     <div className="min-h-screen bg-[#fdf8f0]">
@@ -224,26 +216,15 @@ export default function SessionPage() {
                 {session_title}
               </h1>
             </div>
-            {/* Right side: progress count + print button */}
-            <div className="flex items-center gap-3">
-              {/* Print button */}
-              <button
-                onClick={handlePrint}
-                title="학습지 인쇄"
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#e8ecf5] bg-white text-base text-[#6b7a99] transition hover:border-[#1a2744] hover:text-[#1a2744]"
-              >
-                🖨️
-              </button>
-              {/* Progress count */}
-              <div className="text-right">
-                <p className="font-display text-2xl font-black text-[#1a2744]">
-                  {completed_count}
-                  <span className="text-sm font-normal text-[#6b7a99]">
-                    /{total_count}
-                  </span>
-                </p>
-                <p className="text-xs text-[#6b7a99]">완료</p>
-              </div>
+            {/* Progress count */}
+            <div className="text-right">
+              <p className="font-display text-2xl font-black text-[#1a2744]">
+                {completed_count}
+                <span className="text-sm font-normal text-[#6b7a99]">
+                  /{total_count}
+                </span>
+              </p>
+              <p className="text-xs text-[#6b7a99]">완료</p>
             </div>
           </div>
 

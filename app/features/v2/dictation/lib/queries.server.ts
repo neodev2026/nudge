@@ -41,7 +41,7 @@ export async function getDictationStageContext(
 
   const { data: session } = await client
     .from("nv2_sessions")
-    .select("session_id, product_session_id, sns_type, sns_id")
+    .select("session_id, product_session_id, auth_user_id")
     .eq("session_id", session_id)
     .maybeSingle();
 

@@ -51,8 +51,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     () => null
   );
 
-  const { data: session_data } = await client.auth.getSession();
-  const is_authenticated = !!session_data.session;
+  const { data: { user: auth_user } } = await client.auth.getUser();
+  const is_authenticated = !!auth_user;
 
   return { product, first_stage, is_authenticated, headers };
 }
@@ -171,16 +171,6 @@ export default function ProductDetailPage() {
             first_stage={first_stage}
             is_authenticated={is_authenticated}
           />
-
-          {/* My Progress link — shown only when authenticated */}
-          {is_authenticated && (
-            <Link
-              to={`/products/${product.slug}/progress`}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#e8ecf5] bg-white py-3 text-sm font-bold text-[#6b7a99] transition-all hover:border-[#1a2744] hover:text-[#1a2744]"
-            >
-              📊 내 진도 보기
-            </Link>
-          )}
         </div>
 
         {/* How it works */}

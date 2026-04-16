@@ -13,24 +13,23 @@ import {
   initNv2StageProgress,
   completeNv2Stage,
 } from "~/features/v2/stage/lib/queries.server";
-import type { SnsType } from "~/features/v2/shared/types";
 
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
     return routeData({ error: "Method not allowed" }, { status: 405 });
   }
 
-  let body: { sns_type?: string; sns_id?: string };
+  let body: { auth_user_id?: string };
   try {
     body = await request.json();
   } catch {
     return routeData({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { sns_type, sns_id } = body;
-  if (!sns_type || !sns_id) {
+  const { auth_user_id } = body;
+  if (!auth_user_id) {
     return routeData(
-      { error: "sns_type and sns_id are required" },
+      { error: "auth_user_id is required" },
       { status: 400 }
     );
   }
@@ -42,15 +41,13 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   await initNv2StageProgress(
     service_client,
-    sns_type as SnsType,
-    sns_id,
+    auth_user_id,
     params.stageId
   ).catch((err) => console.error("[dictation-result] init failed:", err));
 
   await completeNv2Stage(
     service_client,
-    sns_type as SnsType,
-    sns_id,
+    auth_user_id,
     params.stageId
   ).catch((err) => console.error("[dictation-result] complete failed:", err));
 

@@ -49,15 +49,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     throw new Response("Stage not found", { status: 404 });
   }
 
-  const { data: auth_session } = await client.auth.getSession();
-  const auth_user = auth_session.session?.user ?? null;
+  const { data: { user: auth_user } } = await client.auth.getUser();
   const is_authenticated = !!auth_user;
 
   const session_id = new URL(request.url).searchParams.get("session");
   const from_chat = new URL(request.url).searchParams.get("from") === "chat";
 
-  let sns_type: string | null = null;
-  let sns_id: string | null = null;
+  let auth_user_id: string | null = null;
   let link_access: string = "members_only";
 
   if (session_id) {
@@ -69,8 +67,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     );
 
     if (identity) {
-      sns_type = identity.sns_type;
-      sns_id = identity.sns_id;
+      auth_user_id = identity.auth_user_id;
       link_access = identity.link_access;
 
       if (identity.link_access === "members_only" && !is_authenticated) {
@@ -82,22 +79,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       }
     }
   } else {
-    const meta = auth_user?.user_metadata as
-      | Record<string, unknown>
-      | undefined;
-    sns_id =
-      (meta?.provider_id as string | undefined) ??
-      (meta?.sub as string | undefined) ??
-      null;
-    sns_type = auth_user ? "discord" : null;
+    // Direct access (no session link) — require login
+    auth_user_id = auth_user?.id ?? null;
     link_access = "members_only";
   }
 
   return {
     stage,
     is_authenticated,
-    sns_type,
-    sns_id,
+    auth_user_id,
     session_id,
     from_chat,
     link_access,
@@ -122,7 +112,7 @@ function stopTts() {
 // ---------------------------------------------------------------------------
 
 export default function StagePage() {
-  const { stage, is_authenticated, sns_type, sns_id, session_id, from_chat, link_access } =
+  const { stage, is_authenticated, auth_user_id, session_id, from_chat, link_access } =
     useLoaderData<typeof loader>();
 
   const cards = stage.nv2_cards;
@@ -134,7 +124,7 @@ export default function StagePage() {
 
   const current_card = cards[card_index];
   const is_last_card = card_index === cards.length - 1;
-  const can_submit = !!sns_type && !!sns_id;
+  const can_submit = !!auth_user_id;
 
   function handleNext() {
     stopTts(); // 다음 카드로 넘어갈 때 TTS 중지
@@ -149,7 +139,7 @@ export default function StagePage() {
     if (!can_submit) return;
     stopTts(); // 처음부터 다시 볼 때 TTS 중지
     retry_fetcher.submit(
-      { sns_type, sns_id },
+      { auth_user_id },
       {
         method: "POST",
         action: `/api/v2/stage/${stage.id}/retry`,
@@ -163,7 +153,7 @@ export default function StagePage() {
   function handleComplete() {
     if (!can_submit) return;
     complete_fetcher.submit(
-      { sns_type, sns_id },
+      { auth_user_id },
       {
         method: "POST",
         action: `/api/v2/stage/${stage.id}/complete`,

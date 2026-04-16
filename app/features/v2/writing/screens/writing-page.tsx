@@ -59,15 +59,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   // Load session
   const { data: session } = await client
     .from("nv2_sessions")
-    .select("session_id, product_session_id, sns_type, sns_id")
+    .select("session_id, product_session_id, auth_user_id")
     .eq("session_id", session_id)
     .maybeSingle();
 
   if (!session) throw new Response("Session not found", { status: 404 });
 
   // Access control
-  const { data: auth_data } = await client.auth.getSession();
-  const is_authenticated = !!auth_data.session;
+  const { data: { user: auth_user } } = await client.auth.getUser();
+  const is_authenticated = !!auth_user;
 
   const { getSessionIdentity } = await import(
     "~/features/v2/session/lib/queries.server"
@@ -81,8 +81,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     throw redirect(`/auth/discord/start?next=${next}`);
   }
 
-  const sns_type = identity?.sns_type ?? session.sns_type;
-  const sns_id = identity?.sns_id ?? session.sns_id;
+  const auth_user_id = identity?.auth_user_id ?? (session as any).auth_user_id ?? null;
 
   // ── Load writing prompt from stage card (if admin configured one) ─────────
   const stage_with_cards = await getNv2StageWithCards(client, params.stageId).catch(() => null);
@@ -122,8 +121,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     from_chat,
     stage_title: stage.title,
     session_id,
-    sns_type,
-    sns_id,
+    auth_user_id,
     prompt,
     words: words.filter(Boolean),
     target_locale,
@@ -139,8 +137,7 @@ export default function WritingPage() {
     stage_id,
     stage_title,
     session_id,
-    sns_type,
-    sns_id,
+    auth_user_id,
     prompt,
     words,
     target_locale,
@@ -176,7 +173,7 @@ export default function WritingPage() {
   function handleSubmit() {
     if (!text.trim() || is_submitting) return;
     result_fetcher.submit(
-      { sns_type, sns_id, text, target_locale, words },
+      { auth_user_id, text, target_locale, words },
       {
         method: "POST",
         action: `/api/v2/writing/${stage_id}/result`,

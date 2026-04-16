@@ -85,8 +85,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     stage_type: stage.stage_type,
     stage_title: stage.title,
     session_id,
-    sns_type: identity.sns_type,
-    sns_id: identity.sns_id,
+    auth_user_id: identity.auth_user_id,
     card_pool,
     quiz5_cards,
     timer_seconds,
@@ -116,8 +115,7 @@ export default function QuizPage() {
       stage_type={data.stage_type}
       stage_title={data.stage_title}
       session_id={data.session_id}
-      sns_type={data.sns_type}
-      sns_id={data.sns_id}
+      auth_user_id={data.auth_user_id}
       cards={data.quiz5_cards}
       from_chat={data.from_chat}
     />
@@ -135,8 +133,7 @@ function Quiz5Game({
   stage_type,
   stage_title,
   session_id,
-  sns_type,
-  sns_id,
+  auth_user_id,
   cards,
   from_chat = false,
 }: {
@@ -144,8 +141,7 @@ function Quiz5Game({
   stage_type: string;
   stage_title: string;
   session_id: string;
-  sns_type: string;
-  sns_id: string;
+  auth_user_id: string;
   cards: Quiz5Card[];
   from_chat?: boolean;
 }) {
@@ -157,8 +153,7 @@ function Quiz5Game({
     // Pass minimal required fields; matched_pairs_count/score default to 0 for quiz_5.
     result_fetcher.submit(
       {
-        sns_type,
-        sns_id,
+        auth_user_id,
         stage_type,  // quiz_5 or quiz_current_session
         matched_pairs_count: 0,
         score: 0,
@@ -196,7 +191,7 @@ function Quiz5Game({
               채팅으로 돌아가기 ✕
             </button>
           ) : (
-            <a href={`/sessions/${session_id}/list`}
+            <a href={`/sessions/${session_id}`}
               className="inline-block rounded-2xl bg-[#1a2744] px-6 py-3 text-sm font-extrabold text-white">
               학습 목록으로 →
             </a>
@@ -845,8 +840,7 @@ function Quiz10Game({
   stage_type,
   stage_title,
   session_id,
-  sns_type,
-  sns_id,
+  auth_user_id,
   card_pool,
   timer_seconds,
   covered_stage_ids,
@@ -856,8 +850,7 @@ function Quiz10Game({
   stage_type: string;
   stage_title: string;
   session_id: string;
-  sns_type: string;
-  sns_id: string;
+  auth_user_id: string;
   card_pool: QuizCard[];
   timer_seconds: number;
   covered_stage_ids: string[];
@@ -947,8 +940,7 @@ function Quiz10Game({
     (final_score: number, final_pairs: number, elapsed: number) => {
       result_fetcher.submit(
         {
-          sns_type,
-          sns_id,
+          auth_user_id,
           stage_type,
           matched_pairs_count: final_pairs,
           score: final_score,
@@ -962,7 +954,7 @@ function Quiz10Game({
         }
       );
     },
-    [sns_type, sns_id, stage_type, covered_stage_ids, stage_id]
+    [auth_user_id, stage_type, covered_stage_ids, stage_id]
   );
 
   function finishGame(
@@ -1196,7 +1188,7 @@ function Quiz10Game({
             </button>
           ) : (
             <a
-              href={`/sessions/${session_id}/list`}
+              href={`/sessions/${session_id}`}
               className="mt-6 inline-block rounded-xl bg-[#1a2744] px-6 py-3 text-sm font-extrabold text-white"
             >
               세션으로 돌아가기
@@ -1265,7 +1257,7 @@ function Quiz10Game({
               score={score}
               matched_pairs={matched_count}
               ranking={ranking}
-              sns_id={sns_id}
+              auth_user_id={auth_user_id}
               session_id={session_id}
               is_submitting={result_fetcher.state !== "idle"}
               onRestart={handleRestart}
@@ -1425,12 +1417,12 @@ function MeaningButton({
 // ---------------------------------------------------------------------------
 
 function ResultView({
-  score, matched_pairs, ranking, sns_id, session_id, is_submitting, onRestart, from_chat = false,
+  score, matched_pairs, ranking, auth_user_id, session_id, is_submitting, onRestart, from_chat = false,
 }: {
   score: number; matched_pairs: number; ranking: QuizRankEntry[];
-  sns_id: string; session_id: string; is_submitting: boolean; onRestart: () => void; from_chat?: boolean;
+  auth_user_id: string; session_id: string; is_submitting: boolean; onRestart: () => void; from_chat?: boolean;
 }) {
-  const my_rank_idx = ranking.findIndex((r) => r.sns_id === sns_id);
+  const my_rank_idx = ranking.findIndex((r) => r.auth_user_id === auth_user_id);
   const my_rank     = my_rank_idx >= 0 ? my_rank_idx + 1 : null;
 
   return (
@@ -1463,7 +1455,7 @@ function ResultView({
         ) : (
           <ol className="space-y-2">
             {ranking.map((entry, i) => {
-              const is_me = entry.sns_id === sns_id;
+              const is_me = entry.auth_user_id === auth_user_id;
               return (
                 <li
                   key={i}
@@ -1480,7 +1472,7 @@ function ResultView({
                       {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}`}
                     </span>
                     <span className="text-sm font-bold">
-                      {is_me ? "나" : maskId(entry.sns_id)}
+                      {is_me ? "나" : maskId(entry.auth_user_id)}
                     </span>
                   </div>
                   <span className="font-display text-lg font-black">
@@ -1510,7 +1502,7 @@ function ResultView({
           </button>
         ) : (
           <a
-            href={`/sessions/${session_id}/list`}
+            href={`/sessions/${session_id}`}
             className="flex w-full items-center justify-center rounded-2xl border-2 border-[#e8ecf5] bg-white py-4 text-base font-extrabold text-[#6b7a99] transition-colors hover:border-[#1a2744] hover:text-[#1a2744]"
           >
             학습 목록으로 →
