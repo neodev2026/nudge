@@ -34,26 +34,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Auth check
   const makeServerClient = (await import("~/core/lib/supa-client.server")).default;
   const [client] = makeServerClient(request);
-  const { data: auth_data } = await client.auth.getSession();
-  const auth_user = auth_data.session?.user ?? null;
+  const { data: { user: auth_user } } = await client.auth.getUser();
 
   if (!auth_user) {
     const next = encodeURIComponent(`/products/${params.slug}/progress`);
     throw redirect(`/auth/discord/start?next=${next}`);
   }
 
-  // Resolve sns_type / sns_id from nv2_profiles
-  const { data: profile } = await adminClient
-    .from("nv2_profiles")
-    .select("sns_type, sns_id")
-    .eq("auth_user_id", auth_user.id)
-    .maybeSingle();
-
-  if (!profile) {
-    throw redirect(`/products/${params.slug}`);
-  }
-
-  const { sns_type, sns_id } = profile;
+  const auth_user_id = auth_user.id;
 
   // Product info
   const { data: product } = await adminClient
@@ -86,8 +74,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       product_session_id,
       nv2_product_sessions!inner(session_number, title, product_id)
     `)
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id)
+    .eq("auth_user_id", auth_user_id)
     .eq("nv2_product_sessions.product_id", product.id)
     .order("dm_sent_at", { ascending: false });
 
@@ -144,8 +131,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? await adminClient
         .from("nv2_stage_progress")
         .select("stage_id, review_status, retry_count, completed_at, nv2_stages!inner(title)")
-        .eq("sns_type", sns_type)
-        .eq("sns_id", sns_id)
+        .eq("auth_user_id", auth_user_id)
         .in("stage_id", stage_ids)
     : { data: [] };
 
@@ -174,8 +160,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const { data: upcoming_raw } = await adminClient
     .from("nv2_stage_progress")
     .select("next_review_at")
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id)
+    .eq("auth_user_id", auth_user_id)
     .in("stage_id", stage_ids.length > 0 ? stage_ids : ["00000000-0000-0000-0000-000000000000"])
     .not("next_review_at", "is", null)
     .gte("next_review_at", new Date(now_ts).toISOString())

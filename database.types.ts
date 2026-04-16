@@ -766,48 +766,54 @@ export type Database = {
       }
       nv2_profiles: {
         Row: {
-          auth_user_id: string | null
+          auth_user_id: string
           avatar_url: string | null
           created_at: string
           daily_goal_new: number
           daily_goal_review: number
+          discord_dm_unsubscribed: boolean
+          discord_id: string | null
           display_name: string | null
+          email: string | null
+          email_unsubscribed: boolean
           is_active: boolean
           send_hour: number
-          sns_id: string
-          sns_type: Database["public"]["Enums"]["nv2_sns_type"]
           timezone: string
           today_new_count: number
           today_review_count: number
           updated_at: string
         }
         Insert: {
-          auth_user_id?: string | null
+          auth_user_id: string
           avatar_url?: string | null
           created_at?: string
           daily_goal_new?: number
           daily_goal_review?: number
+          discord_dm_unsubscribed?: boolean
+          discord_id?: string | null
           display_name?: string | null
+          email?: string | null
+          email_unsubscribed?: boolean
           is_active?: boolean
           send_hour?: number
-          sns_id: string
-          sns_type: Database["public"]["Enums"]["nv2_sns_type"]
           timezone?: string
           today_new_count?: number
           today_review_count?: number
           updated_at?: string
         }
         Update: {
-          auth_user_id?: string | null
+          auth_user_id?: string
           avatar_url?: string | null
           created_at?: string
           daily_goal_new?: number
           daily_goal_review?: number
+          discord_dm_unsubscribed?: boolean
+          discord_id?: string | null
           display_name?: string | null
+          email?: string | null
+          email_unsubscribed?: boolean
           is_active?: boolean
           send_hour?: number
-          sns_id?: string
-          sns_type?: Database["public"]["Enums"]["nv2_sns_type"]
           timezone?: string
           today_new_count?: number
           today_review_count?: number
@@ -817,6 +823,7 @@ export type Database = {
       }
       nv2_quiz_results: {
         Row: {
+          auth_user_id: string
           completed_at: string | null
           covered_stage_ids: string[]
           created_at: string
@@ -824,13 +831,12 @@ export type Database = {
           quiz_result_id: number
           quiz_type: Database["public"]["Enums"]["nv2_quiz_type"]
           result_snapshot: Json | null
-          sns_id: string
-          sns_type: string
           started_at: string
           trigger_at_count: number
           updated_at: string
         }
         Insert: {
+          auth_user_id: string
           completed_at?: string | null
           covered_stage_ids: string[]
           created_at?: string
@@ -838,13 +844,12 @@ export type Database = {
           quiz_result_id?: number
           quiz_type: Database["public"]["Enums"]["nv2_quiz_type"]
           result_snapshot?: Json | null
-          sns_id: string
-          sns_type: string
           started_at?: string
           trigger_at_count: number
           updated_at?: string
         }
         Update: {
+          auth_user_id?: string
           completed_at?: string | null
           covered_stage_ids?: string[]
           created_at?: string
@@ -852,8 +857,6 @@ export type Database = {
           quiz_result_id?: number
           quiz_type?: Database["public"]["Enums"]["nv2_quiz_type"]
           result_snapshot?: Json | null
-          sns_id?: string
-          sns_type?: string
           started_at?: string
           trigger_at_count?: number
           updated_at?: string
@@ -862,6 +865,7 @@ export type Database = {
       }
       nv2_schedules: {
         Row: {
+          auth_user_id: string
           created_at: string
           delivery_url: string
           error_message: string | null
@@ -875,13 +879,12 @@ export type Database = {
           schedule_type: Database["public"]["Enums"]["nv2_schedule_type"]
           scheduled_at: string
           sent_at: string | null
-          sns_id: string
-          sns_type: string
           stage_id: string | null
           status: Database["public"]["Enums"]["nv2_schedule_status"]
           updated_at: string
         }
         Insert: {
+          auth_user_id: string
           created_at?: string
           delivery_url: string
           error_message?: string | null
@@ -895,13 +898,12 @@ export type Database = {
           schedule_type: Database["public"]["Enums"]["nv2_schedule_type"]
           scheduled_at: string
           sent_at?: string | null
-          sns_id: string
-          sns_type: string
           stage_id?: string | null
           status?: Database["public"]["Enums"]["nv2_schedule_status"]
           updated_at?: string
         }
         Update: {
+          auth_user_id?: string
           created_at?: string
           delivery_url?: string
           error_message?: string | null
@@ -915,8 +917,6 @@ export type Database = {
           schedule_type?: Database["public"]["Enums"]["nv2_schedule_type"]
           scheduled_at?: string
           sent_at?: string | null
-          sns_id?: string
-          sns_type?: string
           stage_id?: string | null
           status?: Database["public"]["Enums"]["nv2_schedule_status"]
           updated_at?: string
@@ -940,6 +940,7 @@ export type Database = {
       }
       nv2_sessions: {
         Row: {
+          auth_user_id: string
           completed_at: string | null
           created_at: string
           dm_sent_at: string | null
@@ -947,13 +948,12 @@ export type Database = {
           review_round: number | null
           session_id: string
           session_kind: Database["public"]["Enums"]["nv2_session_kind"]
-          sns_id: string
-          sns_type: string
           started_at: string | null
           status: Database["public"]["Enums"]["nv2_session_status"]
           updated_at: string
         }
         Insert: {
+          auth_user_id: string
           completed_at?: string | null
           created_at?: string
           dm_sent_at?: string | null
@@ -961,13 +961,12 @@ export type Database = {
           review_round?: number | null
           session_id?: string
           session_kind?: Database["public"]["Enums"]["nv2_session_kind"]
-          sns_id: string
-          sns_type: string
           started_at?: string | null
           status?: Database["public"]["Enums"]["nv2_session_status"]
           updated_at?: string
         }
         Update: {
+          auth_user_id?: string
           completed_at?: string | null
           created_at?: string
           dm_sent_at?: string | null
@@ -975,8 +974,6 @@ export type Database = {
           review_round?: number | null
           session_id?: string
           session_kind?: Database["public"]["Enums"]["nv2_session_kind"]
-          sns_id?: string
-          sns_type?: string
           started_at?: string | null
           status?: Database["public"]["Enums"]["nv2_session_status"]
           updated_at?: string
@@ -1020,6 +1017,7 @@ export type Database = {
       }
       nv2_stage_progress: {
         Row: {
+          auth_user_id: string
           completed_at: string | null
           created_at: string
           last_review_completed_at: string | null
@@ -1028,12 +1026,11 @@ export type Database = {
           retry_count: number
           review_round: number | null
           review_status: Database["public"]["Enums"]["nv2_review_status"]
-          sns_id: string
-          sns_type: string
           stage_id: string
           updated_at: string
         }
         Insert: {
+          auth_user_id: string
           completed_at?: string | null
           created_at?: string
           last_review_completed_at?: string | null
@@ -1042,12 +1039,11 @@ export type Database = {
           retry_count?: number
           review_round?: number | null
           review_status?: Database["public"]["Enums"]["nv2_review_status"]
-          sns_id: string
-          sns_type: string
           stage_id: string
           updated_at?: string
         }
         Update: {
+          auth_user_id?: string
           completed_at?: string | null
           created_at?: string
           last_review_completed_at?: string | null
@@ -1056,8 +1052,6 @@ export type Database = {
           retry_count?: number
           review_round?: number | null
           review_status?: Database["public"]["Enums"]["nv2_review_status"]
-          sns_id?: string
-          sns_type?: string
           stage_id?: string
           updated_at?: string
         }
@@ -1106,35 +1100,32 @@ export type Database = {
       }
       nv2_subscriptions: {
         Row: {
+          auth_user_id: string
           created_at: string
           id: string
           is_active: boolean
           link_access: Database["public"]["Enums"]["nv2_link_access_type"]
           product_id: string
-          sns_id: string
-          sns_type: string
           started_at: string | null
           updated_at: string
         }
         Insert: {
+          auth_user_id: string
           created_at?: string
           id?: string
           is_active?: boolean
           link_access?: Database["public"]["Enums"]["nv2_link_access_type"]
           product_id: string
-          sns_id: string
-          sns_type: string
           started_at?: string | null
           updated_at?: string
         }
         Update: {
+          auth_user_id?: string
           created_at?: string
           id?: string
           is_active?: boolean
           link_access?: Database["public"]["Enums"]["nv2_link_access_type"]
           product_id?: string
-          sns_id?: string
-          sns_type?: string
           started_at?: string | null
           updated_at?: string
         }
@@ -1501,7 +1492,6 @@ export type Database = {
       nv2_schedule_type: "new" | "review" | "cheer" | "welcome"
       nv2_session_kind: "new" | "review"
       nv2_session_status: "pending" | "in_progress" | "completed"
-      nv2_sns_type: "discord" | "kakao" | "telegram" | "email"
       nv2_stage_type:
         | "welcome"
         | "learning"
@@ -1722,7 +1712,6 @@ export const Constants = {
       nv2_schedule_type: ["new", "review", "cheer", "welcome"],
       nv2_session_kind: ["new", "review"],
       nv2_session_status: ["pending", "in_progress", "completed"],
-      nv2_sns_type: ["discord", "kakao", "telegram", "email"],
       nv2_stage_type: [
         "welcome",
         "learning",

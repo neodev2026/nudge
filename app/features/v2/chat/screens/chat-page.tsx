@@ -64,8 +64,7 @@ export const meta: Route.MetaFunction = () => [
 export async function loader({ request, params }: Route.LoaderArgs) {
   const [client] = makeServerClient(request);
 
-  const { data: auth_session } = await client.auth.getSession();
-  const auth_user = auth_session.session?.user ?? null;
+  const { data: { user: auth_user } } = await client.auth.getUser();
 
   if (!auth_user) {
     const next = encodeURIComponent(`/sessions/${params.sessionId}/chat`);

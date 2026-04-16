@@ -118,12 +118,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   // ── Step 5: Upsert nv2_profiles ───────────────────────────────────────────
   const profile = await upsertNv2Profile(adminClient, {
-    sns_type: "discord",
-    sns_id,
     auth_user_id: auth_user.id,
+    discord_id: sns_id,               // Discord User ID → discord_id
+    email: auth_user.email ?? null,   // Email from auth.users
     display_name,
     avatar_url,
-    timezone, // null for returning users → existing value is preserved
+    timezone,
   }).catch((err) => {
     console.error("[discord-callback] upsertNv2Profile failed:", err);
     return null;
@@ -145,14 +145,14 @@ export async function loader({ request }: Route.LoaderArgs) {
     if (welcome_stage?.learning_product_id) {
       await upsertNv2Subscription(
         adminClient,
-        "discord",
-        sns_id,
+        auth_user.id,
         welcome_stage.learning_product_id
       ).catch((err) => {
         console.error("[discord-callback] upsertNv2Subscription failed:", err);
       });
     }
 
+    // sns_id = Discord User ID, used directly for Bot DM
     sendWelcomeDm(sns_id, display_name, welcome_url).catch((err) => {
       console.error("[discord-callback] sendWelcomeDm failed:", err);
     });

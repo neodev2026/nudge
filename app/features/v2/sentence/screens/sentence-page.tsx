@@ -75,12 +75,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const { stage, session } = context;
 
   // Resolve link_access + sns identity
-  const { data: auth_session } = await client.auth.getSession();
-  const auth_user = auth_session.session?.user ?? null;
+  const { data: { user: auth_user } } = await client.auth.getUser();
   const is_authenticated = !!auth_user;
 
-  let sns_type: string | null = session.sns_type;
-  let sns_id: string | null = session.sns_id;
+  let auth_user_id: string | null = (session as any).auth_user_id ?? null;
   let link_access: "public" | "members_only" = "public";
 
   const { getSessionIdentity } = await import(
@@ -91,8 +89,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   );
 
   if (identity) {
-    sns_type = identity.sns_type;
-    sns_id = identity.sns_id;
+    auth_user_id = identity.auth_user_id;
     link_access = identity.link_access;
 
     if (identity.link_access === "members_only" && !is_authenticated) {
@@ -115,8 +112,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     from_chat,
     sentence_cards,
     session_id,
-    sns_type,
-    sns_id,
+    auth_user_id,
     link_access,
     is_authenticated,
   };
@@ -144,8 +140,7 @@ export default function SentencePage() {
     stage,
     sentence_cards,
     session_id,
-    sns_type,
-    sns_id,
+    auth_user_id,
     from_chat,
   } = useLoaderData<typeof loader>();
 
@@ -155,7 +150,7 @@ export default function SentencePage() {
 
   const result_fetcher = useFetcher();
 
-  const can_submit = !!sns_type && !!sns_id;
+  const can_submit = !!auth_user_id;
   const current_card = sentence_cards[card_index];
   const total = sentence_cards.length;
 
@@ -187,7 +182,7 @@ export default function SentencePage() {
       set_all_done(true);
       if (can_submit) {
         result_fetcher.submit(
-          { sns_type, sns_id },
+          { auth_user_id },
           {
             method: "POST",
             action: `/api/v2/sentence/${stage.id}/result`,

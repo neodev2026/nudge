@@ -26,8 +26,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const [client, headers] = makeServerClient(request);
 
   // ── Auth check ────────────────────────────────────────────────────────────
-  const { data: auth_session } = await client.auth.getSession();
-  const auth_user = auth_session.session?.user ?? null;
+  const { data: { user: auth_user } } = await client.auth.getUser();
   if (!auth_user) {
     return routeData({ error: "Unauthorized" }, { status: 401, headers });
   }
@@ -199,23 +198,21 @@ export async function action({ request, params }: Route.ActionArgs) {
   // ── Handle complete_stages flag — mark all learning stages done ─────────
   // When Leni sets complete_stages:true (step 3), mark all learning stages complete.
   if (leni_response.complete_stages) {
-    const { sns_type, sns_id } = identity;
+    const { auth_user_id } = identity;
     await Promise.all(
       learning_stages.map(async (s) => {
         // init progress row if not exists
         const { data: existing } = await adminClient
           .from("nv2_stage_progress")
           .select("progress_id, completed_at")
-          .eq("sns_type", sns_type)
-          .eq("sns_id", sns_id)
+          .eq("auth_user_id", auth_user_id)
           .eq("stage_id", s.stage_id)
           .maybeSingle();
 
         if (!existing) {
           try {
             await adminClient.from("nv2_stage_progress").insert({
-              sns_type,
-              sns_id,
+              auth_user_id,
               stage_id: s.stage_id,
             });
           } catch {
@@ -237,8 +234,7 @@ export async function action({ request, params }: Route.ActionArgs) {
                 review_round: 1,
                 next_review_at: next_review.toISOString(),
               })
-              .eq("sns_type", sns_type)
-              .eq("sns_id", sns_id)
+              .eq("auth_user_id", auth_user_id)
               .eq("stage_id", s.stage_id)
               .is("completed_at", null);
           } catch {

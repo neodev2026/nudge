@@ -14,7 +14,7 @@ export default function MaintenancePage() {
           <img
             src="/images/leni/leni-maintenance.jpg"
             alt="Leni"
-            className="h-150 w-auto object-contain mx-auto"
+            className="h-100 w-auto object-contain mx-auto"
           />
         </div>
 
