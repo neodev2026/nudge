@@ -8,8 +8,7 @@
  *
  * Request body (JSON):
  *   {
- *     sns_type: string,
- *     sns_id: string,
+ *     auth_user_id: string,
  *     stage_type: string,
  *     matched_pairs_count: number,
  *     score: number,               // word+meaning=10pt, audio+meaning=30pt
@@ -32,7 +31,6 @@ import {
   initNv2StageProgress,
   completeNv2Stage,
 } from "~/features/v2/stage/lib/queries.server";
-import type { SnsType } from "~/features/v2/shared/types";
 
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -40,8 +38,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   let body: {
-    sns_type?: string;
-    sns_id?: string;
+    auth_user_id?: string;
     stage_type?: string;
     matched_pairs_count?: number;
     score?: number;
@@ -56,8 +53,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   const {
-    sns_type,
-    sns_id,
+    auth_user_id,
     stage_type,
     matched_pairs_count,
     score,
@@ -65,14 +61,13 @@ export async function action({ request, params }: Route.ActionArgs) {
     duration_seconds,
   } = body;
 
-  if (!sns_type || !sns_id) {
+  if (!auth_user_id) {
     return routeData(
-      { error: "sns_type and sns_id are required" },
+      { error: "auth_user_id is required" },
       { status: 400 }
     );
   }
 
-  const typed_sns_type = sns_type as SnsType;
   const stage_id = params.stageId;
   const covered_ids = (covered_stage_ids ?? "")
     .split(",")
@@ -88,8 +83,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   // ── Save quiz result ──────────────────────────────────────────────────────
   await saveQuizResult(
     service_client,
-    typed_sns_type,
-    sns_id,
+    auth_user_id,
     stage_id,
     stage_type ?? "quiz_5",
     matched_pairs_count ?? 0,
@@ -103,15 +97,13 @@ export async function action({ request, params }: Route.ActionArgs) {
   // ── Mark quiz stage as completed ──────────────────────────────────────────
   await initNv2StageProgress(
     service_client,
-    typed_sns_type,
-    sns_id,
+    auth_user_id,
     stage_id
   ).catch(() => null);
 
   await completeNv2Stage(
     service_client,
-    typed_sns_type,
-    sns_id,
+    auth_user_id,
     stage_id
   ).catch((err) => {
     console.error("[quiz-result] completeNv2Stage failed:", err);

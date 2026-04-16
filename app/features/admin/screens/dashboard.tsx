@@ -199,9 +199,9 @@ export default function AdminDashboard() {
 function TurnRow({ user }: {
   user: {
     auth_user_id: string;
+    email: string | null;
     display_name: string | null;
-    sns_type: string;
-    sns_id: string;
+    discord_id: string | null;
     subscription_turns: number;
     charged_turns: number;
   };
@@ -212,8 +212,8 @@ function TurnRow({ user }: {
   return (
     <tr className="transition-colors hover:bg-[#f4f6fb]">
       <td className="px-5 py-4">
-        <p className="font-semibold text-[#1a2744]">{user.display_name ?? user.sns_id}</p>
-        <p className="text-xs text-[#6b7a99]">{user.sns_type} · {user.sns_id}</p>
+        <p className="font-semibold text-[#1a2744]">{user.display_name ?? user.auth_user_id.slice(0, 8)}</p>
+        <p className="text-xs text-[#6b7a99]">{user.discord_id ? `Discord · ${user.discord_id}` : user.email ?? "—"}</p>
       </td>
       <td className="px-5 py-4 text-sm text-[#1a2744]">
         {user.subscription_turns.toLocaleString()}턴

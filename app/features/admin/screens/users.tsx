@@ -54,7 +54,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     ? all_users.filter(
         (u) =>
           (u.display_name ?? "").toLowerCase().includes(q.toLowerCase()) ||
-          (u.sns_id ?? "").toLowerCase().includes(q.toLowerCase())
+          (u.discord_id ?? "").toLowerCase().includes(q.toLowerCase())
       )
     : all_users;
 
@@ -191,7 +191,7 @@ export default function AdminUsersPage() {
                         "truncate text-xs",
                         is_selected ? "text-white/60" : "text-[#b0b8cc]",
                       ].join(" ")}>
-                        {u.sns_type && u.sns_id ? `${u.sns_type} · ${u.sns_id}` : "SNS 미연결"}
+                        {u.discord_id ? `Discord · ${u.discord_id}` : "Discord 미연결"}
                         {" · "}
                         {new Date(u.created_at).toLocaleDateString("ko-KR")}
                       </p>
@@ -222,7 +222,7 @@ export default function AdminUsersPage() {
               왼쪽에서 사용자를 선택하세요
             </div>
           ) : (
-            <UserDetailPanel user={selected_user} />
+            <UserDetailPanel key={selected_user.auth_user_id} user={selected_user} />
           )}
         </div>
       </div>
@@ -256,16 +256,16 @@ function UserDetailPanel({
           />
         ) : (
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1a2744] text-lg font-black text-white">
-            {(user.display_name ?? user.sns_id ?? user.email ?? user.auth_user_id)[0]?.toUpperCase()}
+            {(user.display_name ?? user.email ?? user.auth_user_id)[0]?.toUpperCase()}
           </div>
         )}
         <div>
           <p className="font-display text-lg font-black text-[#1a2744]">
-            {user.display_name ?? user.sns_id ?? user.email ?? user.auth_user_id.slice(0, 8)}
+            {user.display_name ?? user.email ?? user.auth_user_id.slice(0, 8)}
           </p>
           <p className="text-sm text-[#6b7a99]">
             {user.email && <span>{user.email}</span>}
-            {user.sns_type && user.sns_id && <span className="ml-2">{user.sns_type} · {user.sns_id}</span>}
+            {user.discord_id && <span className="ml-2">Discord · {user.discord_id}</span>}
           </p>
           <p className="text-xs text-[#b0b8cc]">
             가입일: {new Date(user.auth_created_at).toLocaleDateString("ko-KR")}

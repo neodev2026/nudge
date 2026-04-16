@@ -66,22 +66,14 @@ export function makeSerialPk(name: string) {
 }
 
 /**
- * User identity column for v2 tables.
+ * Composite SNS identity columns for v2 tables.
  *
- * All v2 tables scoped to a user carry auth_user_id as a foreign key
- * referencing nv2_profiles(auth_user_id).
- * Replaces the previous composite (sns_type, sns_id) pattern.
+ * All v2 tables that are scoped to a user carry (sns_type, sns_id) as a
+ * composite foreign key referencing nv2_profiles(sns_type, sns_id).
+ * Spreading this object ensures consistent column naming across all tables.
  *
  * Usage:
- *   ...userIdentity,
- */
-export const userIdentity = {
-  auth_user_id: text("auth_user_id").notNull(),
-};
-
-/**
- * @deprecated Use userIdentity instead.
- * Kept temporarily for reference during migration.
+ *   ...snsIdentity,
  */
 export const snsIdentity = {
   sns_type: text("sns_type").notNull(),

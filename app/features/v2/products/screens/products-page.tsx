@@ -55,13 +55,11 @@ export const meta: Route.MetaFunction = () => [
 export async function loader({ request }: Route.LoaderArgs) {
   const [client, headers] = makeServerClient(request);
 
-  // Fetch active products and current session in parallel
-  const [products, { data: session_data }] = await Promise.all([
+  // Fetch active products and current user in parallel
+  const [products, { data: { user: auth_user } }] = await Promise.all([
     getNv2ActiveProducts(client),
-    client.auth.getSession(),
+    client.auth.getUser(),
   ]);
-
-  const auth_user = session_data.session?.user ?? null;
 
   // Extract display name from Supabase user metadata (set by Discord OAuth)
   const display_name =

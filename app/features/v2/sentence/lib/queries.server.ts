@@ -9,7 +9,6 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "database.types";
-import type { SnsType } from "~/features/v2/shared/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,7 +53,7 @@ export async function getSentenceStageContext(
 
   const { data: session } = await client
     .from("nv2_sessions")
-    .select("session_id, product_session_id, sns_type, sns_id, session_kind")
+    .select("session_id, product_session_id, auth_user_id, session_kind")
     .eq("session_id", session_id)
     .maybeSingle();
 

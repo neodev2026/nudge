@@ -36,7 +36,6 @@ import {
   upsertNv2Subscription,
 } from "~/features/v2/session/lib/queries.server";
 import { sendSessionDm } from "~/features/v2/auth/lib/discord.server";
-import type { SnsType } from "~/features/v2/shared/types";
 
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -46,26 +45,12 @@ export async function action({ request, params }: Route.ActionArgs) {
   const [client, headers] = makeServerClient(request);
 
   // ── Auth check ────────────────────────────────────────────────────────────
-  const { data: session_data } = await client.auth.getSession();
-  if (!session_data.session) {
+  const { data: { user: auth_user } } = await client.auth.getUser();
+  if (!auth_user) {
     return routeData({ error: "Unauthorized" }, { status: 401, headers });
   }
 
-  const auth_user = session_data.session.user;
-  const meta = auth_user.user_metadata as Record<string, unknown>;
-
-  const sns_id =
-    (meta.provider_id as string | undefined) ??
-    (meta.sub as string | undefined);
-
-  if (!sns_id) {
-    return routeData(
-      { error: "Discord identity not found" },
-      { status: 400, headers }
-    );
-  }
-
-  const sns_type: SnsType = "discord";
+  const auth_user_id = auth_user.id;
 
   // ── Resolve product ───────────────────────────────────────────────────────
   const product = await getNv2ProductBySlug(client, {
@@ -77,7 +62,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   // ── Upsert subscription (uses adminClient to bypass RLS insert restriction) ──
-  await upsertNv2Subscription(adminClient, sns_type, sns_id, product.id).catch(
+  await upsertNv2Subscription(adminClient, auth_user_id, product.id).catch(
     (err) => console.error("[start-learning] upsertNv2Subscription failed:", err)
   );
 
@@ -87,8 +72,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   const active_session = await getNv2ActiveUserSession(
     client,
-    sns_type,
-    sns_id,
+    auth_user_id,
     product.id
   ).catch(() => null);
 
@@ -100,8 +84,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     // Find the next product session the user has not yet completed
     const next_product_session = await getNv2NextUnstartedProductSession(
       client,
-      sns_type,
-      sns_id,
+      auth_user_id,
       product.id
     ).catch(() => null);
 
@@ -117,8 +100,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     // Create new user session
     const new_session = await createNv2UserSession(
       client,
-      sns_type,
-      sns_id,
+      auth_user_id,
       product_session_id
     );
 
@@ -149,15 +131,22 @@ export async function action({ request, params }: Route.ActionArgs) {
   const origin = new URL(request.url).origin;
   const session_url = `${origin}/sessions/${user_session_id}`;
 
+  // Fetch discord_id for DM delivery
+  const { data: profile_for_dm } = await adminClient
+    .from("nv2_profiles")
+    .select("discord_id")
+    .eq("auth_user_id", auth_user_id)
+    .maybeSingle();
+  const discord_id = (profile_for_dm as any)?.discord_id ?? null;
+
   let dm_sent = false;
-  try {
-    await sendSessionDm(sns_id, session_url, session_title, stage_count);
-    dm_sent = true;
-  } catch (err) {
-    // Log the full error for debugging but do not surface it to the user.
-    // Common cause: Discord error 50278 (bot and user share no mutual guild).
-    // The user can still navigate to the session directly via the redirect below.
-    console.error("[start-learning] sendSessionDm failed (non-fatal):", err);
+  if (discord_id) {
+    try {
+      await sendSessionDm(discord_id, session_url, product.name, session_title, null);
+      dm_sent = true;
+    } catch (err) {
+      console.error("[start-learning] sendSessionDm failed (non-fatal):", err);
+    }
   }
 
   // Always return ok — the client will redirect to /sessions/:id

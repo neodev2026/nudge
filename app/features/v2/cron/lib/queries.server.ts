@@ -7,7 +7,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "database.types";
 import { REVIEW_INTERVALS_DAYS } from "~/features/v2/shared/constants";
-import type { SnsType } from "~/features/v2/shared/types";
 
 // ---------------------------------------------------------------------------
 // daily-reset
@@ -30,7 +29,7 @@ export async function getProfilesInLocalTimeWindow(
   // which is acceptable for the current user volume (beta stage).
   const { data, error } = await client
     .from("nv2_profiles")
-    .select("sns_type, sns_id, timezone, send_hour, daily_goal_new, daily_goal_review")
+    .select("auth_user_id, timezone, send_hour, daily_goal_new, daily_goal_review")
     .eq("is_active", true);
 
   if (error) throw error;
@@ -68,16 +67,12 @@ export async function resetCronDailyCounters(
 
   if (profiles.length === 0) return { reset_count: 0 };
 
-  const keys = profiles.map((p) => ({ sns_type: p.sns_type, sns_id: p.sns_id }));
-
-  // Batch update — one update per profile (SNS composite key, no bulk update shortcut)
   let reset_count = 0;
-  for (const key of keys) {
+  for (const p of profiles) {
     const { error } = await client
       .from("nv2_profiles")
       .update({ today_new_count: 0, today_review_count: 0 })
-      .eq("sns_type", key.sns_type)
-      .eq("sns_id", key.sns_id);
+      .eq("auth_user_id", p.auth_user_id);
 
     if (!error) reset_count++;
   }
@@ -96,8 +91,7 @@ export async function resetCronDailyCounters(
  */
 export async function getCronActiveSessionsForUser(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string
+  auth_user_id: string
 ) {
   const { data, error } = await client
     .from("nv2_sessions")
@@ -110,8 +104,7 @@ export async function getCronActiveSessionsForUser(
       nv2_product_sessions!inner ( id, product_id, session_number, title )
     `
     )
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id)
+    .eq("auth_user_id", auth_user_id)
     .in("status", ["pending", "in_progress"]);
 
   if (error) throw error;
@@ -124,24 +117,16 @@ export async function getCronActiveSessionsForUser(
  */
 export async function getCronUserSubscriptions(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string
+  auth_user_id: string
 ) {
   const { data, error } = await client
     .from("nv2_subscriptions")
-    .select(`
-      id, product_id, is_active,
-      nv2_learning_products!inner(name)
-    `)
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id)
+    .select("id, product_id, is_active")
+    .eq("auth_user_id", auth_user_id)
     .eq("is_active", true);
 
   if (error) throw error;
-  return (data ?? []).map((s) => ({
-    ...s,
-    product_name: (s.nv2_learning_products as any)?.name ?? "",
-  }));
+  return data ?? [];
 }
 
 /**
@@ -150,15 +135,13 @@ export async function getCronUserSubscriptions(
  */
 export async function getCronNextUnstartedProductSession(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string,
+  auth_user_id: string,
   product_id: string
 ) {
   const { data: completed, error: completed_error } = await client
     .from("nv2_sessions")
     .select("product_session_id")
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id)
+    .eq("auth_user_id", auth_user_id)
     .eq("status", "completed");
 
   if (completed_error) throw completed_error;
@@ -191,16 +174,14 @@ export async function getCronNextUnstartedProductSession(
  */
 export async function createCronNewSession(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string,
+  auth_user_id: string,
   product_session_id: string,
   dm_sent_at: string
 ) {
   const { data, error } = await client
     .from("nv2_sessions")
     .insert({
-      sns_type,
-      sns_id,
+      auth_user_id,
       product_session_id,
       session_kind: "new",
       status: "pending",
@@ -218,8 +199,7 @@ export async function createCronNewSession(
  */
 export async function createCronReviewSession(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string,
+  auth_user_id: string,
   product_session_id: string,
   review_round: number,
   dm_sent_at: string
@@ -227,8 +207,7 @@ export async function createCronReviewSession(
   const { data, error } = await client
     .from("nv2_sessions")
     .insert({
-      sns_type,
-      sns_id,
+      auth_user_id,
       product_session_id,
       session_kind: "review",
       review_round,
@@ -250,16 +229,14 @@ export async function createCronReviewSession(
  */
 export async function getCronScheduleExistsToday(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string,
+  auth_user_id: string,
   schedule_type: "new" | "review" | "cheer" | "welcome",
   date_prefix: string
 ) {
   const { data, error } = await client
     .from("nv2_schedules")
     .select("schedule_id")
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id)
+    .eq("auth_user_id", auth_user_id)
     .eq("schedule_type", schedule_type)
     .gte("scheduled_at", `${date_prefix}T00:00:00Z`)
     .lt("scheduled_at", `${date_prefix}T23:59:59Z`)
@@ -275,8 +252,7 @@ export async function getCronScheduleExistsToday(
  */
 export async function getCronCheerExistsTodayForHour(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string,
+  auth_user_id: string,
   local_hour: number,
   date_prefix: string
 ) {
@@ -286,8 +262,7 @@ export async function getCronCheerExistsTodayForHour(
   const { data, error } = await client
     .from("nv2_schedules")
     .select("schedule_id")
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id)
+    .eq("auth_user_id", auth_user_id)
     .eq("schedule_type", "cheer")
     .like("message_body", `${hour_tag}|%`)
     .gte("scheduled_at", `${date_prefix}T00:00:00Z`)
@@ -305,8 +280,7 @@ export async function getCronCheerExistsTodayForHour(
 export async function insertCronSchedule(
   client: SupabaseClient<Database>,
   row: {
-    sns_type: SnsType;
-    sns_id: string;
+    auth_user_id: string;
     schedule_type: "new" | "review" | "cheer" | "welcome";
     delivery_url: string;
     message_body?: string;
@@ -315,8 +289,7 @@ export async function insertCronSchedule(
   }
 ) {
   const { error } = await client.from("nv2_schedules").insert({
-    sns_type: row.sns_type,
-    sns_id: row.sns_id,
+    auth_user_id: row.auth_user_id,
     schedule_type: row.schedule_type,
     delivery_url: row.delivery_url,
     message_body: row.message_body ?? null,
@@ -344,7 +317,7 @@ export async function getCronPendingSchedules(
   const { data, error } = await client
     .from("nv2_schedules")
     .select(
-      "schedule_id, sns_type, sns_id, schedule_type, delivery_url, message_body, review_round, retry_count, max_retries"
+      "schedule_id, auth_user_id, schedule_type, delivery_url, message_body, review_round, retry_count, max_retries"
     )
     .eq("status", "pending")
     .lte("scheduled_at", now)
@@ -409,42 +382,19 @@ export async function getCronUsersWithIncompleteSessions(
 ) {
   const { data, error } = await client
     .from("nv2_sessions")
-    .select(`
-      sns_type, sns_id, session_id, product_session_id,
-      nv2_product_sessions!inner(
-        session_number, title,
-        nv2_learning_products!inner(name)
-      )
-    `)
+    .select("auth_user_id, session_id, product_session_id, nv2_product_sessions!inner(session_number, title, nv2_learning_products!inner(name))")
     .in("status", ["pending", "in_progress"]);
 
   if (error) throw error;
 
   // Deduplicate by (sns_type, sns_id) — keep first session per user
   const seen = new Set<string>();
-  const unique: Array<{
-    sns_type: string;
-    sns_id: string;
-    session_id: string;
-    product_session_id: string;
-    product_name: string;
-    session_number: number;
-    session_title: string;
-  }> = [];
+  const unique: typeof data = [];
   for (const row of data ?? []) {
-    const key = `${row.sns_type}:${row.sns_id}`;
+    const key = `${row.auth_user_id}`;
     if (!seen.has(key)) {
       seen.add(key);
-      const ps = (row.nv2_product_sessions as any);
-      unique.push({
-        sns_type: row.sns_type,
-        sns_id: row.sns_id,
-        session_id: row.session_id,
-        product_session_id: row.product_session_id,
-        product_name: ps?.nv2_learning_products?.name ?? "",
-        session_number: ps?.session_number ?? 0,
-        session_title: ps?.title ?? "",
-      });
+      unique.push(row);
     }
   }
   return unique;
@@ -467,8 +417,7 @@ export async function getCronStageProgressDueForReview(
     .select(
       `
       progress_id,
-      sns_type,
-      sns_id,
+      auth_user_id,
       stage_id,
       review_status,
       review_round,
@@ -498,10 +447,7 @@ export async function getProductSessionContainingStage(
     .select(
       `
       product_session_id,
-      nv2_product_sessions!inner (
-        id, product_id, session_number, title, is_active,
-        nv2_learning_products!inner(name)
-      )
+      nv2_product_sessions!inner ( id, product_id, session_number, title, is_active )
     `
     )
     .eq("stage_id", stage_id)
@@ -545,8 +491,7 @@ export function nextReviewStatus(current: string): string {
  */
 export async function advanceCronReviewProgress(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string,
+  auth_user_id: string,
   stage_ids: string[],
   review_round: number
 ) {
@@ -554,8 +499,7 @@ export async function advanceCronReviewProgress(
     const { data: progress } = await client
       .from("nv2_stage_progress")
       .select("progress_id, review_status, retry_count")
-      .eq("sns_type", sns_type)
-      .eq("sns_id", sns_id)
+      .eq("auth_user_id", auth_user_id)
       .eq("stage_id", stage_id)
       .maybeSingle();
 
