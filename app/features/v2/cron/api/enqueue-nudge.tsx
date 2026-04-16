@@ -42,6 +42,10 @@ export async function action({ request }: Route.ActionArgs) {
     return routeData({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // ?force=1 bypasses time slot check — for manual testing only
+  const url = new URL(request.url);
+  const force = url.searchParams.get("force") === "1";
+
   // Server-only imports inside action to prevent client bundle contamination
   const { createClient } = await import("@supabase/supabase-js");
   const {
@@ -73,53 +77,57 @@ export async function action({ request }: Route.ActionArgs) {
         const { data: profile } = await client
           .from("nv2_profiles")
           .select("timezone")
-          .eq("sns_type", candidate.sns_type)
-          .eq("sns_id", candidate.sns_id)
+          .eq("auth_user_id", candidate.auth_user_id)
           .maybeSingle();
 
         const timezone = profile?.timezone ?? "Asia/Seoul";
 
-        const local_time_str = now_date.toLocaleString("en-US", {
-          timeZone: timezone,
-          hour: "numeric",
-          minute: "numeric",
-          hour12: false,
-        });
-        const [local_h, local_m] = local_time_str.split(":").map(Number);
+        // force=1: skip all time-based checks, use hour=0 as dummy slot
+        let local_h = 0;
+        let local_m = 0;
+        if (!force) {
+          const local_time_str = now_date.toLocaleString("en-US", {
+            timeZone: timezone,
+            hour: "numeric",
+            minute: "numeric",
+            hour12: false,
+          });
+          const parts = local_time_str.split(":").map(Number);
+          local_h = parts[0] ?? 0;
+          local_m = parts[1] ?? 0;
+        }
 
-        // No DMs after 22:00 local time
-        if (local_h >= 22) { results.skipped++; continue; }
+        // No DMs after 22:00 local time (unless force)
+        if (!force && local_h >= 22) { results.skipped++; continue; }
 
-        const matched_slot = NUDGE_SCHEDULE_TIMES.find((slot) => {
-          if (slot.hour !== local_h) return false;
-          if (slot.minute === 0)  return local_m < 30;
-          if (slot.minute === 30) return local_m >= 30;
-          return false;
-        });
+        const found_slot = force
+          ? { hour: local_h, minute: 0 }  // force: bypass slot check
+          : NUDGE_SCHEDULE_TIMES.find((slot) => {
+              if (slot.hour !== local_h) return false;
+              if (slot.minute === 0)  return local_m < 30;
+              if (slot.minute === 30) return local_m >= 30;
+              return false;
+            });
 
-        if (!matched_slot) { results.skipped++; continue; }
+        if (!found_slot) { results.skipped++; continue; }
 
-        const sns_type = candidate.sns_type as any;
-        const sns_id = candidate.sns_id;
+        // Type is now guaranteed non-undefined
+        const matched_slot: { hour: number; minute: number } = found_slot;
+
+        const auth_user_id = candidate.auth_user_id;
         const date_prefix = getLocalDatePrefix(timezone);
 
-        const already_cheered = await getCronCheerExistsTodayForHour(
-          client as any, sns_type, sns_id, matched_slot.hour, date_prefix
+        const already_cheered = !force && await getCronCheerExistsTodayForHour(
+          client as any, auth_user_id, matched_slot.hour, date_prefix
         );
         if (already_cheered) { results.skipped++; continue; }
 
         const message = getRandomNudgeMessage(matched_slot.hour);
         const hour_tag = `cheer:${String(matched_slot.hour).padStart(2, "0")}`;
-        // message_body format: "cheer:HH|product_name|session_label|message"
-        // parsed by dispatch.tsx — product_name and session_label shown in embed footer
-        const session_label = candidate.session_title
-          ? `Session ${candidate.session_number}`
-          : "";
-        const message_body = `${hour_tag}|${candidate.product_name}|${session_label}|${message}`;
+        const message_body = `${hour_tag}|${message}`;
 
         await insertCronSchedule(client as any, {
-          sns_type,
-          sns_id,
+          auth_user_id,
           schedule_type: "cheer",
           delivery_url: `${origin}/sessions/${candidate.session_id}`,
           message_body,
@@ -128,7 +136,7 @@ export async function action({ request }: Route.ActionArgs) {
 
         results.enqueued++;
       } catch (err: any) {
-        results.errors.push(`cheer enqueue failed (${candidate.sns_id}): ${err.message}`);
+        results.errors.push(`cheer enqueue failed (${candidate.auth_user_id}): ${err.message}`);
       }
     }
   } catch (err: any) {

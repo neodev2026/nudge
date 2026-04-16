@@ -3,38 +3,58 @@ import {
   boolean,
   index,
   integer,
-  pgEnum,
   pgPolicy,
   pgTable,
-  primaryKey,
   text,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { authenticatedRole } from "drizzle-orm/supabase";
 import { tstz } from "~/core/db/helpers.server";
 import { isAdmin } from "~/core/db/helpers.rls";
-import { DAILY_GOAL_PRESETS, SNS_TYPES } from "~/features/v2/shared/constants";
-
-export const nv2SnsType = pgEnum("nv2_sns_type", SNS_TYPES);
+import { DAILY_GOAL_PRESETS } from "~/features/v2/shared/constants";
 
 /**
  * nv2_profiles
  *
  * Core identity table for Nudge v2.
- * Users are identified by (sns_type, sns_id) — no auth.users dependency for
- * learning logic. A Supabase Auth user is created via Discord OAuth, and
- * auth_user_id links back to it for RLS and future account upgrades.
+ * Primary key: auth_user_id (Supabase Auth user UUID).
+ *
+ * SNS delivery channels:
+ *   discord_id — set when user connects Discord OAuth; used for Bot DM delivery
+ *   email      — set on Google/email sign-up; used for email delivery fallback
+ *
+ * Notification opt-out:
+ *   discord_dm_unsubscribed — user has opted out of Discord DMs
+ *   email_unsubscribed      — user has opted out of email notifications
+ *
+ * DM dispatch logic (enforced at application level):
+ *   discord_id present + discord_dm_unsubscribed = false → Discord Bot DM
+ *   discord_id absent  + email present + email_unsubscribed = false → Resend email
+ *   otherwise → skip
  */
 export const nv2_profiles = pgTable(
   "nv2_profiles",
   {
-    sns_type: nv2SnsType("sns_type").notNull(),
-    sns_id: text("sns_id").notNull(),
+    // Primary key — Supabase Auth user UUID
+    auth_user_id: text("auth_user_id").primaryKey(),
 
-    // Populated on Discord OAuth sign-in via Supabase Auth
-    auth_user_id: text("auth_user_id"),
+    // Discord OAuth identity — populated on Discord sign-in
+    // Used as the recipient ID for Discord Bot DM delivery
+    discord_id: text("discord_id"),
 
-    // Display info sourced from the SNS provider at connection time
+    // Email address — populated on Google/email sign-up
+    // Used for Resend email delivery when discord_id is absent
+    email: text("email"),
+
+    // Notification opt-out flags
+    discord_dm_unsubscribed: boolean("discord_dm_unsubscribed")
+      .notNull()
+      .default(false),
+    email_unsubscribed: boolean("email_unsubscribed")
+      .notNull()
+      .default(false),
+
+    // Display info sourced from the OAuth provider at sign-in
     display_name: text("display_name"),
     avatar_url: text("avatar_url"),
 
@@ -51,12 +71,10 @@ export const nv2_profiles = pgTable(
     today_review_count: integer("today_review_count").notNull().default(0),
 
     // User's IANA timezone (e.g. "Asia/Seoul", "Europe/Berlin").
-    // Used by Cron jobs to calculate local time for each user.
-    // Adjustable via personal settings in the future.
+    // Captured from the browser on first sign-in.
     timezone: text("timezone").notNull().default("Asia/Seoul"),
 
     // Hour of day to send the daily learning DM (0~23, local time).
-    // Default: 5 = 05:00 local time. Adjustable via personal settings in the future.
     send_hour: integer("send_hour").notNull().default(5),
 
     is_active: boolean("is_active").notNull().default(true),
@@ -64,30 +82,32 @@ export const nv2_profiles = pgTable(
     ...tstz,
   },
   (table) => [
-    // Composite PK: platform + platform-scoped user ID
-    primaryKey({ columns: [table.sns_type, table.sns_id] }),
+    // One profile per Discord account
+    uniqueIndex("nv2_profiles_discord_id_uidx")
+      .on(table.discord_id)
+      .where(sql`${table.discord_id} IS NOT NULL`),
 
-    // One Supabase Auth user maps to at most one profile per sns_type
-    uniqueIndex("nv2_profiles_auth_user_sns_type_uidx")
-      .on(table.auth_user_id, table.sns_type)
-      .where(sql`${table.auth_user_id} IS NOT NULL`),
+    // One profile per email address
+    uniqueIndex("nv2_profiles_email_uidx")
+      .on(table.email)
+      .where(sql`${table.email} IS NOT NULL`),
 
-    // RLS: Authenticated users can read their own profile
+    // Fast lookup for Cron (DM dispatch iterates all active profiles)
+    index("nv2_profiles_active_idx").on(table.is_active),
+
+    // RLS: authenticated users can read/write their own profile
     pgPolicy("nv2_profiles_select_own", {
       for: "select",
       to: authenticatedRole,
       using: sql`${table.auth_user_id} = auth.uid()::text`,
     }),
 
-    // RLS: Authenticated users can insert their own profile.
-    // Called during Discord OAuth callback after session is established.
     pgPolicy("nv2_profiles_insert_own", {
       for: "insert",
       to: authenticatedRole,
       withCheck: sql`${table.auth_user_id} = auth.uid()::text`,
     }),
 
-    // RLS: Authenticated users can update their own profile (goal settings etc.)
     pgPolicy("nv2_profiles_update_own", {
       for: "update",
       to: authenticatedRole,
@@ -102,7 +122,7 @@ export const nv2_profiles = pgTable(
       using: isAdmin,
     }),
 
-    // RLS: Service role for Supabase Cron API calls (counter resets, delivery logic)
+    // RLS: Service role for Cron and server-side operations
     pgPolicy("nv2_profiles_service_all", {
       for: "all",
       to: "service_role",
@@ -110,3 +130,6 @@ export const nv2_profiles = pgTable(
     }),
   ]
 );
+
+export type NV2Profile = typeof nv2_profiles.$inferSelect;
+export type NV2NewProfile = typeof nv2_profiles.$inferInsert;

@@ -10,7 +10,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "database.types";
 import { QUIZ_CARD_POOL_SIZE } from "~/features/v2/shared/constants";
-import type { SnsType } from "~/features/v2/shared/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,7 +31,7 @@ export interface QuizCard {
 
 /** Ranking entry for the result screen */
 export interface QuizRankEntry {
-  sns_id: string;
+  auth_user_id: string;
   score: number;
   completed_at: string;
 }
@@ -57,7 +56,7 @@ export async function getQuizStageContext(
 
   const { data: session } = await client
     .from("nv2_sessions")
-    .select("session_id, product_session_id, sns_type, sns_id, session_kind")
+    .select("session_id, product_session_id, auth_user_id, session_kind")
     .eq("session_id", session_id)
     .maybeSingle();
 
@@ -208,7 +207,7 @@ export async function getQuizRanking(
 ): Promise<QuizRankEntry[]> {
   const { data, error } = await client
     .from("nv2_quiz_results")
-    .select("sns_id, matched_pairs_count, result_snapshot, completed_at")
+    .select("auth_user_id, matched_pairs_count, result_snapshot, completed_at")
     .contains("covered_stage_ids", [quiz_stage_id])
     .order("matched_pairs_count", { ascending: false })
     .limit(10);
@@ -219,7 +218,7 @@ export async function getQuizRanking(
     const snapshot = row.result_snapshot as any;
     const score = snapshot?.score ?? (row.matched_pairs_count * 10);
     return {
-      sns_id: row.sns_id,
+      auth_user_id: row.auth_user_id,
       score,
       completed_at: row.completed_at?.toString() ?? "",
     };
@@ -232,8 +231,7 @@ export async function getQuizRanking(
 
 export async function saveQuizResult(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string,
+  auth_user_id: string,
   stage_id: string,
   stage_type: string,
   matched_pairs_count: number,
@@ -244,8 +242,7 @@ export async function saveQuizResult(
   const quiz_type = stage_type === "quiz_10" ? "quiz_10" : "quiz_5";
 
   const { error } = await client.from("nv2_quiz_results").insert({
-    sns_type,
-    sns_id,
+    auth_user_id,
     quiz_type,
     trigger_at_count: 0,
     covered_stage_ids,

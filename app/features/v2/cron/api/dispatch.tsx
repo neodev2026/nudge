@@ -2,15 +2,10 @@
  * POST /api/v2/cron/dispatch
  *
  * Processes pending rows in nv2_schedules where scheduled_at <= now().
- * Dispatches each row to the appropriate SNS channel (Discord for MVP).
+ * Resolves discord_id from nv2_profiles for Discord DM delivery.
  *
  * Runs every 5 minutes via Supabase Cron.
  * Security: Requires Authorization: Bearer {CRON_SECRET}
- *
- * Flow per schedule row:
- *   1. Send DM via Discord Bot
- *   2. On success: mark status = 'sent'
- *   3. On failure: increment retry_count; mark 'failed' if exhausted
  */
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/dispatch";
@@ -31,7 +26,6 @@ export async function action({ request }: Route.ActionArgs) {
     return routeData({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Server-only imports inside action to prevent client bundle contamination
   const { createClient } = await import("@supabase/supabase-js");
   const {
     getCronPendingSchedules,
@@ -57,31 +51,46 @@ export async function action({ request }: Route.ActionArgs) {
   try {
     const pending = await getCronPendingSchedules(client as any);
 
+    // Batch-fetch discord_id for all unique auth_user_ids in pending schedules
+    const unique_user_ids = [...new Set(pending.map((s) => s.auth_user_id))];
+    const { data: profiles_raw } = await client
+      .from("nv2_profiles")
+      .select("auth_user_id, discord_id")
+      .in("auth_user_id", unique_user_ids.length > 0 ? unique_user_ids : ["__none__"]);
+
+    const discord_id_map: Record<string, string | null> = {};
+    for (const p of profiles_raw ?? []) {
+      discord_id_map[p.auth_user_id] = (p as any).discord_id ?? null;
+    }
+
     for (const schedule of pending) {
       const schedule_id = schedule.schedule_id as unknown as bigint;
+      const discord_id = discord_id_map[schedule.auth_user_id] ?? null;
 
       try {
+        if (!discord_id) {
+          // TODO: email fallback — skip for now, mark as failed
+          throw new Error(`No discord_id for auth_user_id=${schedule.auth_user_id}`);
+        }
+
         if (schedule.schedule_type === "cheer") {
           // cheer message_body format: "cheer:HH|product_name|session_label|message"
           // Legacy format (no product info): "cheer:HH|message"
           const raw_body = schedule.message_body ?? "";
           const parts = raw_body.split("|");
-          // parts[0] = "cheer:HH", parts[1..] = product_name?, session_label?, message
           let product_name = "";
           let session_label = "";
           let message = "";
           if (parts.length >= 4) {
-            // New format: cheer:HH|product_name|session_label|message
             product_name = parts[1] ?? "";
             session_label = parts[2] ?? "";
             message = parts.slice(3).join("|");
           } else {
-            // Legacy format: cheer:HH|message
             message = parts.slice(1).join("|");
           }
 
           await sendCheerDm(
-            schedule.sns_id,
+            discord_id,
             schedule.delivery_url,
             message,
             product_name || undefined,
@@ -90,8 +99,6 @@ export async function action({ request }: Route.ActionArgs) {
         } else {
           // new / review / welcome
           // message_body format: "product_name|session_title|kind"
-          //   kind = "new" | "review_N" (N = round number)
-          // Legacy format (no pipes): plain session title string
           const raw_body = schedule.message_body ?? "";
           const parts = raw_body.split("|");
           let product_name = "";
@@ -99,7 +106,6 @@ export async function action({ request }: Route.ActionArgs) {
           let review_round: number | null = null;
 
           if (parts.length >= 3) {
-            // New structured format
             product_name = parts[0] ?? "";
             session_title = parts[1] ?? "";
             const kind = parts[2] ?? "new";
@@ -107,12 +113,11 @@ export async function action({ request }: Route.ActionArgs) {
               review_round = parseInt(kind.split("_")[1] ?? "1", 10);
             }
           } else {
-            // Legacy: just a plain title
             session_title = raw_body || "오늘의 학습";
           }
 
           await sendSessionDm(
-            schedule.sns_id,
+            discord_id,
             schedule.delivery_url,
             product_name,
             session_title,

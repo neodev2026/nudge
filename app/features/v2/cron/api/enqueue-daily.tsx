@@ -92,7 +92,7 @@ export async function action({ request }: Route.ActionArgs) {
     // --- New / incomplete session DMs ---
     const { data: all_profiles, error: profile_error } = await client
       .from("nv2_profiles")
-      .select("sns_type, sns_id, timezone, send_hour")
+      .select("auth_user_id, timezone, send_hour")
       .eq("is_active", true);
 
     if (profile_error) throw profile_error;
@@ -108,21 +108,20 @@ export async function action({ request }: Route.ActionArgs) {
         const [local_h, local_m] = local_time_str.split(":").map(Number);
         if (local_h !== profile.send_hour || local_m >= 30) continue;
 
-        const sns_type = profile.sns_type as any;
-        const sns_id = profile.sns_id;
+        const auth_user_id = profile.auth_user_id;
         const date_prefix = getLocalDatePrefix(profile.timezone);
         const scheduled_at = buildScheduledAt(profile.timezone, profile.send_hour);
 
         const already_enqueued = await getCronScheduleExistsToday(
-          client as any, sns_type, sns_id, "new", date_prefix
+          client as any, auth_user_id, "new", date_prefix
         );
         if (already_enqueued) { results.skipped++; continue; }
 
-        const subscriptions = await getCronUserSubscriptions(client as any, sns_type, sns_id);
+        const subscriptions = await getCronUserSubscriptions(client as any, auth_user_id);
 
         for (const sub of subscriptions) {
           try {
-            const active_sessions = await getCronActiveSessionsForUser(client as any, sns_type, sns_id);
+            const active_sessions = await getCronActiveSessionsForUser(client as any, auth_user_id);
             const active_for_product = active_sessions.filter((s: any) => {
               const ps = s.nv2_product_sessions as any;
               return ps?.product_id === sub.product_id;
@@ -140,12 +139,12 @@ export async function action({ request }: Route.ActionArgs) {
             } else {
               // Case B: create new session
               const next_ps = await getCronNextUnstartedProductSession(
-                client as any, sns_type, sns_id, sub.product_id
+                client as any, auth_user_id, sub.product_id
               );
               if (!next_ps) continue; // Case C: all done
 
               const new_session = await createCronNewSession(
-                client as any, sns_type, sns_id, next_ps.id, now
+                client as any, auth_user_id, next_ps.id, now
               );
               session_id = new_session.session_id;
               session_title = next_ps.title ?? session_title;
@@ -153,31 +152,21 @@ export async function action({ request }: Route.ActionArgs) {
 
             if (!session_id) continue;
 
-            // message_body format: "product_name|session_title|kind"
-            // parsed by dispatch.tsx to build embed with product/session context
-            const active_ps = active_for_product[0]?.nv2_product_sessions as any;
-            const session_number = active_ps?.session_number
-              ?? (await getCronNextUnstartedProductSession(client as any, sns_type, sns_id, sub.product_id).catch(() => null))?.session_number
-              ?? 0;
-            const display_title = session_title !== "오늘의 학습" ? session_title : `Session ${session_number}`;
-            const message_body = `${sub.product_name}|${display_title}|new`;
-
             await insertCronSchedule(client as any, {
-              sns_type,
-              sns_id,
+              auth_user_id,
               schedule_type: "new",
               delivery_url: `${origin}/sessions/${session_id}`,
-              message_body,
+              message_body: session_title,
               scheduled_at,
             });
 
             results.new_enqueued++;
           } catch (err: any) {
-            results.errors.push(`new enqueue failed (${sns_id}/${sub.product_id}): ${err.message}`);
+            results.errors.push(`new enqueue failed (${auth_user_id}/${sub.product_id}): ${err.message}`);
           }
         }
       } catch (err: any) {
-        results.errors.push(`profile loop failed (${profile.sns_id}): ${err.message}`);
+        results.errors.push(`profile loop failed (${profile.auth_user_id}): ${err.message}`);
       }
     }
 
@@ -193,31 +182,26 @@ export async function action({ request }: Route.ActionArgs) {
 
         const ps = pss.nv2_product_sessions as any;
         const round = row.review_round ?? 1;
-        const key = `${row.sns_type}:${row.sns_id}:${pss.product_session_id}`;
+        const key = `${row.auth_user_id}:${pss.product_session_id}`;
 
         const { data: profile_row } = await client
           .from("nv2_profiles")
           .select("timezone, send_hour")
-          .eq("sns_type", row.sns_type)
-          .eq("sns_id", row.sns_id)
+          .eq("auth_user_id", row.auth_user_id)
           .maybeSingle();
 
         const timezone = profile_row?.timezone ?? "Asia/Seoul";
         const send_hour = profile_row?.send_hour ?? 5;
 
         if (!review_map.has(key)) {
-          const product_name = (ps?.nv2_learning_products as any)?.name ?? "";
-          const session_label = ps?.title ? `${ps.title}` : `Session ${ps?.session_number ?? ""}`;
           review_map.set(key, {
-            sns_type: row.sns_type,
-            sns_id: row.sns_id,
+            auth_user_id: row.auth_user_id,
             timezone,
             send_hour,
             product_session_id: pss.product_session_id,
             review_round: round,
             stage_ids: [],
-            // message_body format: "product_name|session_title|review_N"
-            session_title: `${product_name}|${session_label}|review_${round}`,
+            session_title: ps?.title ? `${round}차 복습 — ${ps.title}` : `${round}차 복습`,
           });
         }
         review_map.get(key)!.stage_ids.push(row.stage_id);
@@ -231,18 +215,17 @@ export async function action({ request }: Route.ActionArgs) {
         const date_prefix = getLocalDatePrefix(info.timezone);
 
         const already_enqueued = await getCronScheduleExistsToday(
-          client as any, info.sns_type, info.sns_id, "review", date_prefix
+          client as any, info.auth_user_id, "review", date_prefix
         );
         if (already_enqueued) { results.skipped++; continue; }
 
         const review_session = await createCronReviewSession(
-          client as any, info.sns_type, info.sns_id,
+          client as any, info.auth_user_id,
           info.product_session_id, info.review_round, now
         );
 
         await insertCronSchedule(client as any, {
-          sns_type: info.sns_type,
-          sns_id: info.sns_id,
+          auth_user_id: info.auth_user_id,
           schedule_type: "review",
           delivery_url: `${origin}/sessions/${review_session.session_id}`,
           message_body: info.session_title,

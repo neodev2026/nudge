@@ -297,10 +297,10 @@ export async function adminGetUsersWithTurnBalance(
     created_at: string;
   }> = auth_users_data?.users ?? [];
 
-  // nv2_profiles — display_name, sns info
+  // nv2_profiles — display_name, channel ids, timezone settings
   const { data: profiles } = await client
     .from("nv2_profiles")
-    .select("auth_user_id, sns_id, sns_type, display_name, avatar_url");
+    .select("auth_user_id, discord_id, email, display_name, avatar_url, timezone, send_hour, is_active");
 
   const profile_map = Object.fromEntries(
     (profiles ?? [])
@@ -324,11 +324,12 @@ export async function adminGetUsersWithTurnBalance(
       auth_user_id: u.id,
       email: u.email ?? null,
       created_at: u.created_at,
-      // Profile info (null if user hasn't connected Discord yet)
       display_name: profile?.display_name ?? null,
       avatar_url: profile?.avatar_url ?? null,
-      sns_type: profile?.sns_type ?? null,
-      sns_id: profile?.sns_id ?? null,
+      discord_id: (profile as any)?.discord_id ?? null,
+      timezone: (profile as any)?.timezone ?? "Asia/Seoul",
+      send_hour: (profile as any)?.send_hour ?? 5,
+      is_active: (profile as any)?.is_active ?? true,
       // Turn balance
       subscription_turns: balance?.subscription_turns ?? 0,
       charged_turns: balance?.charged_turns ?? 0,
@@ -424,7 +425,7 @@ export async function adminGetUserDetail(
 
   const { data: profile } = await client
     .from("nv2_profiles")
-    .select("sns_type, sns_id, auth_user_id, display_name, avatar_url, timezone, send_hour, is_active, created_at")
+    .select("auth_user_id, discord_id, email, display_name, avatar_url, timezone, send_hour, is_active, created_at")
     .eq("auth_user_id", auth_user_id)
     .maybeSingle();
 
@@ -438,15 +439,12 @@ export async function adminGetUserDetail(
     auth_user_id: auth_user.id,
     email: auth_user.email ?? null,
     auth_created_at: auth_user.created_at,
-    // Profile (may be null if user hasn't connected Discord)
-    sns_type: profile?.sns_type ?? null,
-    sns_id: profile?.sns_id ?? null,
+    discord_id: (profile as any)?.discord_id ?? null,
     display_name: profile?.display_name ?? null,
     avatar_url: profile?.avatar_url ?? null,
     timezone: profile?.timezone ?? "Asia/Seoul",
     send_hour: profile?.send_hour ?? 5,
     is_active: profile?.is_active ?? true,
-    // Turn balance
     subscription_turns: balance?.subscription_turns ?? 0,
     charged_turns: balance?.charged_turns ?? 0,
     subscription_reset_at: balance?.subscription_reset_at ?? null,

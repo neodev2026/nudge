@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "database.types";
-import type { SnsType } from "~/features/v2/shared/types";
 
 // ---------------------------------------------------------------------------
 // Stage + Cards
@@ -102,15 +101,13 @@ export async function getNv2FirstStage(
  */
 export async function getNv2StageProgress(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string,
+  auth_user_id: string,
   stage_id: string
 ) {
   const { data, error } = await client
     .from("nv2_stage_progress")
     .select("*")
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id)
+    .eq("auth_user_id", auth_user_id)
     .eq("stage_id", stage_id)
     .maybeSingle();
 
@@ -124,8 +121,7 @@ export async function getNv2StageProgress(
  */
 export async function initNv2StageProgress(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string,
+  auth_user_id: string,
   stage_id: string
 ) {
   // Check if a progress row already exists before inserting.
@@ -134,16 +130,14 @@ export async function initNv2StageProgress(
   const { data: existing } = await client
     .from("nv2_stage_progress")
     .select("progress_id")
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id)
+    .eq("auth_user_id", auth_user_id)
     .eq("stage_id", stage_id)
     .maybeSingle();
 
   if (existing) return; // Row already exists — nothing to do
 
   const { error } = await client.from("nv2_stage_progress").insert({
-    sns_type,
-    sns_id,
+    auth_user_id,
     stage_id,
   });
 
@@ -156,8 +150,7 @@ export async function initNv2StageProgress(
  */
 export async function incrementNv2StageRetry(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string,
+  auth_user_id: string,
   stage_id: string
 ) {
   // Fetch current retry_count first — Supabase JS v2 does not support
@@ -165,8 +158,7 @@ export async function incrementNv2StageRetry(
   const { data: current, error: fetchError } = await client
     .from("nv2_stage_progress")
     .select("progress_id, retry_count")
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id)
+    .eq("auth_user_id", auth_user_id)
     .eq("stage_id", stage_id)
     .single();
 
@@ -192,8 +184,7 @@ export async function incrementNv2StageRetry(
  */
 export async function completeNv2Stage(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string,
+  auth_user_id: string,
   stage_id: string
 ) {
   const now = new Date();
@@ -210,8 +201,7 @@ export async function completeNv2Stage(
       review_round: 1,
       next_review_at: next_review_at.toISOString(),
     })
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id)
+    .eq("auth_user_id", auth_user_id)
     .eq("stage_id", stage_id)
     // Guard: only update if not already completed
     .is("completed_at", null)
@@ -228,14 +218,12 @@ export async function completeNv2Stage(
  */
 export async function incrementNv2TodayNewCount(
   client: SupabaseClient<Database>,
-  sns_type: SnsType,
-  sns_id: string
+  auth_user_id: string
 ) {
   const { data: profile, error: fetchError } = await client
     .from("nv2_profiles")
     .select("today_new_count")
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id)
+    .eq("auth_user_id", auth_user_id)
     .single();
 
   if (fetchError) throw fetchError;
@@ -243,8 +231,7 @@ export async function incrementNv2TodayNewCount(
   const { error: updateError } = await client
     .from("nv2_profiles")
     .update({ today_new_count: profile.today_new_count + 1 })
-    .eq("sns_type", sns_type)
-    .eq("sns_id", sns_id);
+    .eq("auth_user_id", auth_user_id);
 
   if (updateError) throw updateError;
 }

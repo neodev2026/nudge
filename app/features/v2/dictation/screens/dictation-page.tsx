@@ -59,8 +59,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const { stage, session } = context;
 
   // Access control
-  const { data: auth_session_data } = await client.auth.getSession();
-  const is_authenticated = !!auth_session_data.session;
+  const { data: { user: auth_user } } = await client.auth.getUser();
+  const is_authenticated = !!auth_user;
 
   const { getSessionIdentity } = await import(
     "~/features/v2/session/lib/queries.server"
@@ -74,8 +74,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     throw redirect(`/auth/discord/start?next=${next}`);
   }
 
-  const sns_type = identity?.sns_type ?? session.sns_type;
-  const sns_id = identity?.sns_id ?? session.sns_id;
+  const auth_user_id = identity?.auth_user_id ?? (session as any).auth_user_id ?? null;
 
   const items = await getDictationCardPool(
     client,
@@ -88,8 +87,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     from_chat,
     stage_title: stage.title,
     session_id,
-    sns_type,
-    sns_id,
+    auth_user_id,
     items,
   };
 }
@@ -145,7 +143,7 @@ function playTts(text: string, lang: string) {
 type Phase = "listen" | "input" | "result";
 
 export default function DictationPage() {
-  const { stage_id, stage_title, session_id, sns_type, sns_id, items, from_chat } =
+  const { stage_id, stage_title, session_id, auth_user_id, items, from_chat } =
     useLoaderData<typeof loader>();
 
   const [idx, set_idx] = useState(0);
@@ -202,7 +200,7 @@ export default function DictationPage() {
     if (is_last) {
       // Submit result
       result_fetcher.submit(
-        { sns_type, sns_id },
+        { auth_user_id },
         {
           method: "POST",
           action: `/api/v2/dictation/${stage_id}/result`,

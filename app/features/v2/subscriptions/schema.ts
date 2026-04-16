@@ -9,7 +9,7 @@ import {
   boolean,
 } from "drizzle-orm/pg-core";
 import { authenticatedRole } from "drizzle-orm/supabase";
-import { tstz, eventTstz, snsIdentity } from "~/core/db/helpers.server";
+import { tstz, eventTstz, userIdentity } from "~/core/db/helpers.server";
 import { isAdmin } from "~/core/db/helpers.rls";
 import { V2_LINK_ACCESS_TYPES } from "~/features/v2/shared/constants";
 import { nv2_learning_products } from "~/features/v2/products/schema";
@@ -39,7 +39,10 @@ export const nv2_subscriptions = pgTable(
   "nv2_subscriptions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    ...snsIdentity,
+
+    // Profile reference — FK to nv2_profiles(auth_user_id)
+    ...userIdentity,
+
     product_id: uuid("product_id")
       .notNull()
       .references(() => nv2_learning_products.id, { onDelete: "cascade" }),
@@ -50,20 +53,21 @@ export const nv2_subscriptions = pgTable(
   },
   (table) => [
     index("nv2_subscriptions_user_product_idx").on(
-      table.sns_type, table.sns_id, table.product_id
+      table.auth_user_id, table.product_id
     ),
     index("nv2_subscriptions_product_idx").on(table.product_id),
+
     pgPolicy("nv2_subscriptions_select_own", {
       for: "select", to: authenticatedRole,
-      using: sql`EXISTS (SELECT 1 FROM nv2_profiles p WHERE p.sns_type::text = ${table.sns_type}::text AND p.sns_id = ${table.sns_id} AND p.auth_user_id = auth.uid()::text)`,
+      using: sql`${table.auth_user_id} = auth.uid()::text`,
     }),
     pgPolicy("nv2_subscriptions_insert_own", {
       for: "insert", to: authenticatedRole,
-      withCheck: sql`EXISTS (SELECT 1 FROM nv2_profiles p WHERE p.sns_type::text = ${table.sns_type}::text AND p.sns_id = ${table.sns_id} AND p.auth_user_id = auth.uid()::text)`,
+      withCheck: sql`${table.auth_user_id} = auth.uid()::text`,
     }),
     pgPolicy("nv2_subscriptions_update_own", {
       for: "update", to: authenticatedRole,
-      using: sql`EXISTS (SELECT 1 FROM nv2_profiles p WHERE p.sns_type::text = ${table.sns_type}::text AND p.sns_id = ${table.sns_id} AND p.auth_user_id = auth.uid()::text)`,
+      using: sql`${table.auth_user_id} = auth.uid()::text`,
     }),
     pgPolicy("nv2_subscriptions_admin_all", {
       for: "all", to: authenticatedRole, using: isAdmin,
