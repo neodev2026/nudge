@@ -1,16 +1,14 @@
 /**
- * /admin  (index)
+ * /admin/stats
  *
- * Admin dashboard — shows the statistics overview.
- * Supports ?date=YYYY-MM-DD&tz=IANA for date/timezone selection.
+ * Admin statistics dashboard.
+ * Supports date + timezone selection via URL params:
+ *   ?date=YYYY-MM-DD&tz=Asia/Seoul
  *
- * Sections:
- *   1. KPI cards (selected day)
- *   2. 7-day trend bar chart (SVG)
- *   3. Per-product stats table
- *   4. Recent signups table
+ * The loader converts the local date to a UTC range and passes it to all
+ * query functions. The UI updates params via useNavigate (no full reload).
  */
-import type { Route } from "./+types/dashboard";
+import type { Route } from "./+types/stats";
 import { useLoaderData, useNavigate } from "react-router";
 import makeServerClient from "~/core/lib/supa-client.server";
 import adminClient from "~/core/lib/supa-admin-client.server";
@@ -24,7 +22,7 @@ import {
 } from "~/features/admin/lib/stats-queries.server";
 
 // ---------------------------------------------------------------------------
-// Timezone options
+// Timezone options shown in the selector
 // ---------------------------------------------------------------------------
 
 const TIMEZONE_OPTIONS = [
@@ -41,7 +39,7 @@ const TIMEZONE_OPTIONS = [
 // ---------------------------------------------------------------------------
 
 export const meta: Route.MetaFunction = () => [
-  { title: "대시보드 — Nudge Admin" },
+  { title: "통계 — Nudge Admin" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -52,8 +50,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   const [client] = makeServerClient(request);
   await requireAdmin(client, request);
 
-  const url   = new URL(request.url);
-  const range = buildStatsDateRange(
+  const url    = new URL(request.url);
+  const range  = buildStatsDateRange(
     url.searchParams.get("date"),
     url.searchParams.get("tz")
   );
@@ -66,23 +64,30 @@ export async function loader({ request }: Route.LoaderArgs) {
       adminGetRecentSignups(adminClient, 10),
     ]);
 
-  return { range, today_stats, daily_trend, product_stats, recent_signups };
+  return {
+    range,
+    today_stats,
+    daily_trend,
+    product_stats,
+    recent_signups,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export default function AdminDashboard() {
+export default function AdminStats() {
   const { range, today_stats, daily_trend, product_stats, recent_signups } =
     useLoaderData<typeof loader>();
 
   const navigate = useNavigate();
 
+  // Update a single URL param and trigger loader reload
   function setParam(key: string, value: string) {
     const params = new URLSearchParams(window.location.search);
     params.set(key, value);
-    navigate(`/admin?${params.toString()}`, { replace: true });
+    navigate(`/admin/stats?${params.toString()}`, { replace: true });
   }
 
   const is_today =
@@ -95,7 +100,7 @@ export default function AdminDashboard() {
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-black text-[#1a2744]">
-            대시보드
+            통계
           </h1>
           <p className="mt-1 text-sm text-[#6b7a99]">
             {range.local_date}{" "}
@@ -112,6 +117,7 @@ export default function AdminDashboard() {
 
         {/* Date + timezone controls */}
         <div className="flex items-center gap-3">
+          {/* Timezone selector */}
           <select
             value={range.timezone}
             onChange={(e) => setParam("tz", e.target.value)}
@@ -124,6 +130,7 @@ export default function AdminDashboard() {
             ))}
           </select>
 
+          {/* Date picker */}
           <input
             type="date"
             value={range.local_date}
@@ -136,12 +143,13 @@ export default function AdminDashboard() {
             className="rounded-xl border border-[#e8ecf5] bg-white px-3 py-2 text-sm font-semibold text-[#1a2744] focus:border-[#4caf72] focus:outline-none"
           />
 
+          {/* Today shortcut */}
           {!is_today && (
             <button
               onClick={() => {
                 const params = new URLSearchParams();
                 params.set("tz", range.timezone);
-                navigate(`/admin?${params.toString()}`, { replace: true });
+                navigate(`/admin/stats?${params.toString()}`, { replace: true });
               }}
               className="rounded-xl border border-[#e8ecf5] bg-white px-3 py-2 text-sm font-semibold text-[#6b7a99] transition-colors hover:bg-[#f4f6fb] hover:text-[#1a2744]"
             >
@@ -153,10 +161,35 @@ export default function AdminDashboard() {
 
       {/* ── Section 1: KPI cards ── */}
       <div className="mb-10 grid grid-cols-4 gap-4">
-        <KpiCard icon="👤" label="신규 가입자"    value={today_stats.new_signups}     unit="명" color="green" />
-        <KpiCard icon="📖" label="활성 세션"      value={today_stats.active_sessions} unit="개" color="blue"  note="현재 스냅샷" />
-        <KpiCard icon="✅" label={is_today ? "오늘 완료 세션" : "완료 세션"} value={today_stats.completed_today} unit="개" color="green" />
-        <KpiCard icon="📨" label={is_today ? "오늘 알림 발송" : "알림 발송"} value={today_stats.dm_sent_today}   unit="건" color="purple" />
+        <KpiCard
+          icon="👤"
+          label="신규 가입자"
+          value={today_stats.new_signups}
+          unit="명"
+          color="green"
+        />
+        <KpiCard
+          icon="📖"
+          label="활성 세션"
+          value={today_stats.active_sessions}
+          unit="개"
+          color="blue"
+          note="현재 스냅샷"
+        />
+        <KpiCard
+          icon="✅"
+          label={is_today ? "오늘 완료 세션" : "완료 세션"}
+          value={today_stats.completed_today}
+          unit="개"
+          color="green"
+        />
+        <KpiCard
+          icon="📨"
+          label={is_today ? "오늘 알림 발송" : "알림 발송"}
+          value={today_stats.dm_sent_today}
+          unit="건"
+          color="purple"
+        />
       </div>
 
       {/* ── Section 2: 7-day trend ── */}
@@ -179,8 +212,16 @@ export default function AdminDashboard() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#e8ecf5] bg-[#f4f6fb]">
-                {["상품", "구독자", "활성 세션", is_today ? "오늘 완료" : "당일 완료"].map((h) => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-[#6b7a99]">
+                {[
+                  "상품",
+                  "구독자",
+                  "활성 세션",
+                  is_today ? "오늘 완료" : "당일 완료",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-5 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-[#6b7a99]"
+                  >
                     {h}
                   </th>
                 ))}
@@ -193,14 +234,30 @@ export default function AdminDashboard() {
                     {p.icon && <span className="mr-2">{p.icon}</span>}
                     {p.name}
                   </td>
-                  <td className="px-5 py-3.5 text-[#1a2744]">{p.subscribers.toLocaleString()}명</td>
+                  <td className="px-5 py-3.5 text-[#1a2744]">
+                    {p.subscribers.toLocaleString()}명
+                  </td>
                   <td className="px-5 py-3.5">
-                    <span className={["rounded-full px-2.5 py-0.5 text-xs font-bold", p.active_sessions > 0 ? "bg-blue-50 text-blue-600" : "text-[#b0b8cc]"].join(" ")}>
+                    <span
+                      className={[
+                        "rounded-full px-2.5 py-0.5 text-xs font-bold",
+                        p.active_sessions > 0
+                          ? "bg-blue-50 text-blue-600"
+                          : "text-[#b0b8cc]",
+                      ].join(" ")}
+                    >
                       {p.active_sessions.toLocaleString()}개
                     </span>
                   </td>
                   <td className="px-5 py-3.5">
-                    <span className={["rounded-full px-2.5 py-0.5 text-xs font-bold", p.completed_today > 0 ? "bg-[#4caf72]/10 text-[#4caf72]" : "text-[#b0b8cc]"].join(" ")}>
+                    <span
+                      className={[
+                        "rounded-full px-2.5 py-0.5 text-xs font-bold",
+                        p.completed_today > 0
+                          ? "bg-[#4caf72]/10 text-[#4caf72]"
+                          : "text-[#b0b8cc]",
+                      ].join(" ")}
+                    >
                       {p.completed_today.toLocaleString()}개
                     </span>
                   </td>
@@ -221,7 +278,10 @@ export default function AdminDashboard() {
             <thead>
               <tr className="border-b border-[#e8ecf5] bg-[#f4f6fb]">
                 {["사용자", "채널", "가입일시", "구독 상품"].map((h) => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-[#6b7a99]">
+                  <th
+                    key={h}
+                    className="px-5 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-[#6b7a99]"
+                  >
                     {h}
                   </th>
                 ))}
@@ -230,20 +290,31 @@ export default function AdminDashboard() {
             <tbody className="divide-y divide-[#e8ecf5]">
               {recent_signups.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-8 text-center text-sm text-[#b0b8cc]">가입자가 없습니다</td>
+                  <td
+                    colSpan={4}
+                    className="px-5 py-8 text-center text-sm text-[#b0b8cc]"
+                  >
+                    가입자가 없습니다
+                  </td>
                 </tr>
               ) : (
                 recent_signups.map((u) => (
                   <tr key={u.auth_user_id} className="hover:bg-[#f4f6fb]">
                     <td className="px-5 py-3.5">
-                      <p className="font-semibold text-[#1a2744]">{u.display_name ?? u.auth_user_id.slice(0, 8)}</p>
+                      <p className="font-semibold text-[#1a2744]">
+                        {u.display_name ?? u.auth_user_id.slice(0, 8)}
+                      </p>
                       <p className="text-xs text-[#6b7a99]">{u.email ?? "—"}</p>
                     </td>
                     <td className="px-5 py-3.5">
                       {u.discord_id ? (
-                        <span className="inline-flex items-center rounded-full bg-[#5865f2]/10 px-2.5 py-0.5 text-xs font-bold text-[#5865f2]">Discord</span>
+                        <span className="inline-flex items-center rounded-full bg-[#5865f2]/10 px-2.5 py-0.5 text-xs font-bold text-[#5865f2]">
+                          Discord
+                        </span>
                       ) : (
-                        <span className="inline-flex items-center rounded-full bg-[#f4f6fb] px-2.5 py-0.5 text-xs font-bold text-[#6b7a99]">Email</span>
+                        <span className="inline-flex items-center rounded-full bg-[#f4f6fb] px-2.5 py-0.5 text-xs font-bold text-[#6b7a99]">
+                          Email
+                        </span>
                       )}
                     </td>
                     <td className="px-5 py-3.5 text-xs text-[#6b7a99]">
@@ -255,7 +326,12 @@ export default function AdminDashboard() {
                       ) : (
                         <div className="flex flex-wrap gap-1">
                           {u.product_names.map((name) => (
-                            <span key={name} className="rounded-full bg-[#1a2744]/5 px-2 py-0.5 text-xs font-semibold text-[#1a2744]">{name}</span>
+                            <span
+                              key={name}
+                              className="rounded-full bg-[#1a2744]/5 px-2 py-0.5 text-xs font-semibold text-[#1a2744]"
+                            >
+                              {name}
+                            </span>
                           ))}
                         </div>
                       )}
@@ -282,9 +358,20 @@ const COLOR_MAP = {
   orange: { bg: "bg-orange-50",    text: "text-orange-600" },
 };
 
-function KpiCard({ icon, label, value, unit, color, note }: {
-  icon: string; label: string; value: number; unit: string;
-  color: keyof typeof COLOR_MAP; note?: string;
+function KpiCard({
+  icon,
+  label,
+  value,
+  unit,
+  color,
+  note,
+}: {
+  icon: string;
+  label: string;
+  value: number;
+  unit: string;
+  color: keyof typeof COLOR_MAP;
+  note?: string;
 }) {
   const c = COLOR_MAP[color];
   return (
@@ -295,7 +382,9 @@ function KpiCard({ icon, label, value, unit, color, note }: {
       <p className="text-xs font-semibold text-[#6b7a99]">
         {label}
         {note && (
-          <span className="ml-1.5 rounded bg-[#f4f6fb] px-1 py-0.5 text-[10px] text-[#b0b8cc]">{note}</span>
+          <span className="ml-1.5 rounded bg-[#f4f6fb] px-1 py-0.5 text-[10px] text-[#b0b8cc]">
+            {note}
+          </span>
         )}
       </p>
       <p className="mt-1 font-display text-3xl font-black text-[#1a2744]">
@@ -307,23 +396,46 @@ function KpiCard({ icon, label, value, unit, color, note }: {
 }
 
 // ---------------------------------------------------------------------------
-// TrendChart — pure SVG
+// TrendChart — pure SVG, no external dependencies
 // ---------------------------------------------------------------------------
 
-function TrendChart({ data }: { data: { date: string; completed: number; signups: number }[] }) {
-  const W = 600; const H = 160;
+function TrendChart({
+  data,
+}: {
+  data: { date: string; completed: number; signups: number }[];
+}) {
+  const W = 600;
+  const H = 160;
   const PAD = { top: 12, right: 16, bottom: 32, left: 36 };
+
   const chart_w = W - PAD.left - PAD.right;
   const chart_h = H - PAD.top - PAD.bottom;
+
   const max_val = Math.max(...data.flatMap((d) => [d.completed, d.signups]), 1);
+
   const bar_group_w = chart_w / data.length;
   const bar_w = Math.min(18, bar_group_w * 0.38);
   const gap = 3;
 
-  function barX(i: number, offset: number) { return PAD.left + bar_group_w * i + bar_group_w / 2 - bar_w - gap / 2 + offset; }
-  function barH(v: number) { return Math.max(2, (v / max_val) * chart_h); }
-  function barY(v: number) { return PAD.top + chart_h - barH(v); }
-  function shortDate(iso: string) { const [, m, d] = iso.split("-"); return `${parseInt(m)}/${parseInt(d)}`; }
+  const grid_ratios = [0, 0.5, 1];
+
+  function barX(i: number, offset: number): number {
+    return PAD.left + bar_group_w * i + bar_group_w / 2 - bar_w - gap / 2 + offset;
+  }
+
+  function barH(val: number): number {
+    return Math.max(2, (val / max_val) * chart_h);
+  }
+
+  function barY(val: number): number {
+    return PAD.top + chart_h - barH(val);
+  }
+
+  // "MM/DD" short label
+  function shortDate(iso: string): string {
+    const [, m, d] = iso.split("-");
+    return `${parseInt(m)}/${parseInt(d)}`;
+  }
 
   return (
     <div>
@@ -331,23 +443,69 @@ function TrendChart({ data }: { data: { date: string; completed: number; signups
         <LegendDot color="#4caf72" label="완료 세션" />
         <LegendDot color="#5865f2" label="신규 가입" />
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 200 }}>
-        {[0, 0.5, 1].map((r, i) => {
+
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full"
+        style={{ maxHeight: 200 }}
+        aria-label="최근 7일 추이 차트"
+      >
+        {/* Grid lines + Y labels */}
+        {grid_ratios.map((r, i) => {
           const y = PAD.top + chart_h * (1 - r);
+          const label =
+            i === 0 ? "0" : i === 1 ? Math.round(max_val / 2) : max_val;
           return (
             <g key={i}>
-              <line x1={PAD.left} y1={y} x2={W - PAD.right} y2={y} stroke="#e8ecf5" strokeWidth={1} />
-              <text x={PAD.left - 6} y={y + 4} textAnchor="end" fontSize={9} fill="#b0b8cc">
-                {i === 0 ? "0" : i === 1 ? Math.round(max_val / 2) : max_val}
+              <line
+                x1={PAD.left}
+                y1={y}
+                x2={W - PAD.right}
+                y2={y}
+                stroke="#e8ecf5"
+                strokeWidth={1}
+              />
+              <text
+                x={PAD.left - 6}
+                y={y + 4}
+                textAnchor="end"
+                fontSize={9}
+                fill="#b0b8cc"
+              >
+                {label}
               </text>
             </g>
           );
         })}
+
+        {/* Bars + X labels */}
         {data.map((d, i) => (
           <g key={d.date}>
-            <rect x={barX(i, 0)}          y={barY(d.completed)} width={bar_w} height={barH(d.completed)} rx={3} fill="#4caf72" opacity={0.85} />
-            <rect x={barX(i, bar_w + gap)} y={barY(d.signups)}   width={bar_w} height={barH(d.signups)}   rx={3} fill="#5865f2" opacity={0.75} />
-            <text x={PAD.left + bar_group_w * i + bar_group_w / 2} y={H - PAD.bottom + 14} textAnchor="middle" fontSize={10} fill="#6b7a99">
+            <rect
+              x={barX(i, 0)}
+              y={barY(d.completed)}
+              width={bar_w}
+              height={barH(d.completed)}
+              rx={3}
+              fill="#4caf72"
+              opacity={0.85}
+            />
+            <rect
+              x={barX(i, bar_w + gap)}
+              y={barY(d.signups)}
+              width={bar_w}
+              height={barH(d.signups)}
+              rx={3}
+              fill="#5865f2"
+              opacity={0.75}
+            />
+            <text
+              x={PAD.left + bar_group_w * i + bar_group_w / 2}
+              y={H - PAD.bottom + 14}
+              textAnchor="middle"
+              fontSize={10}
+              fill="#6b7a99"
+            >
               {shortDate(d.date)}
             </text>
           </g>
@@ -360,17 +518,34 @@ function TrendChart({ data }: { data: { date: string; completed: number; signups
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: color }} />
+      <span
+        className="inline-block h-2.5 w-2.5 rounded-sm"
+        style={{ backgroundColor: color }}
+      />
       <span className="text-xs text-[#6b7a99]">{label}</span>
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Formats a UTC ISO string into a local datetime string for display.
+ * Uses the selected admin timezone.
+ */
 function formatDatetime(iso: string, timezone: string): string {
   try {
     return new Date(iso).toLocaleString("ko-KR", {
-      timeZone: timezone, month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hour12: false,
+      timeZone: timezone,
+      month:  "2-digit",
+      day:    "2-digit",
+      hour:   "2-digit",
+      minute: "2-digit",
+      hour12: false,
     });
-  } catch { return iso; }
+  } catch {
+    return iso;
+  }
 }

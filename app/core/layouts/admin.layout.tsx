@@ -31,9 +31,12 @@ export default function AdminLayout({ loaderData }: Route.ComponentProps) {
   const location = useLocation();
 
   const nav_items = [
-    { href: "/admin", label: "상품 목록", icon: "📦" },
-    { href: "/admin/users", label: "사용자 관리", icon: "👥" },
-    { href: "/admin/trial-sessions", label: "체험 세션", icon: "✨" },
+    { href: "/admin",                label: "대시보드",      icon: "📊" },
+    { href: "/admin/products",       label: "상품 관리",     icon: "📦" },
+    { href: "/admin/users",          label: "사용자 관리",   icon: "👥" },
+    { href: "/admin/trial-sessions", label: "체험 세션",     icon: "✨" },
+    { href: "/admin/leni-turns",     label: "Leni 턴 관리",  icon: "🤖" },
+    { href: "/admin/site-settings",  label: "사이트 설정",   icon: "⚙️" },
   ];
 
   return (
