@@ -50,6 +50,17 @@ export async function action({ request, params }: Route.ActionArgs) {
     return routeData({ error: "Session not found" }, { status: 404, headers });
   }
 
+  // ── Anonymous session check ──────────────────────────────────────────────
+  // Anonymous trial users can see Leni's intro cards but cannot send messages.
+  if (identity.auth_user_id.startsWith("anon:")) {
+    return routeData({
+      ok: true,
+      text: "Leni와의 채팅은 유료입니다. 무료 체험은 학습 목록에서 진행해주세요.",
+      type: "text",
+      session_complete: false,
+    }, { headers });
+  }
+
   // ── Load product session with stages ─────────────────────────────────────
   const product_session = await getNv2ProductSessionWithStages(
     client,

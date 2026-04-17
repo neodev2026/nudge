@@ -14,7 +14,7 @@
  */
 import type { Route } from "./+types/users";
 
-import { useLoaderData, useFetcher, useSearchParams, Link } from "react-router";
+import { useLoaderData, useFetcher, useSearchParams, Link, useNavigate } from "react-router";
 import { useState, useEffect } from "react";
 
 import makeServerClient from "~/core/lib/supa-client.server";
@@ -407,7 +407,74 @@ function UserDetailPanel({
             </button>
           </profile_fetcher.Form>
         </div>
+
+        {/* ── Delete account ── */}
+        <DeleteUserSection auth_user_id={user.auth_user_id} />
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DeleteUserSection
+// ---------------------------------------------------------------------------
+
+function DeleteUserSection({ auth_user_id }: { auth_user_id: string }) {
+  const [confirm, set_confirm] = useState(false);
+  const fetcher = useFetcher<{ ok?: boolean; error?: string }>();
+  const navigate = useNavigate();
+  const is_deleting = fetcher.state !== "idle";
+
+  // On success, redirect to /admin/users (clear ?selected= param)
+  useEffect(() => {
+    if (fetcher.data?.ok) {
+      navigate("/admin/users", { replace: true });
+    }
+  }, [fetcher.data]);
+
+  return (
+    <div className="rounded-2xl bg-white border border-red-100 px-5 py-5">
+      <h3 className="mb-3 font-display text-sm font-black text-red-500">
+        ⚠️ 회원 탈퇴
+      </h3>
+      {!confirm ? (
+        <button
+          onClick={() => set_confirm(true)}
+          className="w-full rounded-xl border border-red-200 py-2.5 text-sm font-bold text-red-500 transition hover:bg-red-50"
+        >
+          이 사용자 탈퇴 처리
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs text-red-500 font-bold text-center">
+            정말 탈퇴 처리하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => set_confirm(false)}
+              className="flex-1 rounded-xl border border-[#e8ecf5] py-2.5 text-sm font-bold text-[#6b7a99]"
+            >
+              취소
+            </button>
+            <fetcher.Form
+              method="post"
+              action={`/admin/api/users/${auth_user_id}/delete`}
+              className="flex-1"
+            >
+              <button
+                type="submit"
+                disabled={is_deleting}
+                className="w-full rounded-xl bg-red-500 py-2.5 text-sm font-extrabold text-white transition hover:bg-red-600 disabled:opacity-50"
+              >
+                {is_deleting ? "처리 중…" : "탈퇴 확인"}
+              </button>
+            </fetcher.Form>
+          </div>
+          {fetcher.data?.error && (
+            <p className="text-xs text-red-500 text-center">{fetcher.data.error}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

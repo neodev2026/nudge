@@ -121,6 +121,9 @@ export const nv2_learning_products = pgTable(
     // Denormalized stage count for display — updated by app logic or DB trigger
     total_stages: integer("total_stages").notNull().default(0),
 
+    // Price in KRW. 0 = free product — instant approval without payment.
+    price: integer("price").notNull().default(0),
+
     // Sort order on the product listing page
     display_order: integer("display_order").notNull().default(0),
 

@@ -47,6 +47,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   const { auth_user_id } = identity;
+  const is_anonymous = auth_user_id.startsWith("anon:");
 
   await completeNv2UserSession(service_client, params.sessionId);
 
@@ -56,7 +57,12 @@ export async function action({ request, params }: Route.ActionArgs) {
   ).catch(() => null);
 
   if (!product_session) {
-    return routeData({ ok: true, next_session_id: null });
+    return routeData({ ok: true, next_session_id: null, is_anonymous });
+  }
+
+  // Anonymous trial sessions: skip next session creation and DM
+  if (is_anonymous) {
+    return routeData({ ok: true, next_session_id: null, is_anonymous: true });
   }
 
   // Fetch product name for DM context
@@ -155,5 +161,5 @@ export async function action({ request, params }: Route.ActionArgs) {
     }
   }
 
-  return routeData({ ok: true, next_session_id: next_user_session_id });
+  return routeData({ ok: true, next_session_id: next_user_session_id, is_anonymous: false });
 }

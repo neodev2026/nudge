@@ -136,16 +136,18 @@ export default function StagePage() {
   }
 
   function handleRetry() {
-    if (!can_submit) return;
     stopTts(); // 처음부터 다시 볼 때 TTS 중지
-    retry_fetcher.submit(
-      { auth_user_id },
-      {
-        method: "POST",
-        action: `/api/v2/stage/${stage.id}/retry`,
-        encType: "application/json",
-      }
-    );
+    // In trial mode (no auth_user_id), just reset client-side without API call
+    if (can_submit) {
+      retry_fetcher.submit(
+        { auth_user_id },
+        {
+          method: "POST",
+          action: `/api/v2/stage/${stage.id}/retry`,
+          encType: "application/json",
+        }
+      );
+    }
     set_card_index(0);
     set_phase("cards");
   }
