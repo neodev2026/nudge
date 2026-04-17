@@ -59,8 +59,12 @@ export default [
   layout("core/layouts/admin.layout.tsx", [
     ...prefix("/admin", [
       index("features/admin/screens/dashboard.tsx"),
+      route("/products",                           "features/admin/screens/products.tsx"),
       route("/users",                              "features/admin/screens/users.tsx"),
       route("/trial-sessions",                     "features/admin/screens/trial-sessions.tsx"),
+      route("/stats",                              "features/admin/screens/stats.tsx"),
+      route("/leni-turns",                         "features/admin/screens/leni-turns.tsx"),
+      route("/site-settings",                      "features/admin/screens/site-settings.tsx"),
       route("/products/new",                       "features/admin/screens/product-new.tsx"),
       route("/products/:id",                       "features/admin/screens/product-detail.tsx"),
       route("/products/:id/stages/new",            "features/admin/screens/stage-new.tsx"),
