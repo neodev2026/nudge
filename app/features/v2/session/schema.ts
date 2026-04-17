@@ -11,28 +11,25 @@ import {
   boolean,
 } from "drizzle-orm/pg-core";
 import { authenticatedRole } from "drizzle-orm/supabase";
-import { tstz, eventTstz, userIdentity } from "~/core/db/helpers.server";
+import { tstz, eventTstz } from "~/core/db/helpers.server";
 import { isAdmin } from "~/core/db/helpers.rls";
-import { V2_SESSION_STATUSES, V2_SESSION_KINDS } from "~/features/v2/shared/constants";
 import { nv2_learning_products } from "~/features/v2/products/schema";
 import { nv2_stages } from "~/features/v2/stage/schema";
 
 // ---------------------------------------------------------------------------
-// Enums
+// Enums — values inlined to avoid drizzle-kit ZodError with constants imports
 // ---------------------------------------------------------------------------
 
-export const nv2SessionStatus = pgEnum(
-  "nv2_session_status",
-  V2_SESSION_STATUSES
-);
+export const nv2SessionStatus = pgEnum("nv2_session_status", [
+  "pending",
+  "in_progress",
+  "completed",
+]);
 
-/**
- * Session kind — distinguishes first-time learning from spaced-repetition review.
- */
-export const nv2SessionKind = pgEnum(
-  "nv2_session_kind",
-  V2_SESSION_KINDS
-);
+export const nv2SessionKind = pgEnum("nv2_session_kind", [
+  "new",
+  "review",
+]);
 
 // ---------------------------------------------------------------------------
 // nv2_product_sessions — Product-level session definition (admin)
@@ -44,15 +41,6 @@ export const nv2SessionKind = pgEnum(
  * Defines the session structure for a learning product.
  * Each session is an ordered group of stages (learning + optional quiz)
  * that is delivered to users as a single DM link.
- *
- * Admins configure sessions via the admin UI:
- *   - Drag stages into sessions
- *   - Place quiz stages at desired positions
- *   - Reorder sessions within a product
- *
- * Default generation rule (applied when a product is first published):
- *   Every 5 learning stages → append quiz_5 stage
- *   Every 10 learning stages → append quiz_10 stage instead of quiz_5
  */
 export const nv2_product_sessions = pgTable(
   "nv2_product_sessions",
@@ -80,31 +68,24 @@ export const nv2_product_sessions = pgTable(
       table.session_number
     ),
 
-    // RLS: Anyone can view active product sessions (needed for session page)
     pgPolicy("nv2_product_sessions_select_active", {
       for: "select",
       to: "public",
       using: sql`${table.is_active} = true`,
     }),
-
-    // RLS: Admin full access
     pgPolicy("nv2_product_sessions_admin_all", {
       for: "all",
       to: authenticatedRole,
       using: isAdmin,
     }),
-
-    // RLS: Service role
     pgPolicy("nv2_product_sessions_service_all", {
       for: "all",
       to: "service_role",
       using: sql`true`,
     }),
-
-    // RLS: n8n_worker can insert product sessions (used by card generation workflow)
     pgPolicy("nv2_product_sessions_n8n_insert", {
       for: "insert",
-      to: 'n8n_worker',
+      to: "n8n_worker",
       withCheck: sql`true`,
     }),
   ]
@@ -117,14 +98,6 @@ export type NV2NewProductSession = typeof nv2_product_sessions.$inferInsert;
 // nv2_product_session_stages — Session ↔ Stage join table
 // ---------------------------------------------------------------------------
 
-/**
- * nv2_product_session_stages
- *
- * Many-to-many join between nv2_product_sessions and nv2_stages.
- * display_order determines the order stages are shown within a session.
- *
- * A stage can appear in at most one session per product (enforced by unique index).
- */
 export const nv2_product_session_stages = pgTable(
   "nv2_product_session_stages",
   {
@@ -138,7 +111,6 @@ export const nv2_product_session_stages = pgTable(
       .notNull()
       .references(() => nv2_stages.id, { onDelete: "cascade" }),
 
-    // Order within the session (1-based)
     display_order: integer("display_order").notNull(),
 
     ...tstz,
@@ -151,31 +123,24 @@ export const nv2_product_session_stages = pgTable(
       table.display_order
     ),
 
-    // RLS: Public read (session page needs stage list without auth)
     pgPolicy("nv2_product_session_stages_select_public", {
       for: "select",
       to: "public",
       using: sql`true`,
     }),
-
-    // RLS: Admin full access
     pgPolicy("nv2_product_session_stages_admin_all", {
       for: "all",
       to: authenticatedRole,
       using: isAdmin,
     }),
-
-    // RLS: Service role
     pgPolicy("nv2_product_session_stages_service_all", {
       for: "all",
       to: "service_role",
       using: sql`true`,
     }),
-
-    // RLS: n8n_worker can insert session stages (used by card generation workflow)
     pgPolicy("nv2_product_session_stages_n8n_insert", {
       for: "insert",
-      to: 'n8n_worker',
+      to: "n8n_worker",
       withCheck: sql`true`,
     }),
   ]
@@ -194,13 +159,9 @@ export type NV2NewProductSessionStage =
  * nv2_sessions
  *
  * Tracks a user's progress through a product session.
- * Created when a user starts a session (via "학습 시작" button or cron).
+ * auth_user_id: Supabase auth.users UUID — single identifier for all login methods.
  *
- * Status transitions:
- *   pending → in_progress → completed
- *
- * One user can have at most one non-completed session per product at a time.
- * (Enforced at application level by start-learning.tsx)
+ * Status transitions: pending → in_progress → completed
  */
 export const nv2_sessions = pgTable(
   "nv2_sessions",
@@ -208,14 +169,13 @@ export const nv2_sessions = pgTable(
     // UUID PK — acts as a security token (unguessable link)
     session_id: uuid("session_id").primaryKey().defaultRandom(),
 
-    // Profile reference — FK to nv2_profiles(auth_user_id)
-    ...userIdentity,
+    // User identifier — Supabase auth.users UUID
+    auth_user_id: text("auth_user_id").notNull(),
 
     product_session_id: uuid("product_session_id")
       .notNull()
       .references(() => nv2_product_sessions.id, { onDelete: "cascade" }),
 
-    // Distinguishes new learning from spaced-repetition review
     session_kind: nv2SessionKind("session_kind").notNull().default("new"),
 
     // For review sessions: which review round (1~4). null for new sessions.
@@ -238,8 +198,6 @@ export const nv2_sessions = pgTable(
     index("nv2_sessions_user_idx").on(table.auth_user_id),
     index("nv2_sessions_product_session_idx").on(table.product_session_id),
     index("nv2_sessions_status_idx").on(table.status),
-
-    // Cron query: find pending/in_progress sessions for nudge DMs
     index("nv2_sessions_active_idx")
       .on(table.auth_user_id, table.status)
       .where(sql`${table.status} != 'completed'`),
@@ -273,7 +231,6 @@ export const nv2_sessions = pgTable(
     }),
 
     // RLS: Public select — session_id UUID acts as a security token
-    // Anyone with the link can view the session (needed for DM link access)
     pgPolicy("nv2_sessions_select_public", {
       for: "select",
       to: "public",

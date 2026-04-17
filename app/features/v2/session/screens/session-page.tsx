@@ -118,6 +118,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     all_learning_completed,
     is_authenticated,
     auth_user_id,
+    is_anonymous: auth_user_id.startsWith("anon:"),
     link_access,
   };
 }
@@ -138,11 +139,12 @@ export default function SessionPage() {
     all_completed,
     all_learning_completed,
     is_authenticated,
+    is_anonymous,
     auth_user_id,
     link_access,
   } = useLoaderData<typeof loader>();
 
-  const complete_fetcher = useFetcher<{ ok?: boolean; next_session_id?: string | null }>();
+  const complete_fetcher = useFetcher<{ ok?: boolean; next_session_id?: string | null; is_anonymous?: boolean }>();
   const is_completing = complete_fetcher.state !== "idle";
   const complete_data = complete_fetcher.data;
 
@@ -303,13 +305,24 @@ export default function SessionPage() {
               <p className="font-display text-lg font-black text-[#4caf72]">
                 모든 학습을 완료하셨네요! 🎉
               </p>
-              {next_session_id ? (
-                <>
-                  <p className="mt-1 text-sm text-[#6b7a99]">
-                    다음 세션 링크를 Discord로 보내드렸어요!
-                    <br />
-                    아니면 여기서 바로 시작할까요?
+              {complete_data?.is_anonymous ? (
+                // Anonymous trial — prompt signup
+                <div className="mt-3 space-y-3">
+                  <p className="text-sm text-[#6b7a99]">
+                    체험이 끝났어요! 계속 학습하려면 회원가입이 필요합니다.
                   </p>
+                  <Link
+                    to="/join"
+                    className="inline-block rounded-2xl bg-[#4caf72] px-8 py-3.5 text-sm font-extrabold text-white shadow-[0_4px_16px_rgba(76,175,114,0.30)] transition-all hover:-translate-y-px hover:bg-[#5ecb87]"
+                  >
+                    회원가입하고 계속 학습하기 →
+                  </Link>
+                  <p className="text-xs text-[#b0b8cc]">
+                    무료로 시작할 수 있어요
+                  </p>
+                </div>
+              ) : next_session_id ? (
+                <>
                   <Link
                     to={`/sessions/${next_session_id}`}
                     className="mt-4 inline-block rounded-2xl bg-[#1a2744] px-8 py-3.5 text-sm font-extrabold text-white shadow-[0_4px_16px_rgba(26,39,68,0.20)] transition-all hover:-translate-y-px hover:shadow-[0_6px_20px_rgba(26,39,68,0.25)]"

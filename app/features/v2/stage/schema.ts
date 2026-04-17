@@ -13,14 +13,21 @@ import {
 import { authenticatedRole } from "drizzle-orm/supabase";
 import { tstz } from "~/core/db/helpers.server";
 import { isAdmin } from "~/core/db/helpers.rls";
-import { V2_CARD_TYPES, V2_STAGE_TYPES } from "~/features/v2/shared/constants";
 import type { V2CardData } from "~/features/v2/shared/types";
 
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
 
-export const nv2CardType = pgEnum("nv2_card_type", V2_CARD_TYPES);
+// Inline enum values — do NOT import from constants.ts (drizzle-kit ZodError)
+export const nv2CardType = pgEnum("nv2_card_type", [
+  "title",
+  "description",
+  "image",
+  "etymology",
+  "example",
+  "option",
+]);
 
 /**
  * Stage type enum for nv2_stages.
@@ -33,7 +40,20 @@ export const nv2CardType = pgEnum("nv2_card_type", V2_CARD_TYPES);
  * quiz_final     — comprehensive quiz on full product completion
  * congratulations— celebration stage after all stages are mastered
  */
-export const nv2StageType = pgEnum("nv2_stage_type", V2_STAGE_TYPES);
+export const nv2StageType = pgEnum("nv2_stage_type", [
+  "welcome",
+  "learning",
+  "quiz_5",
+  "quiz_10",
+  "quiz_current_session",
+  "quiz_current_and_prev_session",
+  "quiz_daily",
+  "quiz_final",
+  "congratulations",
+  "sentence_practice",
+  "dictation",
+  "writing",
+]);
 
 // ---------------------------------------------------------------------------
 // nv2_stages

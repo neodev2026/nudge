@@ -73,12 +73,7 @@ export default function AdminDashboard() {
             총 {products.length}개 상품
           </p>
         </div>
-        <Link
-          to="/admin/users"
-          className="rounded-xl border border-[#e8ecf5] px-4 py-2 text-sm font-bold text-[#6b7a99] transition hover:bg-[#f4f6fb] hover:text-[#1a2744]"
-        >
-          👥 사용자 관리
-        </Link>
+
         <Link
           to="/admin/products/new"
           className="rounded-xl bg-[#1a2744] px-5 py-2.5 text-sm font-extrabold text-white transition-all hover:bg-[#243358]"
