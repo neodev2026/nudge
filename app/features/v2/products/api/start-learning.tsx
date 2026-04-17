@@ -35,7 +35,6 @@ import {
   createNv2UserSession,
   upsertNv2Subscription,
 } from "~/features/v2/session/lib/queries.server";
-import { sendSessionDm } from "~/features/v2/auth/lib/discord.server";
 
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -120,9 +119,8 @@ export async function action({ request, params }: Route.ActionArgs) {
     );
   }
 
-  const stage_count = product_session.nv2_product_session_stages?.length ?? 0;
-  const session_title =
-    product_session.title ?? `Session ${product_session.session_number}`;
+  // session_title kept for future use (e.g. email notification)
+  // const session_title = product_session.title ?? `Session ${product_session.session_number}`;
 
   // ── Attempt Discord DM (non-blocking) ─────────────────────────────────────
   // DM failure (e.g. error 50278 — no mutual guild) must NOT block the user
@@ -131,24 +129,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const origin = new URL(request.url).origin;
   const session_url = `${origin}/sessions/${user_session_id}`;
 
-  // Fetch discord_id for DM delivery
-  const { data: profile_for_dm } = await adminClient
-    .from("nv2_profiles")
-    .select("discord_id")
-    .eq("auth_user_id", auth_user_id)
-    .maybeSingle();
-  const discord_id = (profile_for_dm as any)?.discord_id ?? null;
-
-  let dm_sent = false;
-  if (discord_id) {
-    try {
-      await sendSessionDm(discord_id, session_url, product.name, session_title, null);
-      dm_sent = true;
-    } catch (err) {
-      console.error("[start-learning] sendSessionDm failed (non-fatal):", err);
-    }
-  }
-
-  // Always return ok — the client will redirect to /sessions/:id
-  return routeData({ ok: true, session_id: user_session_id, dm_sent }, { headers });
+  // DM delivery is handled exclusively by Cron (enqueue-daily / dispatch).
+  // start-learning only creates the session and returns the URL.
+  return routeData({ ok: true, session_id: user_session_id }, { headers });
 }
