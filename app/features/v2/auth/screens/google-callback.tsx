@@ -4,9 +4,11 @@
  * Handles Google OAuth callback from Supabase.
  * Flow:
  *   1. exchangeCodeForSession(code)
- *   2. upsert nv2_profiles (auth_user_id, email, display_name, avatar_url)
+ *   2. Check if this is a new user (pre-upsert)
+ *   3. Upsert nv2_profiles (auth_user_id, email, display_name, avatar_url)
  *      — discord_id is NOT set for Google users
- *   3. redirect to ?next= (default: /products)
+ *   4. If new user → send welcome email via Resend (fire-and-forget)
+ *   5. Redirect to ?next= (default: /products)
  */
 import type { Route } from "./+types/google-callback";
 import { data, redirect } from "react-router";
@@ -54,6 +56,15 @@ export async function loader({ request }: Route.LoaderArgs) {
     null;
   const email = auth_user.email ?? null;
 
+  // Check if this is a new user before upsert
+  const { data: existing_profile } = await adminClient
+    .from("nv2_profiles")
+    .select("auth_user_id")
+    .eq("auth_user_id", auth_user.id)
+    .maybeSingle();
+
+  const is_new_user = existing_profile === null;
+
   // Upsert nv2_profiles — Google users have no discord_id
   await adminClient
     .from("nv2_profiles")
@@ -73,6 +84,19 @@ export async function loader({ request }: Route.LoaderArgs) {
     .then(({ error }) => {
       if (error) console.error("[google-callback] upsertNv2Profile failed:", error);
     });
+
+  // Send welcome email to new users (fire-and-forget)
+  if (is_new_user && email) {
+    const origin = new URL(request.url).origin;
+    const products_url = `${origin}/products`;
+
+    const { sendWelcomeEmail } = await import(
+      "~/features/v2/auth/lib/email.server"
+    );
+    sendWelcomeEmail(email, display_name, products_url).catch((err) => {
+      console.error("[google-callback] sendWelcomeEmail failed:", err);
+    });
+  }
 
   return redirect(next, { headers });
 }
