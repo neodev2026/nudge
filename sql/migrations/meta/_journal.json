@@ -379,6 +379,13 @@
       "when": 1776247569658,
       "tag": "0053_nostalgic_norrin_radd",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1776333908080,
+      "tag": "0054_normal_kulan_gath",
+      "breakpoints": true
     }
   ]
 }

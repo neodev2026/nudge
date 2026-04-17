@@ -650,6 +650,7 @@ export type Database = {
           is_active: boolean
           meta: Json | null
           name: string
+          price: number
           slug: string
           total_stages: number
           updated_at: string
@@ -664,6 +665,7 @@ export type Database = {
           is_active?: boolean
           meta?: Json | null
           name: string
+          price?: number
           slug: string
           total_stages?: number
           updated_at?: string
@@ -678,6 +680,7 @@ export type Database = {
           is_active?: boolean
           meta?: Json | null
           name?: string
+          price?: number
           slug?: string
           total_stages?: number
           updated_at?: string
@@ -1106,6 +1109,7 @@ export type Database = {
           is_active: boolean
           link_access: Database["public"]["Enums"]["nv2_link_access_type"]
           product_id: string
+          source: Database["public"]["Enums"]["nv2_subscription_source"]
           started_at: string | null
           updated_at: string
         }
@@ -1116,6 +1120,7 @@ export type Database = {
           is_active?: boolean
           link_access?: Database["public"]["Enums"]["nv2_link_access_type"]
           product_id: string
+          source?: Database["public"]["Enums"]["nv2_subscription_source"]
           started_at?: string | null
           updated_at?: string
         }
@@ -1126,6 +1131,7 @@ export type Database = {
           is_active?: boolean
           link_access?: Database["public"]["Enums"]["nv2_link_access_type"]
           product_id?: string
+          source?: Database["public"]["Enums"]["nv2_subscription_source"]
           started_at?: string | null
           updated_at?: string
         }
@@ -1505,6 +1511,7 @@ export type Database = {
         | "sentence_practice"
         | "dictation"
         | "writing"
+      nv2_subscription_source: "paid" | "free" | "admin"
       push_channel: "discord" | "kakao" | "email" | "telegram"
       sns_type: "discord" | "kakao" | "email" | "telegram"
       subscription_tier: "basic" | "premium" | "vip"
@@ -1726,6 +1733,7 @@ export const Constants = {
         "dictation",
         "writing",
       ],
+      nv2_subscription_source: ["paid", "free", "admin"],
       push_channel: ["discord", "kakao", "email", "telegram"],
       sns_type: ["discord", "kakao", "email", "telegram"],
       subscription_tier: ["basic", "premium", "vip"],
