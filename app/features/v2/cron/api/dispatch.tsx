@@ -2,7 +2,12 @@
  * POST /api/v2/cron/dispatch
  *
  * Processes pending rows in nv2_schedules where scheduled_at <= now().
- * Resolves discord_id from nv2_profiles for Discord DM delivery.
+ * Delivery channel resolution per schedule row:
+ *
+ *   1. discord_id present + discord_dm_unsubscribed = false  → Discord Bot DM
+ *   2. discord_id absent  + email present + email_unsubscribed = false → Resend email
+ *   3. cheer type with no discord_id → skip (cheer is Discord-only)
+ *   4. otherwise → mark failed
  *
  * Runs every 5 minutes via Supabase Cron.
  * Security: Requires Authorization: Bearer {CRON_SECRET}
@@ -35,6 +40,9 @@ export async function action({ request }: Route.ActionArgs) {
   const { sendSessionDm, sendCheerDm } = await import(
     "~/features/v2/auth/lib/discord.server"
   );
+  const { sendSessionEmail } = await import(
+    "~/features/v2/auth/lib/email.server"
+  );
 
   const client = createClient(
     process.env.SUPABASE_URL!,
@@ -45,35 +53,57 @@ export async function action({ request }: Route.ActionArgs) {
     sent: 0,
     failed: 0,
     retrying: 0,
+    skipped: 0,
     errors: [] as string[],
   };
 
   try {
     const pending = await getCronPendingSchedules(client as any);
 
-    // Batch-fetch discord_id for all unique auth_user_ids in pending schedules
+    // Batch-fetch discord_id + email + unsubscribe flags for all unique users
     const unique_user_ids = [...new Set(pending.map((s) => s.auth_user_id))];
     const { data: profiles_raw } = await client
       .from("nv2_profiles")
-      .select("auth_user_id, discord_id")
+      .select("auth_user_id, discord_id, email, discord_dm_unsubscribed, email_unsubscribed")
       .in("auth_user_id", unique_user_ids.length > 0 ? unique_user_ids : ["__none__"]);
 
-    const discord_id_map: Record<string, string | null> = {};
-    for (const p of profiles_raw ?? []) {
-      discord_id_map[p.auth_user_id] = (p as any).discord_id ?? null;
+    // Build lookup maps indexed by auth_user_id
+    type ProfileRow = {
+      auth_user_id: string;
+      discord_id: string | null;
+      email: string | null;
+      discord_dm_unsubscribed: boolean;
+      email_unsubscribed: boolean;
+    };
+    const profile_map: Record<string, ProfileRow> = {};
+    for (const p of (profiles_raw ?? []) as ProfileRow[]) {
+      profile_map[p.auth_user_id] = p;
     }
 
     for (const schedule of pending) {
       const schedule_id = schedule.schedule_id as unknown as bigint;
-      const discord_id = discord_id_map[schedule.auth_user_id] ?? null;
+      const profile = profile_map[schedule.auth_user_id] ?? null;
+
+      const discord_id = profile?.discord_id ?? null;
+      const discord_unsubscribed = profile?.discord_dm_unsubscribed ?? false;
+      const email = profile?.email ?? null;
+      const email_unsubscribed = profile?.email_unsubscribed ?? false;
+
+      // Resolve delivery channel
+      const use_discord =
+        discord_id !== null && !discord_unsubscribed;
+      const use_email =
+        !use_discord && email !== null && !email_unsubscribed;
 
       try {
-        if (!discord_id) {
-          // TODO: email fallback — skip for now, mark as failed
-          throw new Error(`No discord_id for auth_user_id=${schedule.auth_user_id}`);
-        }
-
         if (schedule.schedule_type === "cheer") {
+          // Cheer messages are Discord-only — skip if no discord_id
+          if (!use_discord) {
+            await markCronScheduleSent(client as any, schedule_id);
+            results.skipped++;
+            continue;
+          }
+
           // cheer message_body format: "cheer:HH|product_name|session_label|message"
           // Legacy format (no product info): "cheer:HH|message"
           const raw_body = schedule.message_body ?? "";
@@ -90,7 +120,7 @@ export async function action({ request }: Route.ActionArgs) {
           }
 
           await sendCheerDm(
-            discord_id,
+            discord_id!,
             schedule.delivery_url,
             message,
             product_name || undefined,
@@ -116,13 +146,27 @@ export async function action({ request }: Route.ActionArgs) {
             session_title = raw_body || "오늘의 학습";
           }
 
-          await sendSessionDm(
-            discord_id,
-            schedule.delivery_url,
-            product_name,
-            session_title,
-            review_round
-          );
+          if (use_discord) {
+            await sendSessionDm(
+              discord_id!,
+              schedule.delivery_url,
+              product_name,
+              session_title,
+              review_round
+            );
+          } else if (use_email) {
+            await sendSessionEmail(
+              email!,
+              schedule.delivery_url,
+              product_name,
+              session_title,
+              review_round
+            );
+          } else {
+            throw new Error(
+              `No delivery channel for auth_user_id=${schedule.auth_user_id}`
+            );
+          }
         }
 
         await markCronScheduleSent(client as any, schedule_id);
