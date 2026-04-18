@@ -154,7 +154,8 @@ export async function action({ request, params }: Route.ActionArgs) {
         discord_id,
         null,
         product_name,
-        product_session.session_number
+        product_session.session_number,
+        true  // is_review
       ).catch((err) => {
         console.error("[session-complete] review complete DM failed:", err);
       });

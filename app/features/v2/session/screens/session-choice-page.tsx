@@ -1,3 +1,9 @@
+/**
+ * /sessions/:sessionId
+ *
+ * Session choice page — user selects between self-directed list or Leni chat.
+ * Displays review context banner when session_kind === "review".
+ */
 import { useLoaderData } from "react-router";
 import { Link } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
@@ -12,12 +18,14 @@ export async function loader({ params }: LoaderFunctionArgs) {
   const { sessionId } = params;
   if (!sessionId) throw new Response("Not Found", { status: 404 });
 
-  // 1. session row — auth_user_id is now the user identifier
+  // Load session row — includes session_kind and review_round
   const { data: session, error: sessionErr } = await adminClient
     .from("nv2_sessions")
     .select(
       `session_id,
        auth_user_id,
+       session_kind,
+       review_round,
        nv2_product_sessions!inner(
          title,
          session_number,
@@ -58,6 +66,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
     productName: ps?.nv2_learning_products?.name ?? "",
     sessionTitle: ps?.title ?? "",
     sessionNumber: ps?.session_number ?? null,
+    sessionKind: (session as any).session_kind as "new" | "review",
+    reviewRound: (session as any).review_round as number | null,
     subscriptionTurns,
     chargedTurns,
   };
@@ -69,11 +79,14 @@ export default function SessionChoicePage() {
     productName,
     sessionTitle,
     sessionNumber,
+    sessionKind,
+    reviewRound,
     subscriptionTurns,
     chargedTurns,
   } = useLoaderData<typeof loader>();
 
   const totalTurns = subscriptionTurns + chargedTurns;
+  const is_review = sessionKind === "review";
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center">
@@ -98,10 +111,31 @@ export default function SessionChoicePage() {
           </div>
         </div>
 
+        {/* Review context banner */}
+        {is_review && (
+          <div className="mx-4 mt-4 rounded-2xl bg-[#5865f2]/8 border border-[#5865f2]/20 px-4 py-3.5">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">🔁</span>
+              <div>
+                <p className="text-sm font-extrabold text-[#5865f2]">
+                  복습 {reviewRound != null ? `${reviewRound}회차` : ""}
+                </p>
+                <p className="text-xs text-[#6b7a99] mt-0.5">
+                  이전에 배운 단어를 다시 확인해봐요. 반복이 기억을 만들어요 💪
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Page title */}
         <div className="px-4 pt-5 pb-1">
           <h1 className="text-lg font-medium text-gray-900">학습 방법 선택</h1>
-          <p className="text-sm text-gray-500 mt-1">오늘은 어떻게 공부할까요?</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {is_review
+              ? "어떻게 복습할까요?"
+              : "오늘은 어떻게 공부할까요?"}
+          </p>
         </div>
 
         {/* Banners */}
@@ -112,13 +146,17 @@ export default function SessionChoicePage() {
             imageSrc="/images/leni/leni-study.jpg"
             badge={{ label: "자기주도", className: "bg-blue-50 text-blue-600" }}
             title="학습 목록"
-            description={<>카드 학습부터 퀴즈, 받아쓰기, 작문까지<br />내 페이스로 직접 진행해요.</>}
+            description={
+              is_review
+                ? <>카드를 다시 보고 퀴즈, 받아쓰기, 작문까지<br />내 페이스로 직접 복습해요.</>
+                : <>카드 학습부터 퀴즈, 받아쓰기, 작문까지<br />내 페이스로 직접 진행해요.</>
+            }
             cta={
               <Link
                 to={`/sessions/${sessionId}/list`}
                 className="block w-full py-2.5 text-center text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors"
               >
-                학습 목록으로 →
+                {is_review ? "복습 목록으로 →" : "학습 목록으로 →"}
               </Link>
             }
           />
@@ -128,7 +166,11 @@ export default function SessionChoicePage() {
             imageSrc="/images/leni/leni-chat.jpg"
             badge={{ label: "AI 튜터", className: "bg-amber-50 text-amber-600" }}
             title="Leni와 학습"
-            description={<>Leni가 카드를 보여주고, 퀴즈도 내주고,<br />대화로 실력을 확인해줘요.</>}
+            description={
+              is_review
+                ? <>Leni가 기억나는지 먼저 물어보고,<br />틀린 것만 집중적으로 다시 알려줘요.</>
+                : <>Leni가 카드를 보여주고, 퀴즈도 내주고,<br />대화로 실력을 확인해줘요.</>
+            }
             cta={
               <>
                 <div className="bg-gray-50 rounded-xl px-3 py-2.5 mb-3 flex items-center gap-4">
@@ -149,7 +191,7 @@ export default function SessionChoicePage() {
                   to={`/sessions/${sessionId}/chat`}
                   className="block w-full py-2.5 text-center text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors"
                 >
-                  Leni와 학습 시작 →
+                  {is_review ? "Leni와 복습 시작 →" : "Leni와 학습 시작 →"}
                 </Link>
               </>
             }
@@ -159,6 +201,10 @@ export default function SessionChoicePage() {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
 function BannerCard({
   imageSrc, badge, title, description, cta,
