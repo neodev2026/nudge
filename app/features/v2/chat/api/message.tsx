@@ -176,7 +176,9 @@ export async function action({ request, params }: Route.ActionArgs) {
       quiz_stages,
       display_name,
       session_title,
-      product_category
+      product_category,
+      (identity.session_kind ?? "new") as "new" | "review",
+      identity.review_round ?? null
     );
   } catch (err) {
     console.error("[chat/message] getLeniResponse failed:", err);
