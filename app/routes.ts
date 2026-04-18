@@ -88,6 +88,8 @@ export default [
     route("/products",       "features/v2/products/screens/products-page.tsx"),
     route("/products/:slug", "features/v2/products/screens/product-detail-page.tsx"),
     route("/products/:slug/checkout", "features/v2/products/screens/checkout.tsx"),
+    route("/products/:slug/progress", "features/v2/products/screens/progress-page.tsx"),
+    route("/my-learning", "features/v2/products/screens/my-learning-page.tsx"),
 
     // v2 auth pages
     route("/login",   "features/v2/auth/screens/login.tsx"),
