@@ -11,7 +11,7 @@
  *   5. Upcoming reviews (today / tomorrow / this week)
  *   6. Session timeline (unified, dm_sent_at DESC, new + review merged)
  *
- * Auth: Discord login required.
+ * Auth: login required (email / Google / Discord).
  * RLS: nv2_sessions select_own requires authenticated user.
  * All heavy queries use adminClient (service_role) to bypass RLS safely on server.
  */
@@ -38,7 +38,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   if (!auth_user) {
     const next = encodeURIComponent(`/products/${params.slug}/progress`);
-    throw redirect(`/auth/discord/start?next=${next}`);
+    throw redirect(`/login?next=${next}`);
   }
 
   const auth_user_id = auth_user.id;
@@ -304,10 +304,10 @@ export default function ProgressPage() {
       <div className="border-b border-[#1a2744]/[0.07] bg-white/70 px-6 py-4 backdrop-blur-sm sticky top-0 z-10">
         <div className="mx-auto max-w-2xl flex items-center justify-between">
           <Link
-            to={`/products/${product.slug}`}
+            to="/my-learning"
             className="text-sm font-semibold text-[#6b7a99] hover:text-[#1a2744]"
           >
-            ← {product.name}
+            ← 나의 학습 관리
           </Link>
           <span className="text-sm font-extrabold text-[#1a2744]">My Progress</span>
         </div>
