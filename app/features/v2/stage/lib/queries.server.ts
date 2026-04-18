@@ -125,8 +125,6 @@ export async function initNv2StageProgress(
   stage_id: string
 ) {
   // Check if a progress row already exists before inserting.
-  // Using insert with ON CONFLICT requires a unique index — this avoids
-  // relying on that constraint being in sync with the schema.
   const { data: existing } = await client
     .from("nv2_stage_progress")
     .select("progress_id")
@@ -153,8 +151,6 @@ export async function incrementNv2StageRetry(
   auth_user_id: string,
   stage_id: string
 ) {
-  // Fetch current retry_count first — Supabase JS v2 does not support
-  // server-side increment without an RPC, so we do a read-then-write.
   const { data: current, error: fetchError } = await client
     .from("nv2_stage_progress")
     .select("progress_id, retry_count")
@@ -173,14 +169,27 @@ export async function incrementNv2StageRetry(
 }
 
 /**
- * Marks a stage as completed (sets completed_at to now UTC).
- * Sets review_status to "r1_pending" and schedules the first review.
+ * Marks a stage as completed.
  *
- * Called by POST /api/v2/stage/:stageId/complete.
+ * Two behaviours depending on whether the stage was already completed:
  *
- * Interval halving rule:
- *   If retry_count >= 3, the first review interval is halved (1 day → 12 hours).
- *   This is handled by the cron dispatcher, not here.
+ *   First completion (completed_at IS NULL):
+ *     Sets completed_at, review_status = "r1_pending", review_round = 1,
+ *     and next_review_at = now + 1 day.
+ *     Returns the progress row (progress_id, retry_count).
+ *
+ *   Subsequent completion in a review session (completed_at IS NOT NULL):
+ *     Sets last_review_completed_at = now only.
+ *     Does NOT touch review_status / review_round / next_review_at
+ *     — those are managed exclusively by the Cron dispatcher.
+ *     Returns null (same as the idempotent path).
+ *
+ * Called by:
+ *   - POST /api/v2/stage/:stageId/complete  (learning stages)
+ *   - POST /api/v2/quiz/:stageId/result     (quiz stages)
+ *   - POST /api/v2/sentence/:stageId/result
+ *   - POST /api/v2/dictation/:stageId/result
+ *   - POST /api/v2/writing/:stageId/result
  */
 export async function completeNv2Stage(
   client: SupabaseClient<Database>,
@@ -189,7 +198,7 @@ export async function completeNv2Stage(
 ) {
   const now = new Date();
 
-  // First review fires +1 day from completion (UTC)
+  // Attempt first-completion update (guard: completed_at IS NULL)
   const next_review_at = new Date(now);
   next_review_at.setUTCDate(next_review_at.getUTCDate() + 1);
 
@@ -203,13 +212,27 @@ export async function completeNv2Stage(
     })
     .eq("auth_user_id", auth_user_id)
     .eq("stage_id", stage_id)
-    // Guard: only update if not already completed
     .is("completed_at", null)
     .select("progress_id, retry_count")
     .maybeSingle();
 
   if (error) throw error;
-  return data; // null if already completed (idempotent)
+
+  // data is non-null → first completion succeeded, nothing more to do.
+  if (data) return data;
+
+  // data is null → stage was already completed (review session).
+  // Update last_review_completed_at so the session-page can detect
+  // that this stage was reviewed in the current session.
+  const { error: review_error } = await client
+    .from("nv2_stage_progress")
+    .update({ last_review_completed_at: now.toISOString() })
+    .eq("auth_user_id", auth_user_id)
+    .eq("stage_id", stage_id);
+
+  if (review_error) throw review_error;
+
+  return null;
 }
 
 /**

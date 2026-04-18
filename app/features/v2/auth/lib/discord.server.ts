@@ -211,7 +211,8 @@ export async function sendSessionCompleteDm(
   sns_id: string,
   next_session_url: string | null,
   product_name: string = "",
-  session_number: number = 0
+  session_number: number = 0,
+  is_review: boolean = false
 ): Promise<void> {
   const channel_id = await openDmChannel(sns_id);
 
@@ -231,6 +232,11 @@ export async function sendSessionCompleteDm(
       button_label: "다음 세션 시작 →",
       button_url: next_session_url,
     });
+  } else if (is_review) {
+    await postMessage(
+      channel_id,
+      `🔁 ${context ? `${context}` : "복습"}을 완료했어요! 기억력이 점점 강해지고 있어요 🧠\n다음 복습 일정은 자동으로 예약됩니다. 수고하셨어요!`
+    );
   } else {
     await postMessage(
       channel_id,
