@@ -43,7 +43,8 @@ export default [
       route("/products/:slug/start",         "features/v2/products/api/start-learning.tsx"),
       route("/products/:slug/purchase",      "features/v2/products/api/purchase.tsx"),
       route("/products/:slug/trial",         "features/v2/products/api/trial.tsx"),
-      route("/sessions/:sessionId/complete", "features/v2/session/api/complete.tsx"),
+      route("/sessions/:sessionId/complete",       "features/v2/session/api/complete.tsx"),
+      route("/sessions/:sessionId/reset-progress", "features/v2/session/api/reset-progress.tsx"),
       route("/quiz/:stageId/result",         "features/v2/quiz/api/result.tsx"),
       route("/sentence/:stageId/result",     "features/v2/sentence/api/result.tsx"),
       route("/chat/:sessionId/message",      "features/v2/chat/api/message.tsx"),
@@ -59,12 +60,8 @@ export default [
   layout("core/layouts/admin.layout.tsx", [
     ...prefix("/admin", [
       index("features/admin/screens/dashboard.tsx"),
-      route("/products",                           "features/admin/screens/products.tsx"),
       route("/users",                              "features/admin/screens/users.tsx"),
       route("/trial-sessions",                     "features/admin/screens/trial-sessions.tsx"),
-      route("/stats",                              "features/admin/screens/stats.tsx"),
-      route("/leni-turns",                         "features/admin/screens/leni-turns.tsx"),
-      route("/site-settings",                      "features/admin/screens/site-settings.tsx"),
       route("/products/new",                       "features/admin/screens/product-new.tsx"),
       route("/products/:id",                       "features/admin/screens/product-detail.tsx"),
       route("/products/:id/stages/new",            "features/admin/screens/stage-new.tsx"),
