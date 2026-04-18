@@ -73,8 +73,8 @@ export function V2Nav({ user }: V2NavProps) {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link to="/products" className="cursor-pointer">
-                  학습 상품
+                <Link to="/my-learning" className="cursor-pointer">
+                  나의 학습 관리
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
