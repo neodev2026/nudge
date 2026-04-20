@@ -19,6 +19,7 @@ import { useEffect } from "react";
 import React from "react";
 
 import makeServerClient from "~/core/lib/supa-client.server";
+import adminClient from "~/core/lib/supa-admin-client.server";
 import {
   getNv2ProductSessionWithStages,
   startNv2UserSession,
@@ -155,6 +156,64 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       .filter((s) => (s.nv2_stages as any)?.stage_type === "learning")
       .every((s) => progress_map[s.stage_id] ?? false);
 
+  // ── Story chapter info (for story products) ──────────────────────────────
+  // Query directly via adminClient to bypass RLS.
+  // Join nv2_product_session_stages → nv2_stages (story) → nv2_cards.
+  let story_chapter: {
+    chapter_number: number;
+    chapter_title: string | null;
+    hook_text: string | null;
+  } | null = null;
+
+  // Debug: log product_session_id to server console
+  console.log("[story_chapter] product_session_id:", identity.product_session_id);
+
+  const { data: all_pss_rows, error: pss_err } = await adminClient
+    .from("nv2_product_session_stages")
+    .select("stage_id")
+    .eq("product_session_id", identity.product_session_id);
+
+  console.log("[story_chapter] all_pss_rows:", JSON.stringify(all_pss_rows), "err:", pss_err?.message);
+
+  const all_stage_ids = (all_pss_rows ?? []).map((r: any) => r.stage_id);
+
+  if (all_stage_ids.length > 0) {
+    const { data: story_stage_rows, error: ss_err } = await adminClient
+      .from("nv2_stages")
+      .select("id, stage_type")
+      .in("id", all_stage_ids)
+      .eq("stage_type", "story")
+      .limit(1);
+
+    console.log("[story_chapter] story_stage_rows:", JSON.stringify(story_stage_rows), "err:", ss_err?.message);
+
+    const story_stage_id = story_stage_rows?.[0]?.id ?? null;
+
+    if (story_stage_id) {
+      const { data: story_card, error: sc_err } = await adminClient
+        .from("nv2_cards")
+        .select("card_data")
+        .eq("stage_id", story_stage_id)
+        .eq("card_type", "story")
+        .eq("is_active", true)
+        .maybeSingle();
+
+      console.log("[story_chapter] story_card:", story_card ? "found" : "null", "err:", sc_err?.message);
+
+      if (story_card?.card_data) {
+        const d = story_card.card_data as any;
+        story_chapter = {
+          chapter_number: d.chapter_number ?? product_session.session_number,
+          chapter_title:  d.chapter_title  ?? null,
+          hook_text:      d.hook_text      ?? null,
+        };
+        console.log("[story_chapter] resolved:", JSON.stringify(story_chapter));
+      }
+    }
+  } else {
+    console.log("[story_chapter] no stage_ids found — all_pss_rows empty");
+  }
+
   return {
     session_id: params.sessionId,
     session_title,
@@ -175,6 +234,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     auth_user_id,
     is_anonymous: auth_user_id.startsWith("anon:"),
     link_access,
+    story_chapter,
   };
 }
 
@@ -198,6 +258,7 @@ export default function SessionPage() {
     all_completed,
     all_learning_completed,
     is_authenticated,
+    story_chapter,
     is_anonymous,
     auth_user_id,
     link_access,
@@ -359,6 +420,34 @@ export default function SessionPage() {
       </div>
 
       <div className="mx-auto max-w-lg px-6">
+        {/* ── Story chapter summary card (story products only) ── */}
+        {story_chapter && (
+          <div className="mt-6 rounded-2xl bg-white shadow-[0_4px_20px_rgba(26,39,68,0.08)] overflow-hidden">
+            <div className="bg-[#1a2744] px-5 py-3">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-[#4caf72]">
+                Chapter {story_chapter.chapter_number}
+              </p>
+              {story_chapter.chapter_title && (
+                <p className="mt-0.5 text-base font-black text-white">
+                  {story_chapter.chapter_title}
+                </p>
+              )}
+            </div>
+            {story_chapter.hook_text && (
+              <div className="px-5 py-4">
+                <p className="text-sm leading-[1.8] text-[#6b7a99]">
+                  {story_chapter.hook_text}
+                </p>
+              </div>
+            )}
+            <div className="border-t border-[#f4f6fb] px-5 py-4 space-y-3">
+              <StoryFlowStep num={1} label="단어 카드 학습 (5개)" desc="이 챕터의 단어를 먼저 학습합니다." />
+              <StoryFlowStep num={2} label="챕터 읽기" desc="이야기 속에서 단어를 다시 만납니다." />
+              <StoryFlowStep num={3} label="퀴즈" desc="배운 단어를 확인합니다." />
+            </div>
+          </div>
+        )}
+
         {/* ── Leni + message ── */}
         <div className="flex flex-col items-center py-8 text-center">
           <div className="relative mb-4">
@@ -700,5 +789,23 @@ function StageRow({
 
       <span className="text-sm text-[#6b7a99]">→</span>
     </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// StoryFlowStep — used in chapter summary card
+// ---------------------------------------------------------------------------
+
+function StoryFlowStep({ num, label, desc }: { num: number; label: string; desc: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#1a2744] text-[10px] font-black text-white">
+        {num}
+      </div>
+      <div>
+        <p className="text-sm font-bold text-[#1a2744]">{label}</p>
+        <p className="text-xs text-[#9aa3b5]">{desc}</p>
+      </div>
+    </div>
   );
 }

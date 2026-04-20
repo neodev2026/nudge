@@ -50,6 +50,7 @@ const STAGE_TYPE_LABELS: Record<string, string> = {
   sentence_practice: "문장 연습 (sentence_practice)",
   dictation: "받아쓰기 (dictation)",
   writing: "작문 연습 (writing)",
+  story: "스토리 (story)",
 };
 
 const CARD_TYPE_LABELS: Record<string, string> = {
@@ -59,6 +60,7 @@ const CARD_TYPE_LABELS: Record<string, string> = {
   etymology: "어원 (etymology)",
   example: "예문 (example)",
   option: "선택지 (option)",
+  story: "스토리 본문 (story)",
 };
 
 export default function AdminStageEdit() {
@@ -158,6 +160,14 @@ export default function AdminStageEdit() {
           </stage_fetcher.Form>
         </section>
 
+        {/* ── Story: illustration editor (story type only) ── */}
+        {stage.stage_type === "story" && (
+          <StoryIllustrationEditor
+            stage_id={stage.id}
+            cards={cards}
+          />
+        )}
+
         {/* ── Cards ── */}
         <section>
           <div className="mb-4 flex items-center justify-between">
@@ -167,7 +177,7 @@ export default function AdminStageEdit() {
                 {cards.length}개
               </span>
             </h2>
-            {stage.stage_type.startsWith("quiz") || stage.stage_type === "congratulations" || stage.stage_type === "dictation" ? null : (
+            {stage.stage_type.startsWith("quiz") || stage.stage_type === "congratulations" || stage.stage_type === "dictation" || stage.stage_type === "story" ? null : (
               <button
                 onClick={() => set_adding_card(true)}
                 className="rounded-xl bg-[#4caf72] px-4 py-2 text-xs font-extrabold text-white hover:bg-[#5ecb87]"
@@ -178,12 +188,14 @@ export default function AdminStageEdit() {
           </div>
 
           {/* Quiz / congratulations / dictation stage notice */}
-          {(stage.stage_type.startsWith("quiz") || stage.stage_type === "congratulations" || stage.stage_type === "dictation") && (
+          {(stage.stage_type.startsWith("quiz") || stage.stage_type === "congratulations" || stage.stage_type === "dictation" || stage.stage_type === "story") && (
             <div className="rounded-2xl border border-[#4caf72]/30 bg-[#4caf72]/5 px-5 py-4 text-sm text-[#4caf72] font-semibold">
               {stage.stage_type.startsWith("quiz")
                 ? "퀴즈 스테이지는 카드를 추가할 필요가 없습니다. 세션 내 앞선 learning 스테이지의 카드를 자동으로 가져와 퀴즈를 구성합니다."
                 : stage.stage_type === "dictation"
                 ? "받아쓰기 스테이지는 카드가 필요 없습니다. 세션 내 learning 스테이지의 예문 카드를 자동으로 사용합니다."
+                : stage.stage_type === "story"
+                ? null
                 : "congratulations 스테이지는 카드가 필요 없습니다. 전체 학습 완료 시 자동으로 표시됩니다."}
             </div>
           )}
@@ -503,5 +515,141 @@ function CardForm({
         </button>
       </div>
     </fetcher.Form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// StoryIllustrationEditor — story stage only
+// ---------------------------------------------------------------------------
+
+/**
+ * Displays the story chapter text preview and allows the admin to set/update
+ * the illustration_url field inside card_data (JSONB partial update via upsert).
+ */
+function StoryIllustrationEditor({
+  stage_id,
+  cards,
+}: {
+  stage_id: string;
+  cards: any[];
+}) {
+  const fetcher = useFetcher<{ ok?: boolean }>();
+  const story_card = cards.find((c: any) => c.card_type === "story");
+  const story_data = story_card?.card_data as {
+    chapter_number?: number;
+    summary?: string;
+    text?: string;
+    illustration_url?: string | null;
+  } | undefined;
+
+  const [url_input, set_url_input] = useState(
+    story_data?.illustration_url ?? ""
+  );
+  const [preview_error, set_preview_error] = useState(false);
+
+  // Strip {{word|meaning}} markers for plain text preview
+  const plain_text = (story_data?.text ?? "")
+    .replace(/\{\{([^|]+)\|[^}]+\}\}/g, "$1")
+    .slice(0, 120);
+
+  if (!story_card) {
+    return (
+      <section className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+        <p className="text-sm font-semibold text-amber-700">
+          story 카드가 아직 없습니다. n8n 파이프라인으로 생성 후 이 곳에서 삽화를 추가할 수 있습니다.
+        </p>
+      </section>
+    );
+  }
+
+  const is_saving = fetcher.state !== "idle";
+  const save_ok = fetcher.data && "ok" in fetcher.data && fetcher.data.ok;
+
+  function handleSave() {
+    if (!story_card) return;
+    const new_card_data = {
+      ...(story_data ?? {}),
+      illustration_url: url_input.trim() || null,
+    };
+    fetcher.submit(
+      {
+        id: story_card.id,
+        stage_id,
+        card_type: "story",
+        display_order: String(story_card.display_order ?? 1),
+        is_active: "true",
+        card_data: JSON.stringify(new_card_data),
+      },
+      { method: "POST", action: "/admin/api/cards/upsert" }
+    );
+  }
+
+  return (
+    <section className="mb-6 rounded-2xl border border-[#e8ecf5] bg-white p-6 shadow-[0_2px_12px_rgba(26,39,68,0.06)]">
+      <h2 className="mb-4 font-display text-base font-black text-[#1a2744]">
+        챕터 삽화 관리
+      </h2>
+
+      {/* Chapter text preview */}
+      {plain_text && (
+        <div className="mb-5 rounded-xl bg-[#fdf8f0] px-4 py-3">
+          <p className="mb-1 text-[10px] font-extrabold uppercase tracking-wider text-[#9aa3b5]">
+            챕터 {story_data?.chapter_number ?? "?"} 미리보기
+          </p>
+          <p className="text-sm leading-[1.7] text-[#1a2744]">
+            "{plain_text}{plain_text.length >= 120 ? "..." : ""}"
+          </p>
+        </div>
+      )}
+
+      {/* Illustration URL input */}
+      <div className="mb-4">
+        <label className="mb-1.5 block text-xs font-extrabold text-[#6b7a99]">
+          삽화 이미지 URL
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="url"
+            value={url_input}
+            onChange={(e) => {
+              set_url_input(e.target.value);
+              set_preview_error(false);
+            }}
+            placeholder="https://..."
+            className="flex-1 rounded-xl border border-[#e8ecf5] bg-[#fdf8f0] px-4 py-2.5 text-sm focus:border-[#1a2744] focus:outline-none"
+          />
+          <button
+            onClick={handleSave}
+            disabled={is_saving}
+            className="rounded-xl bg-[#1a2744] px-5 py-2.5 text-sm font-extrabold text-white hover:bg-[#243358] disabled:opacity-60"
+          >
+            {is_saving ? "저장 중..." : "저장"}
+          </button>
+        </div>
+        {save_ok && (
+          <p className="mt-1.5 text-xs font-semibold text-[#4caf72]">저장됐습니다 ✓</p>
+        )}
+      </div>
+
+      {/* Image preview */}
+      {url_input && !preview_error && (
+        <div className="overflow-hidden rounded-xl border border-[#e8ecf5]">
+          <img
+            src={url_input}
+            alt="삽화 미리보기"
+            className="max-h-48 w-full object-cover bg-[#f4f6fb]"
+            onError={() => set_preview_error(true)}
+          />
+        </div>
+      )}
+      {url_input && preview_error && (
+        <p className="text-xs font-semibold text-red-400">
+          이미지를 불러올 수 없습니다. URL을 확인해주세요.
+        </p>
+      )}
+      {!url_input && (
+        <p className="text-xs text-[#c3c9d5]">URL을 입력하면 미리보기가 표시됩니다.</p>
+      )}
+    </section>
   );
 }
