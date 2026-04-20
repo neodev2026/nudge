@@ -17,9 +17,13 @@ import { requireAdmin } from "~/features/admin/lib/guards.server";
 // ---------------------------------------------------------------------------
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const [client] = makeServerClient(request);
+  // Include headers in the response so that refreshed session cookies
+  // (set by Supabase SSR during getUser()) are forwarded to the browser.
+  // Without this, a token refresh on the server is lost and the next
+  // request arrives with the old (expired) token, causing auth errors.
+  const [client, headers] = makeServerClient(request);
   const { email } = await requireAdmin(client, request);
-  return { email };
+  return Response.json({ email }, { headers });
 }
 
 // ---------------------------------------------------------------------------

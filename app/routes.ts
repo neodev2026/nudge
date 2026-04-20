@@ -50,6 +50,7 @@ export default [
       route("/chat/:sessionId/message",      "features/v2/chat/api/message.tsx"),
       route("/dictation/:stageId/result",    "features/v2/dictation/api/result.tsx"),
       route("/writing/:stageId/result",      "features/v2/writing/api/result.tsx"),
+      route("/story/:stageId/result",        "features/v2/story/api/result.tsx"),
       route("/auth/delete-account",             "features/v2/auth/screens/delete-account.tsx"),
     ]),
   ]),
@@ -62,6 +63,10 @@ export default [
       index("features/admin/screens/dashboard.tsx"),
       route("/users",                              "features/admin/screens/users.tsx"),
       route("/trial-sessions",                     "features/admin/screens/trial-sessions.tsx"),
+      route("/leni-turns",                         "features/admin/screens/leni-turns.tsx"),
+      route("/stats",                              "features/admin/screens/stats.tsx"),
+      route("/site-settings",                      "features/admin/screens/site-settings.tsx"),
+      route("/products",                           "features/admin/screens/products.tsx"),
       route("/products/new",                       "features/admin/screens/product-new.tsx"),
       route("/products/:id",                       "features/admin/screens/product-detail.tsx"),
       route("/products/:id/stages/new",            "features/admin/screens/stage-new.tsx"),
@@ -86,10 +91,10 @@ export default [
   layout("core/layouts/v2-nav.layout.tsx", [
     index("features/v2/home/screens/home-page.tsx"),
     route("/products",       "features/v2/products/screens/products-page.tsx"),
-    route("/products/:slug", "features/v2/products/screens/product-detail-page.tsx"),
     route("/products/:slug/checkout", "features/v2/products/screens/checkout.tsx"),
     route("/products/:slug/progress", "features/v2/products/screens/progress-page.tsx"),
-    route("/my-learning", "features/v2/products/screens/my-learning-page.tsx"),
+    route("/products/:slug",          "features/v2/products/screens/product-detail-page.tsx"),
+    route("/my-learning",             "features/v2/products/screens/my-learning-page.tsx"),
 
     // v2 auth pages
     route("/login",   "features/v2/auth/screens/login.tsx"),
@@ -101,6 +106,8 @@ export default [
   layout("core/layouts/v2.layout.tsx", [
     route("/stages/:stageId",           "features/v2/stage/screens/stage-page.tsx"),
     route("/sessions/:sessionId",       "features/v2/session/screens/session-choice-page.tsx"),
+    route("/sessions/:sessionId/story", "features/v2/session/screens/story-session-page.tsx"),
+    route("/story/:stageId",             "features/v2/story/screens/story-page.tsx"),
     route("/sessions/:sessionId/list",  "features/v2/session/screens/session-page.tsx"),
     route("/sessions/:sessionId/chat",  "features/v2/chat/screens/chat-page.tsx"),
     route("/quiz/:stageId",             "features/v2/quiz/screens/quiz-page.tsx"),
