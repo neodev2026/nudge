@@ -129,6 +129,26 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   );
   const quiz_stage_id = (quiz_stage?.stage_id as string | undefined) ?? null;
 
+  // story stage for StoryBubble
+  const story_stage = stages.find(
+    (s) => (s.nv2_stages as any)?.stage_type === "story"
+  );
+  const story_stage_id = (story_stage?.stage_id as string | undefined) ?? null;
+
+  // Load hook_text for StoryBubble
+  let story_hook_text: string | null = null;
+  if (story_stage_id) {
+    const { data: story_card } = await adminClient
+      .from("nv2_cards")
+      .select("card_data")
+      .eq("stage_id", story_stage_id)
+      .eq("card_type", "story")
+      .maybeSingle();
+    if (story_card?.card_data) {
+      story_hook_text = (story_card.card_data as any)?.hook_text ?? null;
+    }
+  }
+
   return {
     session_id: params.sessionId,
     session_title,
@@ -137,6 +157,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     history_rows: history_rows ?? [],
     intro_cards,
     quiz_stage_id,
+    story_stage_id,
+    story_hook_text,
   };
 }
 
@@ -165,7 +187,9 @@ function speakOnce(text: string, lang: string) {
 function buildIntroMessages(
   intro_cards: Array<{ stage_id: string; cards: CardObject[] }>,
   session_id: string,
-  quiz_stage_id: string | null
+  quiz_stage_id: string | null,
+  story_stage_id: string | null = null,
+  story_hook_text: string | null = null
 ): ChatMessage[] {
   const messages: ChatMessage[] = [];
 
@@ -199,6 +223,20 @@ function buildIntroMessages(
     text: choices,
   });
 
+  // Story bubble — shown before quiz bubble for story products
+  if (story_stage_id) {
+    messages.push({
+      id: "story-bubble",
+      role: "leni",
+      bubble_type: "quiz",  // reuse quiz bubble_type for rendering
+      text: "",
+      stage_id: story_stage_id,
+      stage_type: "story",
+      stage_title: story_hook_text ?? "이번 챕터 이야기를 읽어봐요!",
+      session_id,
+    });
+  }
+
   return messages;
 }
 
@@ -206,10 +244,12 @@ function buildInitialMessages(
   history_rows: Array<{ id: string; role: string; message_type: string; content: string }>,
   intro_cards: Array<{ stage_id: string; cards: CardObject[] }>,
   session_id: string,
-  quiz_stage_id: string | null
+  quiz_stage_id: string | null,
+  story_stage_id: string | null = null,
+  story_hook_text: string | null = null
 ): ChatMessage[] {
   // Always show intro cards at the top (cards + guidance message)
-  const intro = buildIntroMessages(intro_cards, session_id, quiz_stage_id);
+  const intro = buildIntroMessages(intro_cards, session_id, quiz_stage_id, story_stage_id, story_hook_text);
 
   // If there is existing history, append it below the intro
   if (history_rows.length > 0) {
@@ -331,10 +371,12 @@ export default function ChatPage() {
     history_rows,
     intro_cards,
     quiz_stage_id,
+    story_stage_id,
+    story_hook_text,
   } = useLoaderData<typeof loader>();
 
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
-    buildInitialMessages(history_rows, intro_cards, session_id, quiz_stage_id)
+    buildInitialMessages(history_rows, intro_cards, session_id, quiz_stage_id, story_stage_id, story_hook_text)
   );
   const [input, setInput] = useState("");
   const [is_typing, set_is_typing] = useState(false);
@@ -762,6 +804,7 @@ const DEDICATED_STAGE_ROUTES: Record<string, string> = {
   sentence_practice: "sentence",
   dictation: "dictation",
   writing: "writing",
+  story: "story",
 };
 
 function QuizBubble({
@@ -780,8 +823,9 @@ function QuizBubble({
     const route = (stage_type && DEDICATED_STAGE_ROUTES[stage_type])
       ? DEDICATED_STAGE_ROUTES[stage_type]
       : "quiz";
+    const extra = stage_type === "story" ? "&next=close" : "&from=chat";
     window.open(
-      `/${route}/${stage_id}?session=${session_id}&from=chat`,
+      `/${route}/${stage_id}?session=${session_id}${extra}`,
       "_blank",
       "noopener,noreferrer"
     );
@@ -790,17 +834,39 @@ function QuizBubble({
   return (
     <div className="flex items-end gap-2 justify-start">
       <div className="h-8 w-8 shrink-0" />
-      <div className="w-full max-w-[85%] rounded-2xl rounded-bl-sm border-2 border-dashed border-[#5865F2]/30 bg-[#5865F2]/5 px-4 py-4">
-        <p className="mb-1 text-xs font-extrabold uppercase tracking-wider text-[#5865F2]">퀴즈</p>
-        <p className="mb-3 text-sm font-bold text-[#1a2744]">
-          {title ?? "지금까지 배운 단어를 확인해봐요!"}
-        </p>
-        <button
-          onClick={openQuiz}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-[#5865F2] px-4 py-2 text-xs font-extrabold text-white transition hover:bg-[#4752c4]"
-        >
-          퀴즈 시작 →
-        </button>
+      <div className={[
+        "w-full max-w-[85%] rounded-2xl rounded-bl-sm border-2 border-dashed px-4 py-4",
+        stage_type === "story"
+          ? "border-[#4caf72]/30 bg-[#4caf72]/5"
+          : "border-[#5865F2]/30 bg-[#5865F2]/5",
+      ].join(" ")}>
+        {stage_type === "story" ? (
+          <>
+            <p className="mb-1 text-xs font-extrabold uppercase tracking-wider text-[#4caf72]">📖 이번 챕터</p>
+            <p className="mb-3 text-sm leading-[1.7] text-[#1a2744]">
+              {title ?? "이번 챕터 이야기를 읽어봐요!"}
+            </p>
+            <button
+              onClick={openQuiz}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#4caf72] px-4 py-2 text-xs font-extrabold text-white transition hover:bg-[#3d9e61]"
+            >
+              챕터 읽기 →
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="mb-1 text-xs font-extrabold uppercase tracking-wider text-[#5865F2]">퀴즈</p>
+            <p className="mb-3 text-sm font-bold text-[#1a2744]">
+              {title ?? "지금까지 배운 단어를 확인해봐요!"}
+            </p>
+            <button
+              onClick={openQuiz}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#5865F2] px-4 py-2 text-xs font-extrabold text-white transition hover:bg-[#4752c4]"
+            >
+              퀴즈 시작 →
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

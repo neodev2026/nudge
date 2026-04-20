@@ -16,9 +16,18 @@ export async function requireAdmin(
   request: Request
 ) {
   // ── Step 1: Check authentication ─────────────────────────────────────────
-  const {
-    data: { user },
-  } = await client.auth.getUser();
+  // Wrap getUser() to handle expired/invalid refresh tokens gracefully.
+  // Supabase throws AuthApiError (refresh_token_not_found) instead of
+  // returning null user when the stored token is invalid, which would
+  // otherwise surface as an unhandled error and show a page not found.
+  let user;
+  try {
+    const { data } = await client.auth.getUser();
+    user = data.user;
+  } catch (err) {
+    const current_url = new URL(request.url).pathname;
+    throw redirect(`/admin/login?next=${encodeURIComponent(current_url)}`);
+  }
 
   if (!user || !user.email) {
     const current_url = new URL(request.url).pathname;

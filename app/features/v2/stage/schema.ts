@@ -27,6 +27,7 @@ export const nv2CardType = pgEnum("nv2_card_type", [
   "etymology",
   "example",
   "option",
+  "story",
 ]);
 
 /**
@@ -53,6 +54,7 @@ export const nv2StageType = pgEnum("nv2_stage_type", [
   "sentence_practice",
   "dictation",
   "writing",
+  "story",
 ]);
 
 // ---------------------------------------------------------------------------

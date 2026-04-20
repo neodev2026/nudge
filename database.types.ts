@@ -1471,6 +1471,7 @@ export type Database = {
         | "etymology"
         | "example"
         | "option"
+        | "story"
       nv2_chat_message_type:
         | "text"
         | "card"
@@ -1511,6 +1512,7 @@ export type Database = {
         | "sentence_practice"
         | "dictation"
         | "writing"
+        | "story"
       nv2_subscription_source: "paid" | "free" | "admin"
       push_channel: "discord" | "kakao" | "email" | "telegram"
       sns_type: "discord" | "kakao" | "email" | "telegram"
@@ -1688,6 +1690,7 @@ export const Constants = {
         "etymology",
         "example",
         "option",
+        "story",
       ],
       nv2_chat_message_type: [
         "text",
@@ -1732,6 +1735,7 @@ export const Constants = {
         "sentence_practice",
         "dictation",
         "writing",
+        "story",
       ],
       nv2_subscription_source: ["paid", "free", "admin"],
       push_channel: ["discord", "kakao", "email", "telegram"],

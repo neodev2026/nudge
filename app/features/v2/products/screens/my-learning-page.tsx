@@ -75,7 +75,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const product_ids = subscriptions.map((s) => s.product.id);
 
   let completed_map: Record<string, number> = {};
+  let total_sessions_map: Record<string, number> = {};
+
   if (product_ids.length > 0) {
+    // Completed sessions per product
     const { data: sessions_raw } = await adminClient
       .from("nv2_sessions")
       .select("product_session_id, nv2_product_sessions!inner(product_id)")
@@ -88,11 +91,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
       const pid = (s.nv2_product_sessions as any)?.product_id as string;
       if (pid) completed_map[pid] = (completed_map[pid] ?? 0) + 1;
     }
+
+    // Total sessions per product — count from nv2_product_sessions
+    const { data: ps_counts } = await adminClient
+      .from("nv2_product_sessions")
+      .select("product_id")
+      .in("product_id", product_ids)
+      .eq("is_active", true);
+
+    for (const row of ps_counts ?? []) {
+      const pid = row.product_id as string;
+      total_sessions_map[pid] = (total_sessions_map[pid] ?? 0) + 1;
+    }
   }
 
   const items = subscriptions.map((s) => ({
     ...s,
     completed_sessions: completed_map[s.product.id] ?? 0,
+    total_sessions:     total_sessions_map[s.product.id] ?? 0,
   }));
 
   return { items };
@@ -159,15 +175,11 @@ export default function MyLearningPage() {
       ) : (
         <div className="space-y-4">
           {items.map((item) => {
-            const { product, completed_sessions } = item;
+            const { product, completed_sessions, total_sessions } = item;
             const pct =
-              product.total_stages > 0
-                ? Math.round((completed_sessions / product.total_stages) * 100)
+              total_sessions > 0
+                ? Math.round((completed_sessions / total_sessions) * 100)
                 : 0;
-            // total_stages = stages count; sessions = stages / 5 (approx)
-            const total_sessions = product.total_stages > 0
-              ? Math.ceil(product.total_stages / 5)
-              : 0;
             const subtitle = getProductSubtitle(product);
 
             return (
