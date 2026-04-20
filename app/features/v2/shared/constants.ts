@@ -21,6 +21,7 @@ export const V2_CARD_TYPES = [
   "etymology",    // Word origin and root history
   "example",      // Example sentence with translation
   "option",       // Multiple choice or selection interaction
+  "story",        // Story chapter text with {{word|meaning}} markers
 ] as const;
 
 /**
@@ -39,6 +40,7 @@ export const V2_STAGE_TYPES = [
   "sentence_practice",
   "dictation",   // Listen to TTS and type what you hear
   "writing",     // Compose sentences using session vocabulary with AI feedback
+  "story",       // Story chapter — typewriter display with word popup interrupts
 ] as const;
 
 /**

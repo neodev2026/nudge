@@ -3,6 +3,10 @@
  *
  * Product detail page.
  *
+ * Renders two layouts based on product type:
+ *   - "story" (meta.story exists): chapter list, story-specific how-to
+ *   - "word"  (default):           session word preview, word card how-to
+ *
  * CTA buttons:
  *   "학습 시작" — branches based on auth + subscription state:
  *     - Not logged in          → /login?next=/products/:slug
@@ -50,13 +54,17 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const product = await getNv2ProductBySlug(client, { slug: params.slug });
   if (!product) throw new Response("Product not found", { status: 404 });
 
+  const meta_obj = (product.meta && typeof product.meta === "object" && !Array.isArray(product.meta))
+    ? (product.meta as Record<string, unknown>)
+    : {};
+  const is_story = !!meta_obj?.story;
+
   const first_stage = await getNv2FirstStage(client, product.id).catch(() => null);
   const first_product_session = await getNv2FirstProductSession(client, product.id).catch(() => null);
 
   const { data: { user } } = await client.auth.getUser();
   const is_authenticated = !!user;
 
-  // Check subscription if logged in
   let is_subscribed = false;
   if (user) {
     const { data: sub } = await adminClient
@@ -69,15 +77,78 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     is_subscribed = !!sub;
   }
 
+  // Session count for stats
+  const { count: session_count } = await adminClient
+    .from("nv2_product_sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("product_id", product.id)
+    .eq("is_active", true);
+
+  // Session preview list
+  // - word product: first 5 sessions with word titles
+  // - story product: all sessions (chapter list)
+  let session_previews: Array<{
+    session_number: number;
+    title: string;
+    word_titles: string[];
+  }> = [];
+
+  if (is_story) {
+    // All chapters with title
+    const { data: chapters } = await adminClient
+      .from("nv2_product_sessions")
+      .select("session_number, title")
+      .eq("product_id", product.id)
+      .eq("is_active", true)
+      .order("session_number", { ascending: true });
+
+    session_previews = (chapters ?? []).map((c) => ({
+      session_number: c.session_number,
+      title: c.title ?? `Chapter ${c.session_number}`,
+      word_titles: [],
+    }));
+  } else {
+    // First 5 sessions with learning stage titles (= words)
+    const { data: sessions } = await adminClient
+      .from("nv2_product_sessions")
+      .select(`
+        session_number, title,
+        nv2_product_session_stages(
+          display_order,
+          nv2_stages!inner(title, stage_type)
+        )
+      `)
+      .eq("product_id", product.id)
+      .eq("is_active", true)
+      .order("session_number", { ascending: true })
+      .limit(5);
+
+    session_previews = (sessions ?? []).map((s) => {
+      const words = ((s.nv2_product_session_stages as any[]) ?? [])
+        .filter((p: any) => p.nv2_stages?.stage_type === "learning")
+        .sort((a: any, b: any) => a.display_order - b.display_order)
+        .map((p: any) => p.nv2_stages?.title ?? "")
+        .filter(Boolean);
+      return {
+        session_number: s.session_number,
+        title: s.title ?? `Session ${s.session_number}`,
+        word_titles: words,
+      };
+    });
+  }
+
   return {
     product: {
       ...product,
       price: (product as any).price ?? 0,
     },
+    is_story,
     first_stage,
     first_product_session,
     is_authenticated,
     is_subscribed,
+    session_count: session_count ?? 0,
+    session_previews,
   };
 }
 
@@ -108,11 +179,18 @@ const CATEGORY_ICONS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 export default function ProductDetailPage() {
-  const { product, first_stage, first_product_session, is_authenticated, is_subscribed } =
-    useLoaderData<typeof loader>();
+  const {
+    product, is_story,
+    first_stage, first_product_session,
+    is_authenticated, is_subscribed,
+    session_count, session_previews,
+  } = useLoaderData<typeof loader>();
 
   const icon = product.icon ?? CATEGORY_ICONS[product.category] ?? "📚";
   const subtitle = getProductSubtitle(product.category, product.meta as NV2ProductMeta | null);
+  const meta_obj = (product.meta && typeof product.meta === "object" && !Array.isArray(product.meta))
+    ? (product.meta as Record<string, unknown>)
+    : {};
 
   return (
     <div className="min-h-screen bg-[#fdf8f0]">
@@ -125,10 +203,10 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="mx-auto max-w-2xl px-6 py-12">
-        {/* Product header */}
-        <div className="mb-10 rounded-3xl bg-white p-8 shadow-[0_4px_24px_rgba(26,39,68,0.08)]">
+      <div className="mx-auto max-w-2xl px-6 py-8 space-y-5">
+
+        {/* ── Product header card ── */}
+        <div className="rounded-3xl bg-white p-8 shadow-[0_4px_24px_rgba(26,39,68,0.08)]">
           <span className="mb-4 block text-5xl">{icon}</span>
 
           {subtitle && (
@@ -149,68 +227,201 @@ export default function ProductDetailPage() {
 
           {/* Stats row */}
           <div className="mb-8 flex gap-8 border-t border-[#1a2744]/[0.06] pt-6">
-            <div>
-              <div className="font-display text-2xl font-black text-[#1a2744]">
-                {product.total_stages.toLocaleString()}<span className="text-[#4caf72]">개</span>
-              </div>
-              <div className="mt-0.5 text-xs text-[#6b7a99]">학습 단계</div>
-            </div>
-            <div>
-              <div className="font-display text-2xl font-black text-[#1a2744]">
-                20<span className="text-[#4caf72]">초</span>
-              </div>
-              <div className="mt-0.5 text-xs text-[#6b7a99]">카드 1장 학습</div>
-            </div>
-            <div>
-              <div className="font-display text-2xl font-black text-[#1a2744]">
-                {product.price === 0 ? (
-                  <>0<span className="text-[#4caf72]">원</span></>
-                ) : (
-                  <>{product.price.toLocaleString("ko-KR")}<span className="text-xs text-[#6b7a99] ml-1">원</span></>
-                )}
-              </div>
-              <div className="mt-0.5 text-xs text-[#6b7a99]">
-                {product.price === 0 ? "무료" : "가격"}
-              </div>
-            </div>
+            {is_story ? (
+              <>
+                <StatItem
+                  value={String(session_count)}
+                  unit="챕터"
+                  label={typeof meta_obj.season === "number" ? `시즌 ${meta_obj.season}` : "전체"}
+                />
+                <StatItem value="5" unit="단어" label="챕터당 학습" />
+              </>
+            ) : (
+              <>
+                <StatItem
+                  value={product.total_stages > 0 ? product.total_stages.toLocaleString() : String(session_count * 5)}
+                  unit="개"
+                  label="학습 단어"
+                />
+                <StatItem value={String(session_count)} unit="세션" label="전체 세션" />
+              </>
+            )}
+            <StatItem
+              value={product.price === 0 ? "0" : product.price.toLocaleString("ko-KR")}
+              unit="원"
+              label={product.price === 0 ? "무료" : "가격"}
+            />
           </div>
 
-          {/* CTA buttons */}
+          {/* CTA */}
           <CTASection
             product_slug={product.slug}
             first_stage={first_stage}
             first_product_session={first_product_session}
             is_authenticated={is_authenticated}
             is_subscribed={is_subscribed}
+            is_story={is_story}
           />
         </div>
 
-        {/* How it works */}
+        {/* ── How it works ── */}
         <div className="rounded-3xl bg-white p-8 shadow-[0_4px_24px_rgba(26,39,68,0.08)]">
           <h2 className="mb-6 font-display text-lg font-black text-[#1a2744]">학습 방법</h2>
-          <div className="space-y-4">
-            {[
-              { num: "01", title: "카드 열람", desc: "단어, 의미, 예문 카드를 순서대로 확인합니다. 한 장에 20초면 충분해요." },
-              { num: "02", title: "Self 평가", desc: "\"암기 완료\"를 누르면 다음 단계로 진행됩니다. 더 보고 싶으면 \"다시 보기\"를 눌러요." },
-              { num: "03", title: "자동 복습", desc: "+1일, +3일, +7일, +14일에 복습 알림이 발송됩니다." },
-            ].map(({ num, title, desc }) => (
-              <div key={num} className="flex gap-4">
-                <div className="font-display text-2xl font-black leading-none text-[#4caf72]/30">{num}</div>
-                <div>
-                  <h3 className="mb-1 font-display text-sm font-extrabold text-[#1a2744]">{title}</h3>
-                  <p className="text-sm leading-[1.7] text-[#6b7a99]">{desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          {is_story ? <StoryHowTo /> : <WordHowTo />}
         </div>
+
+        {/* ── Session / Chapter list ── */}
+        {session_previews.length > 0 && (
+          is_story
+            ? <ChapterList chapters={session_previews} />
+            : <SessionPreviewList sessions={session_previews} total={session_count} />
+        )}
+
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// CTASection
+// StatItem
+// ---------------------------------------------------------------------------
+
+function StatItem({ value, unit, label }: { value: string; unit: string; label: string }) {
+  return (
+    <div>
+      <div className="font-display text-2xl font-black text-[#1a2744]">
+        {value}<span className="text-[#4caf72]">{unit}</span>
+      </div>
+      <div className="mt-0.5 text-xs text-[#6b7a99]">{label}</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// HowTo sections
+// ---------------------------------------------------------------------------
+
+function WordHowTo() {
+  const steps = [
+    { num: "01", title: "카드 열람", desc: "단어, 의미, 예문 카드를 순서대로 확인합니다." },
+    { num: "02", title: "Self 평가", desc: "\"암기 완료\"를 누르면 다음 단계로 진행됩니다. 더 보고 싶으면 \"다시 보기\"를 눌러요." },
+    { num: "03", title: "퀴즈 & 문장 연습", desc: "매 세션마다 퀴즈와 문장 만들기로 기억을 다집니다." },
+    { num: "04", title: "자동 복습", desc: "+1일, +3일, +7일, +14일에 복습 알림이 발송됩니다." },
+  ];
+  return <HowToList steps={steps} />;
+}
+
+function StoryHowTo() {
+  const steps = [
+    { num: "01", title: "단어 먼저", desc: "챕터 시작 전 5개 단어를 카드로 미리 학습합니다." },
+    { num: "02", title: "이야기 읽기", desc: "이야기를 읽다가 단어가 등장하면 클릭해서 뜻과 예문을 확인합니다." },
+    { num: "03", title: "퀴즈로 마무리", desc: "챕터 끝에 퀴즈로 기억을 다져요." },
+    { num: "04", title: "자동 복습", desc: "+1일, +3일, +7일, +14일에 복습 알림이 발송됩니다." },
+  ];
+  return <HowToList steps={steps} />;
+}
+
+function HowToList({ steps }: { steps: { num: string; title: string; desc: string }[] }) {
+  return (
+    <div className="space-y-4">
+      {steps.map(({ num, title, desc }) => (
+        <div key={num} className="flex gap-4">
+          <div className="font-display text-2xl font-black leading-none text-[#4caf72]/30">{num}</div>
+          <div>
+            <h3 className="mb-1 font-display text-sm font-extrabold text-[#1a2744]">{title}</h3>
+            <p className="text-sm leading-[1.7] text-[#6b7a99]">{desc}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Chapter list (story)
+// ---------------------------------------------------------------------------
+
+function ChapterList({ chapters }: {
+  chapters: Array<{ session_number: number; title: string; word_titles: string[] }>;
+}) {
+  const [expanded, set_expanded] = useState(false);
+  const visible = expanded ? chapters : chapters.slice(0, 5);
+
+  return (
+    <div className="rounded-3xl bg-white shadow-[0_4px_24px_rgba(26,39,68,0.08)] overflow-hidden">
+      <div className="px-8 pt-7 pb-4 border-b border-[#f4f6fb]">
+        <h2 className="font-display text-lg font-black text-[#1a2744]">챕터 목록</h2>
+        <p className="mt-1 text-xs text-[#9aa3b5]">전체 {chapters.length}챕터</p>
+      </div>
+      <div className="divide-y divide-[#f4f6fb]">
+        {visible.map((ch) => {
+          // Extract chapter title after ": " if present
+          const display_title = ch.title.includes(": ")
+            ? ch.title.split(": ").slice(1).join(": ")
+            : ch.title;
+          return (
+            <div key={ch.session_number} className="flex items-center gap-4 px-8 py-4">
+              <span className="w-10 shrink-0 font-display text-xs font-black text-[#c3c9d5]">
+                Ch.{ch.session_number}
+              </span>
+              <span className="text-sm font-bold text-[#1a2744]">{display_title}</span>
+            </div>
+          );
+        })}
+      </div>
+      {chapters.length > 5 && (
+        <div className="px-8 py-4 text-center border-t border-[#f4f6fb]">
+          <button
+            onClick={() => set_expanded((v) => !v)}
+            className="text-sm font-bold text-[#6b7a99] hover:text-[#1a2744] transition-colors"
+          >
+            {expanded ? "접기 ↑" : `더 보기 (${chapters.length - 5}개 남음) ↓`}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Session preview list (word)
+// ---------------------------------------------------------------------------
+
+function SessionPreviewList({ sessions, total }: {
+  sessions: Array<{ session_number: number; title: string; word_titles: string[] }>;
+  total: number;
+}) {
+  return (
+    <div className="rounded-3xl bg-white shadow-[0_4px_24px_rgba(26,39,68,0.08)] overflow-hidden">
+      <div className="px-8 pt-7 pb-4 border-b border-[#f4f6fb]">
+        <h2 className="font-display text-lg font-black text-[#1a2744]">학습 내용 미리보기</h2>
+        <p className="mt-1 text-xs text-[#9aa3b5]">첫 5세션 · 전체 {total}세션</p>
+      </div>
+      <div className="divide-y divide-[#f4f6fb]">
+        {sessions.map((s) => (
+          <div key={s.session_number} className="px-8 py-4">
+            <div className="flex items-center gap-3 mb-1.5">
+              <span className="w-16 shrink-0 font-display text-xs font-black text-[#c3c9d5]">
+                Session {s.session_number}
+              </span>
+            </div>
+            {s.word_titles.length > 0 && (
+              <p className="text-xs leading-[1.7] text-[#6b7a99]">
+                {s.word_titles.join(" · ")}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="px-8 py-4 text-center border-t border-[#f4f6fb]">
+        <p className="text-xs text-[#c3c9d5]">구독 후 전체 세션 목록을 확인할 수 있어요</p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CTASection (unchanged from original)
 // ---------------------------------------------------------------------------
 
 function CTASection({
@@ -219,26 +430,30 @@ function CTASection({
   first_product_session,
   is_authenticated,
   is_subscribed,
+  is_story,
 }: {
   product_slug: string;
   first_stage: { id: string } | null;
   first_product_session: { id: string } | null;
   is_authenticated: boolean;
   is_subscribed: boolean;
+  is_story: boolean;
 }) {
   const [show_trial_modal, set_show_trial_modal] = useState(false);
-
   const fetcher = useFetcher<{ ok?: boolean; session_id?: string; error?: string }>();
   const is_loading = fetcher.state !== "idle";
 
-  // Redirect after start-learning succeeds
   useEffect(() => {
     if (fetcher.data?.ok && fetcher.data.session_id) {
       window.location.href = `/sessions/${fetcher.data.session_id}`;
     }
   }, [fetcher.data]);
 
-  if (!first_stage) {
+  // story: has content when first_product_session exists
+  // word:  has content when first_stage (learning) exists
+  const has_content = is_story ? !!first_product_session : !!first_stage;
+
+  if (!has_content) {
     return (
       <div className="rounded-2xl bg-[#fdf8f0] px-5 py-4 text-center">
         <p className="text-sm font-bold text-[#6b7a99]">콘텐츠 준비 중이에요. 조금만 기다려주세요! 🛠️</p>
@@ -246,7 +461,6 @@ function CTASection({
     );
   }
 
-  // If loading after start-learning
   if (fetcher.data?.ok) {
     return (
       <div className="rounded-2xl bg-[#4caf72]/10 px-5 py-5 text-center">
@@ -258,25 +472,18 @@ function CTASection({
 
   function handleStartLearning() {
     if (!is_authenticated) {
-      // Not logged in → login page
       window.location.href = `/login?next=${encodeURIComponent(`/products/${product_slug}`)}`;
       return;
     }
     if (!is_subscribed) {
-      // Logged in but not subscribed → checkout
       window.location.href = `/products/${product_slug}/checkout`;
       return;
     }
-    // Subscribed → call start-learning API
-    fetcher.submit(
-      {},
-      { method: "POST", action: `/api/v2/products/${product_slug}/start` }
-    );
+    fetcher.submit({}, { method: "POST", action: `/api/v2/products/${product_slug}/start` });
   }
 
   return (
     <div className="space-y-3">
-      {/* Primary: 학습 시작 */}
       <button
         onClick={handleStartLearning}
         disabled={is_loading}
@@ -285,7 +492,6 @@ function CTASection({
         {is_loading ? "준비 중..." : is_subscribed ? "학습 시작 →" : is_authenticated ? "구매하고 학습 시작 →" : "로그인하고 학습 시작 →"}
       </button>
 
-      {/* Secondary: 즉시 무료 체험 */}
       <button
         onClick={() => set_show_trial_modal(true)}
         className="w-full rounded-2xl border border-[#e8ecf5] bg-white py-3.5 text-sm font-bold text-[#6b7a99] transition-all hover:border-[#d0d7e8] hover:text-[#1a2744]"
@@ -293,14 +499,12 @@ function CTASection({
         즉시 무료 체험
       </button>
 
-      {/* Error */}
       {fetcher.data?.error && (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-xs font-bold text-red-600 text-center">
           {fetcher.data.error}
         </p>
       )}
 
-      {/* Trial modal */}
       {show_trial_modal && (
         <TrialModal
           product_slug={product_slug}
@@ -312,7 +516,7 @@ function CTASection({
 }
 
 // ---------------------------------------------------------------------------
-// TrialModal
+// TrialModal (unchanged from original)
 // ---------------------------------------------------------------------------
 
 function TrialModal({
@@ -325,7 +529,6 @@ function TrialModal({
   const fetcher = useFetcher<{ ok?: boolean; session_id?: string; error?: string }>();
   const is_loading = fetcher.state !== "idle";
 
-  // Redirect after trial session created
   useEffect(() => {
     if (fetcher.data?.ok && fetcher.data.session_id) {
       window.location.href = `/sessions/${fetcher.data.session_id}`;

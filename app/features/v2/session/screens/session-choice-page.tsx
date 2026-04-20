@@ -27,6 +27,8 @@ export async function loader({ params }: LoaderFunctionArgs) {
        session_kind,
        review_round,
        nv2_product_sessions!inner(
+         id,
+         product_id,
          title,
          session_number,
          nv2_learning_products!inner(name)
