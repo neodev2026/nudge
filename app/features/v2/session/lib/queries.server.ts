@@ -228,13 +228,30 @@ export async function createNv2UserSession(
     .insert({
       auth_user_id,
       product_session_id,
+      session_kind: "new",
       status: "pending",
       dm_sent_at: new Date().toISOString(),
     })
     .select("session_id")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    // Unique constraint violation — active new session already exists; return it
+    if (error.code === "23505") {
+      const { data: existing, error: sel_err } = await client
+        .from("nv2_sessions")
+        .select("session_id")
+        .eq("auth_user_id", auth_user_id)
+        .eq("product_session_id", product_session_id)
+        .eq("session_kind", "new")
+        .neq("status", "completed")
+        .maybeSingle();
+      if (sel_err) throw sel_err;
+      if (!existing) throw error;
+      return existing;
+    }
+    throw error;
+  }
   return data;
 }
 
