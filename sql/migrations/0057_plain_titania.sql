@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "nv2_sessions_user_product_new_uidx" ON "nv2_sessions" USING btree ("auth_user_id","product_session_id") WHERE "nv2_sessions"."status" != 'completed' AND "nv2_sessions"."session_kind" = 'new';--> statement-breakpoint
+CREATE UNIQUE INDEX "nv2_sessions_user_product_review_uidx" ON "nv2_sessions" USING btree ("auth_user_id","product_session_id","review_round") WHERE "nv2_sessions"."status" != 'completed' AND "nv2_sessions"."session_kind" = 'review';

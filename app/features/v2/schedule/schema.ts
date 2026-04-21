@@ -125,5 +125,17 @@ export const nv2_schedules = pgTable(
       to: "service_role",
       using: sql`true`,
     }),
+
+    // RLS: n8n_worker needs to read schedules (dedup check) and insert new ones
+    pgPolicy("nv2_schedules_n8n_select", {
+      for: "select",
+      to: "n8n_worker",
+      using: sql`true`,
+    }),
+    pgPolicy("nv2_schedules_n8n_insert", {
+      for: "insert",
+      to: "n8n_worker",
+      withCheck: sql`true`,
+    }),
   ]
 );

@@ -9,6 +9,7 @@ import {
   text,
   uuid,
   boolean,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { authenticatedRole } from "drizzle-orm/supabase";
 import { tstz, eventTstz } from "~/core/db/helpers.server";
@@ -87,6 +88,13 @@ export const nv2_product_sessions = pgTable(
       for: "insert",
       to: "n8n_worker",
       withCheck: sql`true`,
+    }),
+
+    // RLS: n8n_worker needs to read all product sessions (including inactive) for workflow queries
+    pgPolicy("nv2_product_sessions_n8n_select", {
+      for: "select",
+      to: "n8n_worker",
+      using: sql`true`,
     }),
   ]
 );
@@ -201,6 +209,16 @@ export const nv2_sessions = pgTable(
     index("nv2_sessions_active_idx")
       .on(table.auth_user_id, table.status)
       .where(sql`${table.status} != 'completed'`),
+
+    // Prevent duplicate active sessions for the same user + product session.
+    // new sessions: at most one active (pending/in_progress) per user per product_session
+    uniqueIndex("nv2_sessions_user_product_new_uidx")
+      .on(table.auth_user_id, table.product_session_id)
+      .where(sql`${table.status} != 'completed' AND ${table.session_kind} = 'new'`),
+    // review sessions: at most one active per user per product_session per review_round
+    uniqueIndex("nv2_sessions_user_product_review_uidx")
+      .on(table.auth_user_id, table.product_session_id, table.review_round)
+      .where(sql`${table.status} != 'completed' AND ${table.session_kind} = 'review'`),
 
     // RLS: Users can read their own sessions
     pgPolicy("nv2_sessions_select_own", {
