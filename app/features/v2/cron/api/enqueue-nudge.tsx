@@ -1,25 +1,21 @@
 /**
+ * @deprecated 2026-04-21
+ * Superseded by n8n workflow: leni-cheer-dm-v2
+ * This route is no longer called by Supabase Cron.
+ * Kept for reference and manual testing purposes only.
+ *
  * POST /api/v2/cron/enqueue-nudge
  *
  * Enqueues Leni cheer DMs for users who have an incomplete session
- * and whose local time matches one of the fixed nudge slots:
- *   09:00 / 11:30 / 14:00 / 17:30 / 21:00
+ * and whose local time matches one of the fixed nudge slots.
  *
- * Runs every 30 minutes via Supabase Cron.
  * Security: Requires Authorization: Bearer {CRON_SECRET}
- *
- * Duplicate guard:
- *   → Skips if a cheer schedule tagged with the same hour already exists today
- *   → message_body is stored as "cheer:HH|<message>" for dedup lookup
- *
- * Time constraint:
- *   → Does not enqueue if user's local time >= 22:00
  */
 import { data as routeData } from "react-router";
 import type { Route } from "./+types/enqueue-nudge";
 import {
   NUDGE_SCHEDULE_TIMES,
-  getRandomNudgeMessage,
+  // getRandomNudgeMessage, // deprecated — removed with leni-cheer-dm-v2 migration
 } from "~/features/v2/shared/constants";
 
 function verifyCronSecret(request: Request): boolean {
@@ -122,9 +118,9 @@ export async function action({ request }: Route.ActionArgs) {
         );
         if (already_cheered) { results.skipped++; continue; }
 
-        const message = getRandomNudgeMessage(matched_slot.hour);
+        // getRandomNudgeMessage removed — n8n workflow now generates messages
         const hour_tag = `cheer:${String(matched_slot.hour).padStart(2, "0")}`;
-        const message_body = `${hour_tag}|${message}`;
+        const message_body = `${hour_tag}|(legacy fallback — see leni-cheer-dm-v2 n8n workflow)`;
 
         await insertCronSchedule(client as any, {
           auth_user_id,

@@ -283,9 +283,12 @@ export async function addUserToGuild(
 /**
  * Sends a Leni cheer (nudge) DM to a user with an incomplete session.
  *
+ * The AI-generated message already contains rich content (word previews, story
+ * hooks, etc.), so the embed is kept minimal — just a button to start learning.
+ *
  * @param sns_id        - Discord user ID
- * @param session_url   - Full URL to the incomplete session
- * @param message       - Leni's cheer message (selected randomly by enqueue-nudge)
+ * @param session_url   - Full URL to the incomplete/active session
+ * @param message       - AI-generated Leni message (already includes learning preview)
  * @param product_name  - Product name for context (optional)
  * @param session_label - Session label for context (optional)
  */
@@ -298,17 +301,16 @@ export async function sendCheerDm(
 ): Promise<void> {
   const channel_id = await openDmChannel(sns_id);
 
-  const context = product_name
-    ? `${product_name}${session_label ? ` · ${session_label}` : ""}`
-    : "";
+  const cta = [
+    product_name,
+    session_label,
+  ].filter(Boolean).join(" · ") || "학습 이어하기";
 
   await postEmbedWithButton(channel_id, {
     content: message,
     embed: {
-      title: "📖 학습을 계속해봐요!",
-      description: context
-        ? `${context}\n아래 버튼을 눌러 이어서 학습하세요. 금방 끝나요!`
-        : "아래 버튼을 눌러 이어서 학습하세요. 금방 끝나요!",
+      title: "",
+      description: `${cta} →`,
       color: 0xffa500,
     },
     button_label: "학습 이어하기 →",
