@@ -128,6 +128,13 @@ export const nv2_profiles = pgTable(
       to: "service_role",
       using: sql`true`,
     }),
+
+    // RLS: n8n_worker needs to read profiles for DM dispatch workflows
+    pgPolicy("nv2_profiles_n8n_select", {
+      for: "select",
+      to: "n8n_worker",
+      using: sql`true`,
+    }),
   ]
 );
 

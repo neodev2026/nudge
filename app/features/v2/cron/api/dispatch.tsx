@@ -31,6 +31,10 @@ export async function action({ request }: Route.ActionArgs) {
     return routeData({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // ?schedule_id=123 — force-send a specific row regardless of status/scheduled_at
+  const url = new URL(request.url);
+  const force_schedule_id = url.searchParams.get("schedule_id");
+
   const { createClient } = await import("@supabase/supabase-js");
   const {
     getCronPendingSchedules,
@@ -58,7 +62,20 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   try {
-    const pending = await getCronPendingSchedules(client as any);
+    let pending: Awaited<ReturnType<typeof getCronPendingSchedules>>;
+
+    if (force_schedule_id) {
+      const { data, error } = await client
+        .from("nv2_schedules")
+        .select("schedule_id, auth_user_id, schedule_type, delivery_url, message_body, review_round, retry_count, max_retries")
+        .eq("schedule_id", force_schedule_id)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return routeData({ error: `schedule_id ${force_schedule_id} not found` }, { status: 404 });
+      pending = [data];
+    } else {
+      pending = await getCronPendingSchedules(client as any);
+    }
 
     // Batch-fetch discord_id + email + unsubscribe flags for all unique users
     const unique_user_ids = [...new Set(pending.map((s) => s.auth_user_id))];
@@ -104,19 +121,49 @@ export async function action({ request }: Route.ActionArgs) {
             continue;
           }
 
-          // cheer message_body format: "cheer:HH|product_name|session_label|message"
-          // Legacy format (no product info): "cheer:HH|message"
           const raw_body = schedule.message_body ?? "";
-          const parts = raw_body.split("|");
+
+          // Split into meta+incomplete part and complete_message part by ||| separator
+          const separator_idx = raw_body.indexOf("|||");
+          const has_dual_message = separator_idx !== -1;
+
+          const meta_part = has_dual_message
+            ? raw_body.slice(0, separator_idx)
+            : raw_body;
+          const complete_message_part = has_dual_message
+            ? raw_body.slice(separator_idx + 3)
+            : null;
+
+          // Parse meta: "cheer:HH|product_name|session_label|incomplete_message"
+          // Legacy format (no product info): "cheer:HH|message"
+          const parts = meta_part.split("|");
           let product_name = "";
           let session_label = "";
-          let message = "";
+          let incomplete_message = "";
           if (parts.length >= 4) {
             product_name = parts[1] ?? "";
             session_label = parts[2] ?? "";
-            message = parts.slice(3).join("|");
+            incomplete_message = parts.slice(3).join("|");
           } else {
-            message = parts.slice(1).join("|");
+            incomplete_message = parts.slice(1).join("|");
+          }
+
+          let message = incomplete_message;
+
+          if (has_dual_message && complete_message_part !== null) {
+            // Re-check session status immediately before sending to handle
+            // the case where the user completed the session after n8n enqueued it
+            const { data: latest_session } = await client
+              .from("nv2_sessions")
+              .select("status")
+              .eq("auth_user_id", schedule.auth_user_id)
+              .not("status", "eq", "pending")
+              .order("updated_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            const is_completed = latest_session?.status === "completed";
+            message = is_completed ? complete_message_part : incomplete_message;
           }
 
           await sendCheerDm(

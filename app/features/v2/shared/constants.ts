@@ -166,27 +166,22 @@ export const QUIZ_CARD_POOL_SIZE: Record<string, number> = {
 } as const;
 
 /**
- * Fixed local times (hour, minute) at which enqueue-nudge Cron runs.
- * Leni sends a cheer DM if the user has not completed their session by each time slot.
- * The Cron runs every 30 minutes and matches users whose local time falls within
- * [scheduled_hour:scheduled_minute, +30 minutes).
+ * Fixed local times (hour, minute) for Leni cheer DM slots.
+ * Cheer DM generation is now handled by n8n workflow (leni-cheer-dm-v2).
+ * Two slots: morning (09:00) and evening (19:00).
  */
 export const NUDGE_SCHEDULE_TIMES = [
-  { hour: 9,  minute: 0  },  // 09:00
-  { hour: 11, minute: 30 },  // 11:30
-  { hour: 14, minute: 0  },  // 14:00
-  { hour: 17, minute: 30 },  // 17:30
-  { hour: 21, minute: 0  },  // 21:00
+  { hour: 9,  minute: 0  },  // morning slot
+  { hour: 19, minute: 0  },  // evening slot
 ] as const;
 
-/**
- * Leni cheer messages sent as nudge DMs when a user has not completed their session.
- * Keyed by local hour. Four variants per slot — one is chosen at random.
- *
- * Character: Leni, 15-year-old German girl studying with Nudge.
- * Tone: warm, bright, encouraging. Polite Korean (존댓말).
- * Occasionally sprinkles German expressions.
- */
+// ---------------------------------------------------------------------------
+// Deprecated — superseded by n8n workflow leni-cheer-dm-v2 (2026-04-21)
+// AI-generated personalized messages replaced fixed templates below.
+// Kept for reference only.
+// ---------------------------------------------------------------------------
+
+/*
 export const NUDGE_MESSAGES: Record<number, string[]> = {
   9: [
     "혹시 오늘 학습 잊으신 건 아니죠? 😄 저도 깜빡할 뻔 했어요! 같이 해봐요!",
@@ -220,11 +215,8 @@ export const NUDGE_MESSAGES: Record<number, string[]> = {
   ],
 };
 
-/**
- * Returns a random cheer message for the given local hour.
- * Falls back to the 9:00 slot if no message exists for the given hour.
- */
 export function getRandomNudgeMessage(local_hour: number): string {
   const messages = NUDGE_MESSAGES[local_hour] ?? NUDGE_MESSAGES[9];
   return messages[Math.floor(Math.random() * messages.length)];
 }
+*/
