@@ -7,261 +7,327 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 22 * * *",
-              "notes": "UTC 22:00 = KST 07:00, runs 2h before 09:00 morning send slot"
-            },
-            {
-              "field": "cronExpression",
-              "expression": "0 8 * * *",
-              "notes": "UTC 08:00 = KST 17:00, runs 2h before 19:00 evening send slot"
+              "expression": "0 */2 * * *"
             }
           ]
         }
       },
-      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "id": "12f8125c-200e-445a-86a7-427ebd667dff",
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        0,
-        300
+        6080,
+        2480
       ]
     },
     {
-      "id": "a1b2c3d4-0006-0006-0006-000000000006",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT ON (s.auth_user_id, lp.id)\n  s.auth_user_id,\n  s.session_id,\n  s.product_session_id,\n  s.status,\n  ps.session_number,\n  ps.title     AS ps_title,\n  lp.id        AS product_id,\n  lp.name      AS product_name,\n  lp.meta      AS product_meta,\n  lp.slug      AS product_slug,\n  pr.discord_id,\n  pr.display_name,\n  pr.timezone,\n  pr.discord_dm_unsubscribed\nFROM nv2_sessions s\nJOIN nv2_product_sessions  ps ON ps.id  = s.product_session_id\nJOIN nv2_learning_products lp ON lp.id  = ps.product_id\nJOIN nv2_profiles          pr ON pr.auth_user_id = s.auth_user_id\nWHERE s.status IN ('pending', 'in_progress')\n  AND s.auth_user_id NOT LIKE 'anon:%'\n  AND pr.discord_id IS NOT NULL\n  AND pr.discord_dm_unsubscribed = false\nORDER BY\n  s.auth_user_id,\n  lp.id,\n  CASE s.status WHEN 'in_progress' THEN 0 ELSE 1 END ASC,\n  s.updated_at DESC",
+        "options": {}
+      },
+      "id": "776391e2-73fd-407c-a2cd-85161999bb98",
       "name": "Get Incomplete Sessions",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        220,
-        300
+        6304,
+        2480
       ],
       "credentials": {
         "postgres": {
           "id": "c4XNXQBW2Z7gkFSC",
           "name": "supabase-nudge-n8n_worker"
         }
-      },
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT\n  s.auth_user_id,\n  s.session_id,\n  s.product_session_id,\n  s.status,\n  ps.id        AS ps_id,\n  ps.session_number,\n  ps.title     AS ps_title,\n  lp.id        AS product_id,\n  lp.name      AS product_name,\n  lp.meta      AS product_meta,\n  lp.slug      AS product_slug,\n  pr.discord_id,\n  pr.display_name,\n  pr.timezone,\n  pr.discord_dm_unsubscribed\nFROM nv2_sessions s\nJOIN nv2_product_sessions  ps ON ps.id  = s.product_session_id\nJOIN nv2_learning_products lp ON lp.id  = ps.product_id\nJOIN nv2_profiles          pr ON pr.auth_user_id = s.auth_user_id\nWHERE s.status IN ('pending', 'in_progress')\n  AND s.auth_user_id NOT LIKE 'anon:%'\n  AND (pr.discord_id IS NOT NULL AND pr.discord_dm_unsubscribed = false)\nORDER BY s.auth_user_id, s.created_at DESC",
-        "options": {}
       }
     },
     {
       "parameters": {
-        "jsCode": "// Determine slot type from UTC hour (no Merge node needed)\n// UTC 22 = KST 07:00 → morning slot (send at 09:00 KST)\n// UTC 08 = KST 17:00 → evening slot (send at 19:00 KST)\nconst utc_hour = new Date().getUTCHours();\nconst is_morning = (utc_hour >= 20 && utc_hour <= 23);\nconst slot_type = is_morning ? 'morning' : 'evening';\nconst slot_hour = is_morning ? 9 : 19;\n\n// Dedup by auth_user_id — keep one session per user\nconst seen = new Set();\nconst result = [];\n\nfor (const item of $input.all()) {\n  const s = item.json;\n  const profile = s.nv2_profiles;\n  const product_session = s.nv2_product_sessions;\n  const product = product_session?.nv2_learning_products;\n\n  // Skip anonymous sessions\n  if (s.auth_user_id?.startsWith('anon:')) continue;\n\n  // Skip if no Discord account or DM unsubscribed\n  if (!profile?.discord_id || profile.discord_dm_unsubscribed) continue;\n\n  // Dedup — keep first (most recent due to order=updated_at.desc)\n  if (seen.has(s.auth_user_id)) continue;\n  seen.add(s.auth_user_id);\n\n  const meta = typeof product?.meta === 'string'\n    ? JSON.parse(product.meta)\n    : (product?.meta ?? {});\n\n  result.push({\n    json: {\n      slot_type,\n      slot_hour,\n      auth_user_id: s.auth_user_id,\n      session_id: s.session_id,\n      product_session_id: s.product_session_id,\n      discord_id: profile.discord_id,\n      display_name: profile.display_name || '학습자',\n      timezone: profile.timezone || 'Asia/Seoul',\n      session_number: product_session?.session_number ?? 1,\n      session_label: `Session ${product_session?.session_number ?? ''}`.trim(),\n      product_id: product?.id,\n      product_name: product?.name ?? '',\n      product_slug: product?.slug ?? '',\n      is_story: !!(meta?.story),\n    }\n  });\n}\n\nreturn result;"
+        "jsCode": "const result = [];\nlet morning_index = 0;\nlet evening_index = 0;\n\nconst MORNING_HOUR = 9;\nconst EVENING_HOUR = 19;\nconst WINDOW_MINUTES = 90;\n\nfor (const item of $input.all()) {\n  const s = item.json;\n\n  const product_meta = typeof s.product_meta === 'string'\n    ? JSON.parse(s.product_meta)\n    : (s.product_meta ?? {});\n\n  const timezone = s.timezone || 'Asia/Seoul';\n\n  const local_time_str = new Date().toLocaleString('en-US', {\n    timeZone: timezone,\n    hour: 'numeric',\n    minute: 'numeric',\n    hour12: false,\n  });\n  const [local_h, local_m] = local_time_str.split(':').map(Number);\n  const local_minutes = local_h * 60 + local_m;\n\n  const morning_target = MORNING_HOUR * 60;\n  const evening_target = EVENING_HOUR * 60;\n\n  const diff_morning = Math.abs(local_minutes - morning_target);\n  const diff_evening = Math.abs(local_minutes - evening_target);\n  const dist_morning = Math.min(diff_morning, 24 * 60 - diff_morning);\n  const dist_evening = Math.min(diff_evening, 24 * 60 - diff_evening);\n\n  let slot_type = null;\n  let slot_hour = null;\n\n  if (dist_morning <= WINDOW_MINUTES) {\n    slot_type = 'morning';\n    slot_hour = MORNING_HOUR;\n  } else if (dist_evening <= WINDOW_MINUTES) {\n    slot_type = 'evening';\n    slot_hour = EVENING_HOUR;\n  } else {\n    continue;\n  }\n\n  const today_local = new Date().toLocaleDateString('en-CA', { timeZone: timezone });\n  const target_local_iso = `${today_local}T${String(slot_hour).padStart(2, '0')}:00:00`;\n  const ref_local = new Date(new Date().toLocaleString('en-US', { timeZone: timezone }));\n  const tz_offset_ms = new Date().getTime() - ref_local.getTime();\n  const base_utc_ms = new Date(target_local_iso + 'Z').getTime() + tz_offset_ms;\n  const stagger_index = slot_type === 'morning' ? morning_index++ : evening_index++;\n  const stagger_ms = stagger_index * 5 * 60 * 1000;\n  const scheduled_at = new Date(base_utc_ms + stagger_ms).toISOString();\n\n  result.push({\n    json: {\n      slot_type,\n      slot_hour,\n      auth_user_id: s.auth_user_id,\n      session_id: s.session_id,\n      product_session_id: s.product_session_id,\n      discord_id: s.discord_id,\n      display_name: s.display_name || '학습자',\n      timezone,\n      session_number: s.session_number ?? 1,\n      session_label: `Session ${s.session_number ?? ''}`.trim(),\n      product_id: s.product_id,\n      product_name: s.product_name ?? '',\n      product_slug: s.product_slug ?? '',\n      is_story: !!(product_meta?.story),\n      today_local,\n      scheduled_at,\n    }\n  });\n}\n\nreturn result;"
       },
-      "id": "a1b2c3d4-0007-0007-0007-000000000007",
+      "id": "b7e81ef4-6100-495b-beef-ad15841dbb8a",
       "name": "Filter and Dedup Users",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        440,
-        300
+        6528,
+        2480
       ]
     },
     {
       "parameters": {
-        "batchSize": 1,
         "options": {}
       },
-      "id": "a1b2c3d4-0008-0008-0008-000000000008",
+      "id": "db9368ee-e787-45c0-a602-a3885045b672",
       "name": "Loop Over Users",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        660,
-        300
+        6752,
+        2480
       ]
     },
     {
-      "id": "a1b2c3d4-0009-0009-0009-000000000009",
+      "parameters": {
+        "jsCode": "const user = $input.first().json;\n\nconst slot_hour          = user.slot_hour;\nconst auth_user_id       = user.auth_user_id;\nconst session_id         = user.session_id;\nconst product_session_id = user.product_session_id;\nconst product_id         = user.product_id;\nconst today_local        = user.today_local;\nconst today_utc_start    = new Date(`${today_local}T00:00:00.000Z`).toISOString();\nconst hour_tag           = `cheer:${String(slot_hour).padStart(2, '0')}`;\nconst product_name       = user.product_name ?? '';\nconst session_label      = `Session ${user.session_number ?? ''}`;\nconst safe_product_name  = product_name.replace(/'/g, \"''\");\n\n// SQL: dedup check\nconst dedup_sql = `SELECT schedule_id FROM nv2_schedules\nWHERE auth_user_id = '${auth_user_id}'\n  AND schedule_type = 'cheer'\n  AND message_body LIKE '${hour_tag}|${safe_product_name}|%'\n  AND created_at >= '${today_utc_start}'\nLIMIT 1`;\n\n// SQL: today session status + next session id\nconst session_status_sql = `\nSELECT\n  s.status AS today_status,\n  next_ps.id AS next_product_session_id,\n  next_ps.session_number AS next_session_number\nFROM nv2_sessions s\nLEFT JOIN nv2_product_sessions cur_ps ON cur_ps.id = s.product_session_id\nLEFT JOIN nv2_product_sessions next_ps\n  ON next_ps.product_id = cur_ps.product_id\n  AND next_ps.session_number = cur_ps.session_number + 1\n  AND next_ps.is_active = true\nWHERE s.session_id = '${session_id}'\nLIMIT 1`;\n\n// SQL: pick ONE random stage, then fetch all its cards (title+description+example)\n// This ensures title card is always included\nconst card_sql_for = (ps_id) => user.is_story\n  ? `SELECT c.card_type, c.card_data\n     FROM nv2_product_session_stages pss\n     JOIN nv2_stages st ON st.id = pss.stage_id\n     JOIN nv2_cards  c  ON c.stage_id = st.id\n     WHERE pss.product_session_id = '${ps_id}'\n       AND st.stage_type = 'story'\n       AND c.card_type = 'story'\n     LIMIT 1`\n  : `SELECT st.id AS stage_id, c.card_type, c.card_data\n     FROM nv2_product_session_stages pss\n     JOIN nv2_stages st ON st.id = pss.stage_id\n     JOIN nv2_cards  c  ON c.stage_id = st.id\n     WHERE pss.product_session_id = '${ps_id}'\n       AND st.stage_type = 'learning'\n       AND c.card_type IN ('title', 'description', 'example')\n       AND st.id = (\n         SELECT st2.id\n         FROM nv2_product_session_stages pss2\n         JOIN nv2_stages st2 ON st2.id = pss2.stage_id\n         WHERE pss2.product_session_id = '${ps_id}'\n           AND st2.stage_type = 'learning'\n         ORDER BY RANDOM()\n         LIMIT 1\n       )`;\n\nconst today_card_sql = card_sql_for(product_session_id);\n\nreturn [{\n  json: {\n    ...user,\n    hour_tag,\n    product_name,\n    session_label,\n    dedup_sql,\n    session_status_sql,\n    today_card_sql,\n  }\n}];"
+      },
+      "id": "e0312a39-59e1-4e91-9af5-d094de0f659e",
       "name": "Prepare Queries",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
-        200
-      ],
-      "parameters": {
-        "jsCode": "\nconst user = $input.item.json;\n\nconst utc_hour = new Date().getUTCHours();\nconst is_morning = (utc_hour >= 20 && utc_hour <= 23);\nconst slot_type = user.slot_type ?? (is_morning ? 'morning' : 'evening');\nconst slot_hour = user.slot_hour ?? (is_morning ? 9 : 19);\n\nconst timezone   = user.timezone ?? 'Asia/Seoul';\nconst auth_user_id      = user.auth_user_id;\nconst product_session_id = user.product_session_id;\n\nconst today_local = new Date().toLocaleDateString('en-CA', { timeZone: timezone });\nconst today_utc_start = new Date(`${today_local}T00:00:00.000Z`).toISOString();\nconst hour_tag = `cheer:${String(slot_hour).padStart(2, '0')}`;\n\nconst is_story = (() => {\n  const meta = typeof user.product_meta === 'string'\n    ? JSON.parse(user.product_meta)\n    : (user.product_meta ?? {});\n  return !!meta?.story;\n})();\n\nconst product_name = user.product_name ?? '';\nconst session_label = `Session ${user.session_number ?? ''}`;\n\n// SQL: dedup check\nconst dedup_sql = `SELECT schedule_id FROM nv2_schedules\nWHERE auth_user_id = '${auth_user_id}'\n  AND schedule_type = 'cheer'\n  AND message_body LIKE '${hour_tag}|%'\n  AND created_at >= '${today_utc_start}'\nLIMIT 1`;\n\n// SQL: completed session count\nconst count_sql = `SELECT COUNT(*) AS completed_count FROM nv2_sessions\nWHERE auth_user_id = '${auth_user_id}'\n  AND status = 'completed'`;\n\n// SQL: learning content preview\nconst content_sql = is_story\n  ? `SELECT c.card_type, c.card_data\n     FROM nv2_product_session_stages pss\n     JOIN nv2_stages st ON st.id = pss.stage_id\n     JOIN nv2_cards  c  ON c.stage_id = st.id\n     WHERE pss.product_session_id = '${product_session_id}'\n       AND st.stage_type = 'story'\n       AND c.card_type   = 'story'\n     LIMIT 1`\n  : `SELECT st.id AS stage_id, c.card_type, c.card_data\n     FROM nv2_product_session_stages pss\n     JOIN nv2_stages st ON st.id = pss.stage_id\n     JOIN nv2_cards  c  ON c.stage_id = st.id\n     WHERE pss.product_session_id = '${product_session_id}'\n       AND st.stage_type = 'learning'\n       AND c.card_type IN ('title', 'description')\n     ORDER BY pss.display_order ASC, c.card_type ASC\n     LIMIT 10`;\n\nreturn [{\n  json: {\n    ...user,\n    slot_type,\n    slot_hour,\n    hour_tag,\n    today_local,\n    is_story,\n    product_name,\n    session_label,\n    dedup_sql,\n    count_sql,\n    content_sql,\n  }\n}];\n"
-      }
+        6976,
+        2336
+      ]
     },
     {
-      "id": "a1b2c3d4-0020-0020-0020-000000000020",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.dedup_sql }}",
+        "options": {}
+      },
+      "id": "1700cfe3-4fe8-452a-a328-45b202e3c14b",
       "name": "Dedup Check",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1100,
-        200
+        7200,
+        2336
       ],
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
           "id": "c4XNXQBW2Z7gkFSC",
           "name": "supabase-nudge-n8n_worker"
         }
-      },
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "={{ $json.dedup_sql }}",
-        "options": {}
       }
     },
     {
-      "id": "a1b2c3d4-0021-0021-0021-000000000021",
+      "parameters": {
+        "jsCode": "const dedup_rows = $input.all();\nif (dedup_rows.length > 0 && dedup_rows[0].json.schedule_id) {\n  return [{ json: { _skip: true } }];\n}\nconst user = $('Prepare Queries').first().json;\nreturn [{ json: { ...user, _skip: false } }];"
+      },
+      "id": "4e06bc48-17e8-41f2-8f11-9bd4659f1cfa",
       "name": "Check Dedup Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1320,
-        200
-      ],
-      "parameters": {
-        "jsCode": "\nconst dedup_rows = $input.all();\n// If any row returned, this slot is already queued — skip\nif (dedup_rows.length > 0 && dedup_rows[0].json.schedule_id) {\n  return [];\n}\n// Pass through the prepared query data from Prepare Queries node\nconst user = $('Prepare Queries').item.json;\nreturn [{ json: user }];\n"
-      }
+        7424,
+        2336
+      ]
     },
     {
-      "id": "a1b2c3d4-0022-0022-0022-000000000022",
-      "name": "Get Completed Count",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "skip-condition",
+              "leftValue": "={{ $json._skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c704d800-24db-4923-851a-eeae419b6d9c",
+      "name": "Skip Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        7648,
+        2336
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "fec87b05-e000-466d-bbbd-2403b3dcd638",
+      "name": "Skip to Next",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        7872,
+        2208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $('Check Dedup Result').first().json.session_status_sql }}",
+        "options": {}
+      },
+      "id": "f0b1c943-f103-4795-b3ed-08c688542689",
+      "name": "Get Session Status",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1540,
-        200
+        7872,
+        2400
       ],
       "credentials": {
         "postgres": {
           "id": "c4XNXQBW2Z7gkFSC",
           "name": "supabase-nudge-n8n_worker"
         }
-      },
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "={{ $json.count_sql }}",
-        "options": {}
       }
     },
     {
-      "id": "a1b2c3d4-0023-0023-0023-000000000023",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $('Check Dedup Result').first().json.today_card_sql }}",
+        "options": {}
+      },
+      "id": "1f697b99-80d2-4657-bc09-065811480da9",
       "name": "Get Content Preview",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1540,
-        380
+        7872,
+        2592
       ],
       "credentials": {
         "postgres": {
           "id": "c4XNXQBW2Z7gkFSC",
           "name": "supabase-nudge-n8n_worker"
         }
-      },
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "={{ $('Check Dedup Result').item.json.content_sql }}",
-        "options": {}
       }
     },
     {
-      "id": "a1b2c3d4-0024-0024-0024-000000000024",
+      "parameters": {},
+      "id": "fcdbe3a6-9015-4359-90a1-3752f9eaaaaf",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        8096,
+        2496
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const user = $('Check Dedup Result').first().json;\nconst all_rows = $('Merge').all();\n\n// Session status row\nconst status_row = all_rows.find(r => r.json.today_status !== undefined);\nconst today_status           = status_row?.json?.today_status ?? 'pending';\nconst next_product_session_id = status_row?.json?.next_product_session_id ?? null;\nconst next_session_number     = status_row?.json?.next_session_number ?? null;\n\nconst is_completed = today_status === 'completed';\nconst use_next     = is_completed && !!next_product_session_id;\n\n// Content rows (cards)\nconst content_rows = all_rows.filter(r => r.json.card_type !== undefined);\n\nlet card_word = '';\nlet card_meaning = '';\nlet card_example = '';\nlet card_example_translation = '';\nlet script_tip = ''; // memory tip from details.explanation (for hiragana/katakana)\n\nif (user.is_story) {\n  const row = content_rows?.[0]?.json;\n  const cd = typeof row?.card_data === 'string'\n    ? JSON.parse(row.card_data)\n    : (row?.card_data ?? {});\n  card_word = cd.hook_text ?? '';\n} else {\n  // Group by stage_id\n  const by_stage = {};\n  for (const row of content_rows) {\n    const r = row.json;\n    if (!by_stage[r.stage_id]) by_stage[r.stage_id] = {};\n    const cd = typeof r.card_data === 'string'\n      ? JSON.parse(r.card_data)\n      : (r.card_data ?? {});\n    by_stage[r.stage_id][r.card_type] = cd;\n  }\n\n  for (const [, cards] of Object.entries(by_stage)) {\n    const title_front = cards['title']?.presentation?.front ?? cards['title']?.text ?? '';\n    const title_back  = cards['title']?.presentation?.back  ?? '';\n    const desc_back   = cards['description']?.presentation?.back ?? cards['description']?.text ?? '';\n    const desc_expl   = cards['description']?.details?.explanation ?? '';\n    const ex_front    = cards['example']?.presentation?.front ?? cards['example']?.text ?? '';\n    const ex_back     = cards['example']?.presentation?.back  ?? cards['example']?.back  ?? '';\n    const ex_expl     = cards['example']?.details?.explanation ?? '';\n\n    // Require at least a word to proceed\n    const word = title_front || desc_back || '';\n    if (!word) continue;\n\n    card_word    = title_front;\n    card_meaning = title_back || desc_back;\n    card_example = ex_front;\n    card_example_translation = ex_back;\n\n    // script_tip: best explanation text for hiragana/katakana memory\n    // Prefer example explanation (e.g. 'すし = 초밥'), then description explanation\n    script_tip = ex_expl || desc_expl || '';\n    break;\n  }\n}\n\nconst target_session_label = use_next\n  ? `Session ${next_session_number}`\n  : user.session_label;\n\nreturn [{\n  json: {\n    ...user,\n    today_status,\n    is_completed,\n    use_next,\n    next_product_session_id,\n    next_session_number,\n    target_session_label,\n    card_word,\n    card_meaning,\n    card_example,\n    card_example_translation,\n    script_tip,\n  }\n}];"
+      },
+      "id": "d9a699cf-c0e2-42e6-9544-cd1e880bdee4",
       "name": "Build Preview",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1760,
-        200
-      ],
-      "parameters": {
-        "jsCode": "\nconst user = $('Check Dedup Result').item.json;\n\n// Completed count\nconst count_rows = $('Get Completed Count').all();\nconst completed_count = parseInt(count_rows?.[0]?.json?.completed_count ?? '0', 10) || 0;\n\n// Content preview\nconst content_rows = $('Get Content Preview').all();\nlet preview_lines = '';\n\nif (user.is_story) {\n  const row = content_rows?.[0]?.json;\n  const card_data = typeof row?.card_data === 'string'\n    ? JSON.parse(row.card_data)\n    : (row?.card_data ?? {});\n  if (card_data.hook_text) {\n    preview_lines = `오늘의 이야기:\\n${card_data.hook_text}`;\n  }\n} else {\n  // Group cards by stage_id to pair title + description\n  const by_stage = {};\n  for (const row of content_rows) {\n    const r = row.json;\n    if (!by_stage[r.stage_id]) by_stage[r.stage_id] = {};\n    const cd = typeof r.card_data === 'string' ? JSON.parse(r.card_data) : (r.card_data ?? {});\n    by_stage[r.stage_id][r.card_type] = cd;\n  }\n  const words = [];\n  for (const [, cards] of Object.entries(by_stage)) {\n    const word    = cards['title']?.text ?? cards['title']?.front ?? '';\n    const meaning = cards['description']?.text ?? cards['description']?.back ?? '';\n    if (word && meaning) words.push(`• ${word} — ${meaning}`);\n    if (words.length >= 3) break;\n  }\n  preview_lines = words.join('\\n');\n}\n\nreturn [{\n  json: {\n    ...user,\n    completed_count,\n    preview_lines,\n  }\n}];\n"
-      }
+        8320,
+        2496
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const d = $input.item.json;\n\nconst system_prompt = `You are Leni, a 15-year-old German girl who studies languages alongside the user.\nTone: warm, bright, slightly playful. Korean 해요체 (존댓말). Plain text only, no markdown.\nMax 1~2 emojis per message. Each message max 4 lines.\nRespond ONLY with a JSON object containing exactly two keys: incomplete_message, complete_message.\nNo preamble, no explanation, no code fences. Just the raw JSON.`;\n\nconst user_prompt = `사용자 정보:\n- 이름: ${d.display_name}\n- 학습 상품: ${d.product_name}\n- 오늘 세션: ${d.session_label}\n- 전체 완료 세션 수: ${d.completed_count}\n- 발송 시간대: ${d.slot_type}\n\n오늘의 학습 콘텐츠 미리보기:\n${d.preview_lines || '(콘텐츠 준비 중)'}\n\n---\n\nincomplete_message 작성 조건:\n- 세션을 아직 시작하지 않은 사용자에게 보내는 메시지\n- 위 단어/표현 중 일부를 자연스럽게 포함\n- 학습 링크 클릭을 유도하되 강요하지 않음\n- 첫 줄이 가장 흥미로운 훅이 되도록\n\ncomplete_message 작성 조건:\n- 이미 오늘 세션을 완료한 사용자에게 보내는 메시지\n- slot_type이 \"morning\"이면: 오늘 배운 내용 중 단어/표현을 활용하는 팁 또는 복습 유도\n- slot_type이 \"evening\"이면: 내일 배울 것을 예고하는 내용 (위 단어들이 내일 나올 것처럼 자연스럽게)\n- 칭찬과 기대감을 함께 담을 것`;\n\nreturn [{\n  json: {\n    ...d,\n    system_prompt,\n    user_prompt,\n  }\n}];"
+        "jsCode": "const d = $input.first().json;\n\n// Content type detection\nconst is_script = !!(d.product_slug?.includes('hiragana') || d.product_slug?.includes('katakana'));\nconst is_story  = d.is_story;\n\n// Build card info block\nlet card_info = '(콘텐츠 준비 중)';\nif (d.card_word) {\n  const lines = [\n    `단어/표현: ${d.card_word}${d.card_meaning ? ` (${d.card_meaning})` : ''}`,\n  ];\n  if (is_script && d.script_tip) {\n    lines.push(`기억 팁: ${d.script_tip}`);\n  }\n  if (!is_script && d.card_example) {\n    lines.push(`예문: ${d.card_example}`);\n    if (d.card_example_translation) lines.push(`예문 번역: ${d.card_example_translation}`);\n  }\n  card_info = lines.join('\\n');\n}\n\nconst system_prompt = `You are Leni, a 15-year-old German girl who studies languages alongside the user.\nTone: warm, bright, slightly playful. Korean 해요체 (존댓말). Plain text only, no markdown.\nYou must respond in JSON format.\nRespond ONLY with a JSON object with two keys: incomplete_message, complete_message.\nNo preamble, no explanation, no code fences. Just the raw JSON.`;\n\nconst context_line = `학습 상품: ${d.product_name} / 세션: ${d.target_session_label}`;\n\nlet incomplete_instruction = '';\nlet complete_instruction   = '';\n\nif (is_script) {\n  incomplete_instruction =\n    '- 2~3줄 이내\\n' +\n    '- 글자 모양이나 발음을 기억하는 재미있는 팁 1줄 포함 (기억 팁 활용)\\n' +\n    '- 마지막 줄에 학습 링크 클릭 유도 1줄\\n' +\n    '- 이모지 1개';\n  complete_instruction =\n    '- 2~3줄 이내\\n' +\n    '- 칭찬 1줄\\n' +\n    '- 배운 글자가 포함된 간단한 단어나 소리 조합 예시 1줄\\n' +\n    '- 이모지 1개';\n} else if (is_story) {\n  incomplete_instruction =\n    '- 2~3줄 이내\\n' +\n    '- 이야기 내용으로 궁금증을 유발하는 훅 1줄\\n' +\n    '- 마지막 줄에 학습 링크 클릭 유도 1줄\\n' +\n    '- 이모지 1개';\n  complete_instruction =\n    '- 2~3줄 이내\\n' +\n    '- 칭찬 1줄\\n' +\n    '- 오늘 배운 단어 활용 팁 1줄\\n' +\n    '- 이모지 1개';\n} else {\n  incomplete_instruction =\n    '- 2~3줄 이내\\n' +\n    '- 카드의 단어/표현을 실생활에서 쓸 수 있는 활용 예 1문장 포함\\n' +\n    '- 마지막 줄에 학습 링크 클릭 유도 1줄\\n' +\n    '- 이모지 1개';\n  complete_instruction =\n    '- 2~3줄 이내\\n' +\n    '- 칭찬 1줄\\n' +\n    '- 카드의 단어/표현 또 다른 활용 예 1문장\\n' +\n    '- 이모지 1개';\n}\n\nconst user_prompt =\n  `사용자: ${d.display_name}\\n` +\n  `${context_line}\\n` +\n  `\\n카드 정보:\\n${card_info}\\n` +\n  `\\n---\\n` +\n  `\\nincomplete_message (세션 미완료 사용자용):\\n${incomplete_instruction}\\n` +\n  `\\ncomplete_message (세션 완료 사용자용):\\n${complete_instruction}`;\n\nreturn [{\n  json: {\n    ...d,\n    system_prompt,\n    user_prompt,\n  }\n}];"
       },
-      "id": "a1b2c3d4-0010-0010-0010-000000000010",
+      "id": "88c87895-6bf6-4d09-ab69-587e45ddcd62",
       "name": "Build OpenAI Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1100,
-        200
+        8544,
+        2496
       ]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.OPENAI_API_SECRET_NUDGE_LENI_CHAT }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.system_prompt) }} },\n    { \"role\": \"user\",   \"content\": {{ JSON.stringify($json.user_prompt) }} }\n  ],\n  \"response_format\": { \"type\": \"json_object\" },\n  \"max_tokens\": 512,\n  \"temperature\": 0.85\n}",
+        "agent": "conversationalAgent",
+        "promptType": "define",
+        "text": "={{ $json.user_prompt }}",
         "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
+          "systemMessage": "={{ $json.system_prompt }}"
         }
       },
-      "id": "a1b2c3d4-0011-0011-0011-000000000011",
+      "id": "819d168d-2126-4d9c-adc1-f0136c60a9dd",
       "name": "Call OpenAI",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
       "position": [
-        1320,
-        200
+        8768,
+        2496
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Parse OpenAI response and build the nv2_schedules row\nconst openai_res = $input.item.json;\nconst user = $('Build OpenAI Prompt').item.json;\n\n// Extract generated messages\nlet incomplete_message = '';\nlet complete_message = '';\ntry {\n  const content = openai_res.choices?.[0]?.message?.content ?? '{}';\n  const parsed = JSON.parse(content);\n  incomplete_message = (parsed.incomplete_message ?? '').trim();\n  complete_message = (parsed.complete_message ?? '').trim();\n} catch (e) {\n  return []; // skip on parse error\n}\n\nif (!incomplete_message || !complete_message) return [];\n\n// Build message_body: cheer:HH|product_name|session_label|incomplete_message|||complete_message\nconst message_body = [\n  `${user.hour_tag}|${user.product_name}|${user.session_label}|${incomplete_message}`,\n  complete_message,\n].join('|||');\n\n// Calculate scheduled_at: convert user's local slot_hour:00 to UTC\n// Strategy: find the UTC offset for the user's timezone at today's date\nconst target_local_iso = `${user.today_local}T${String(user.slot_hour).padStart(2, '0')}:00:00`;\nconst local_as_utc = new Date(target_local_iso + 'Z'); // treat as UTC first\nconst ref_local = new Date(new Date().toLocaleString('en-US', { timeZone: user.timezone }));\nconst tz_offset_ms = new Date().getTime() - ref_local.getTime();\nconst scheduled_at = new Date(local_as_utc.getTime() + tz_offset_ms).toISOString();\n\nconst nudge_origin = $env.NUDGE_SITE_URL ?? 'https://nudge.neowithai.com';\nconst delivery_url = `${nudge_origin}/sessions/${user.session_id}`;\n\nreturn [{\n  json: {\n    auth_user_id: user.auth_user_id,\n    schedule_type: 'cheer',\n    delivery_url,\n    message_body,\n    scheduled_at,\n  }\n}];"
+        "jsCode": "const openai_res = $input.first().json;\nconst user = $('Build OpenAI Prompt').first().json;\n\nlet incomplete_message = '';\nlet complete_message   = '';\ntry {\n  const content = openai_res.output ?? '{}';\n  const parsed  = typeof content === 'string' ? JSON.parse(content) : content;\n  incomplete_message = (parsed.incomplete_message ?? '').trim();\n  complete_message   = (parsed.complete_message   ?? '').trim();\n} catch (e) {\n  return [];\n}\n\nif (!incomplete_message || !complete_message) return [];\n\n// message_body: cheer:HH|product_name|session_label|incomplete_message|||complete_message\nconst message_body = [\n  `${user.hour_tag}|${user.product_name}|${user.session_label}|${incomplete_message}`,\n  complete_message,\n].join('|||');\n\nconst nudge_origin = 'https://nudge.neowithai.com';\nconst delivery_url = `${nudge_origin}/sessions/${user.session_id}`;\n\nreturn [{\n  json: {\n    auth_user_id:  user.auth_user_id,\n    schedule_type: 'cheer',\n    delivery_url,\n    message_body,\n    scheduled_at:  user.scheduled_at,\n  }\n}];"
       },
-      "id": "a1b2c3d4-0012-0012-0012-000000000012",
+      "id": "6c4b4af4-1211-453d-b403-bc28ba2c61e7",
       "name": "Parse Response and Build Schedule",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1540,
-        200
+        9120,
+        2496
       ]
     },
     {
-      "id": "a1b2c3d4-0013-0013-0013-000000000013",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO nv2_schedules\n  (auth_user_id, schedule_type, delivery_url, message_body, scheduled_at, status)\nVALUES\n  ($1, 'cheer', $2, $3, $4, 'pending')",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ [$json.auth_user_id, $json.delivery_url, $json.message_body, $json.scheduled_at] }}"
+        }
+      },
+      "id": "65cc4229-9287-4b4e-aa1e-00744ab4eca5",
       "name": "Insert nv2_schedules",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1760,
-        200
+        9344,
+        2624
       ],
       "credentials": {
         "postgres": {
           "id": "c4XNXQBW2Z7gkFSC",
           "name": "supabase-nudge-n8n_worker"
         }
-      },
+      }
+    },
+    {
       "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO nv2_schedules\n  (auth_user_id, schedule_type, delivery_url, message_body, scheduled_at, status)\nVALUES\n  ('{{ $json.auth_user_id }}', 'cheer', '{{ $json.delivery_url }}', '{{ $json.message_body }}', '{{ $json.scheduled_at }}', 'pending')",
-        "options": {}
+        "model": {
+          "__rl": true,
+          "value": "gpt-5-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "textFormat": {
+            "textOptions": {
+              "type": "json_object"
+            }
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        8848,
+        2720
+      ],
+      "id": "ec64c96d-2d59-4dd6-8273-7baa341fcd50",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "LdOtmIiaV2ctTUzr",
+          "name": "OpenAi account"
+        }
       }
     }
   ],
+  "pinData": {},
   "connections": {
     "Schedule Trigger": {
       "main": [
@@ -298,14 +364,14 @@
     },
     "Loop Over Users": {
       "main": [
+        [],
         [
           {
             "node": "Prepare Queries",
             "type": "main",
             "index": 0
           }
-        ],
-        []
+        ]
       ]
     },
     "Prepare Queries": {
@@ -334,7 +400,25 @@
       "main": [
         [
           {
-            "node": "Get Completed Count",
+            "node": "Skip Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Check": {
+      "main": [
+        [
+          {
+            "node": "Skip to Next",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Session Status",
             "type": "main",
             "index": 0
           },
@@ -346,11 +430,22 @@
         ]
       ]
     },
-    "Get Completed Count": {
+    "Skip to Next": {
       "main": [
         [
           {
-            "node": "Build Preview",
+            "node": "Loop Over Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Session Status": {
+      "main": [
+        [
+          {
+            "node": "Merge",
             "type": "main",
             "index": 0
           }
@@ -358,6 +453,17 @@
       ]
     },
     "Get Content Preview": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
       "main": [
         [
           {
@@ -422,32 +528,29 @@
           }
         ]
       ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Call OpenAI",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1",
-    "saveManualExecutions": true,
-    "callerPolicy": "workflowsFromSameOwner",
-    "errorWorkflow": ""
+    "binaryMode": "separate"
   },
-  "pinData": {},
-  "versionId": "2",
+  "versionId": "91b3186f-1b4f-4a70-9214-adf5fae34297",
   "meta": {
-    "templateCredsSetupCompleted": false,
-    "n8nVersion": "2.x"
+    "templateCredsSetupCompleted": true,
+    "instanceId": "aa181ee0568855ddf7ce6cbee8bcaf4deb4e978a4f1a4508621f7592ca0432e3"
   },
-  "id": "leni-cheer-dm-v2",
-  "tags": [
-    {
-      "name": "nudge"
-    },
-    {
-      "name": "leni"
-    },
-    {
-      "name": "cheer-dm"
-    }
-  ],
-  "staticData": null
+  "id": "QqWJk6I1uJtZ8HHW",
+  "tags": []
 }
