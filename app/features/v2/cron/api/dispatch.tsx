@@ -31,6 +31,10 @@ export async function action({ request }: Route.ActionArgs) {
     return routeData({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // ?schedule_id=123 — force-send a specific row regardless of status/scheduled_at
+  const url = new URL(request.url);
+  const force_schedule_id = url.searchParams.get("schedule_id");
+
   const { createClient } = await import("@supabase/supabase-js");
   const {
     getCronPendingSchedules,
@@ -58,7 +62,20 @@ export async function action({ request }: Route.ActionArgs) {
   };
 
   try {
-    const pending = await getCronPendingSchedules(client as any);
+    let pending: Awaited<ReturnType<typeof getCronPendingSchedules>>;
+
+    if (force_schedule_id) {
+      const { data, error } = await client
+        .from("nv2_schedules")
+        .select("schedule_id, auth_user_id, schedule_type, delivery_url, message_body, review_round, retry_count, max_retries")
+        .eq("schedule_id", force_schedule_id)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return routeData({ error: `schedule_id ${force_schedule_id} not found` }, { status: 404 });
+      pending = [data];
+    } else {
+      pending = await getCronPendingSchedules(client as any);
+    }
 
     // Batch-fetch discord_id + email + unsubscribe flags for all unique users
     const unique_user_ids = [...new Set(pending.map((s) => s.auth_user_id))];
