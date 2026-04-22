@@ -653,6 +653,7 @@ function ResetProgressButton({
 
 const STAGE_TYPE_LABELS: Record<string, string> = {
   learning: "학습",
+  story: "스토리",
   quiz_5: "퀴즈",
   quiz_10: "퀴즈",
   quiz_current_session: "퀴즈",
@@ -695,6 +696,7 @@ function StageRow({
   const is_sentence = stage_type === "sentence_practice";
   const is_dictation = stage_type === "dictation";
   const is_writing = stage_type === "writing";
+  const is_story = stage_type === "story";
 
   // ── Visual state ──────────────────────────────────────────────────────────
   // Review session states:
@@ -758,6 +760,8 @@ function StageRow({
           ? `/dictation/${stage_id}?session=${session_id}`
           : is_writing
           ? `/writing/${stage_id}?session=${session_id}`
+          : is_story
+          ? `/story/${stage_id}?session=${session_id}`
           : `/stages/${stage_id}?session=${session_id}`
       }
       className={[
