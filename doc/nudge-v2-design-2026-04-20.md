@@ -1,8 +1,8 @@
 # Nudge v2 설계 문서
 
 **작성일**: 2026-03-23  
-**최종 업데이트**: 2026-04-18 (v11)  
-**상태**: Vercel 배포 완료. Deutsch A1·A2·B1 / 히라가나 / 카타카나 / Spanish A1·A2·B1·B2 콘텐츠 등록 완료. Leni AI 채팅 + dictation/writing 스테이지 구현 완료. 이메일/Google/Discord 회원가입·로그인 구현 완료. 상품 구매 및 무료 체험 플로우 구현 완료. 이메일 학습 알림 구현 완료. 어드민 통계 대시보드 구현 완료. 복습 UX 보완 완료. 클로즈 베타 테스트 진행 중 (7명).
+**최종 업데이트**: 2026-04-22 (v12)  
+**상태**: Vercel 배포 완료. Deutsch A1·A2·B1 / 히라가나 / 카타카나 / Spanish A1·A2·B1·B2 콘텐츠 등록 완료. Leni AI 채팅 + dictation/writing 스테이지 구현 완료. 이메일/Google/Discord 회원가입·로그인 구현 완료. 상품 구매 및 무료 체험 플로우 구현 완료. 이메일 학습 알림 구현 완료. 어드민 통계 대시보드 구현 완료. 복습 UX 보완 완료. Story Learning 구현 완료. Leni Cheer DM v2 구현 완료 (n8n 이관). 클로즈 베타 테스트 진행 중 (7명).
 
 ---
 
@@ -392,7 +392,7 @@ getLeniResponse(
 |---|---|---|
 | `daily-reset` | 30분 | 자정 코호트 today_new_count / today_review_count 초기화 |
 | `enqueue-daily` | 30분 | send_hour 코호트 DM 큐 생성 |
-| `enqueue-nudge` | 30분 | 미완료 세션 cheer DM 큐 생성 |
+| ~~`enqueue-nudge`~~ | ~~30분~~ | ~~미완료 세션 cheer DM 큐 생성~~ → **n8n 이관 (deprecated)** |
 | `dispatch` | 5분 | pending 스케줄 발송 (Discord DM / 이메일) |
 
 ### DM 발송 원칙
@@ -400,6 +400,44 @@ getLeniResponse(
 - Cron(`enqueue-daily` / `dispatch`)만 DM/이메일 발송
 - `start-learning`, `session/complete`에서 DM 발송 없음
 - cheer DM은 Discord 전용 (이메일 fallback 없음)
+
+### n8n 자동화 워크플로우 (leni-cheer-dm-v2)
+
+cheer DM 큐 생성은 Supabase Cron에서 n8n으로 이관됨.
+
+| 항목 | 값 |
+|---|---|
+| 파일 | `n8n/leni-cheer-dm-v2.json` |
+| 실행 주기 | `0 */2 * * *` (2시간마다) |
+| 발송 슬롯 | 09:00 KST, 19:00 KST |
+| DB 연결 | Postgres 직접 연결 (`supabase-nudge-n8n_worker` credential) |
+
+**노드 구성 (13개)**:
+```
+Schedule Trigger
+→ Get Incomplete Sessions (Postgres)
+→ Filter and Dedup Users
+→ Loop Over Users
+  → Prepare Queries
+  → Dedup Check
+  → Check Dedup Result
+  → Get Completed Count + Get Content Preview (Postgres, 병렬)
+  → Build Preview
+  → Build OpenAI Prompt
+  → Call OpenAI
+  → Parse Response and Build Schedule
+  → Insert nv2_schedules (Postgres)
+```
+
+**cheer DM message_body 포맷**:
+```
+cheer:HH|product_name|session_label|incomplete_message|||complete_message
+```
+- `cheer:HH`: 발송 시각(KST 시)
+- `|||`: 미완료 메시지와 완료 메시지 구분자
+- dispatch.tsx가 발송 직전 세션 상태를 재확인하여 어느 메시지를 보낼지 결정
+
+**is_script 판별**: `product_slug`에 `'hiragana'` 또는 `'katakana'`가 포함되면 스크립트 상품으로 간주 (n8n 내 분기 처리).
 
 ### 복습 완료 DM 문구
 
@@ -422,6 +460,15 @@ getLeniResponse(
 - 세션 status를 `in_progress`로 초기화
 
 > ⚠️ 테스트 완료 후 `RESET_PROGRESS_ENABLED` 환경변수 삭제 권장
+
+### 특정 스케줄 강제 발송
+
+`POST /api/v2/cron/dispatch?schedule_id={id}`
+
+- `Authorization: Bearer {CRON_SECRET}` 헤더 필수
+- 해당 schedule row를 `status`, `scheduled_at`에 상관없이 즉시 발송
+- 발송 후 status → `sent`로 업데이트
+- n8n에서 insert된 cheer DM 로컬 테스트 용도
 
 ---
 
@@ -467,7 +514,7 @@ app/
 │       │       ├── my-learning-page.tsx         ✅ /my-learning (구독 상품 진행 현황)
 │       │       └── progress-page.tsx            ✅ /products/:slug/progress (상품별 진도)
 │       ├── cron/
-│       │   └── api/dispatch.tsx                 ✅ Discord DM / 이메일 채널 분기
+│       │   └── api/dispatch.tsx                 ✅ Discord DM / 이메일 채널 분기, ?schedule_id 강제 발송, cheer dual-message 처리
 │       └── chat/
 │           ├── screens/chat-page.tsx            ✅ story 말풍선 추가 (챕터 읽기 → 새 탭)
 │           └── lib/leni.server.ts               ✅ 신규/복습 시스템 프롬프트 분리
@@ -502,6 +549,8 @@ app/
 23. **story 상품 판별**: `product.meta.story` 필드 존재 여부로 판별 (`!!meta_obj?.story`). DB에 `meta.story` 값이 있으면 story 상품.
 24. **story next=close**: Leni 채팅에서 새 탭으로 열린 story-page는 `?next=close`로 완료 후 `window.close()` 호출.
 25. **nv2_product_sessions count**: 상품의 총 세션 수는 `total_stages / 5` 계산 대신 `nv2_product_sessions` 테이블 count 직접 조회.
+26. **cheer DM message_body 포맷**: `cheer:HH|product_name|session_label|incomplete_message|||complete_message`. `|||`가 구분자로, dispatch.tsx가 발송 직전 세션 상태를 재확인하여 어느 메시지를 보낼지 결정. legacy 포맷(`cheer:HH|message`)도 지원.
+27. **is_script 판별**: n8n 워크플로우에서 `product_slug`에 `'hiragana'` 또는 `'katakana'`가 포함되면 스크립트 상품으로 분기 처리 (cheer 메시지 생성 방식 차이).
 
 ---
 
@@ -555,6 +604,10 @@ app/
 | 2026-04-18 | 복습 완료 판정: last_review_completed_at > session.created_at (ms 비교) |
 | 2026-04-18 | Supabase JS null update 이슈 확인 → epoch sentinel 방식으로 해결 |
 | 2026-04-18 | 테스트용 reset-progress API 추가 (RESET_PROGRESS_ENABLED=true 환경변수 필요) |
+| 2026-04-22 | nv2_sessions 중복 세션 버그 수정: partial UNIQUE index 추가 (new/review 각각), createCronNewSession/createCronReviewSession/createNv2UserSession에서 error.code 23505 graceful handling |
+| 2026-04-22 | n8n_worker RLS 추가: nv2_profiles (SELECT), nv2_product_sessions (SELECT), nv2_schedules (SELECT + INSERT) |
+| 2026-04-22 | dispatch.tsx ?schedule_id 파라미터 추가 (강제 발송, status/scheduled_at 무관) |
+| 2026-04-22 | Leni Cheer DM v2 구현 완료: n8n postgres 직접연결, OpenAI 개인화 메시지, |||  dual-message 포맷, is_script 분기 |
 
 ---
 
@@ -565,6 +618,7 @@ app/
 | 1 | **서비스 공개 런칭 준비** | 랜딩 페이지 정비, 베타 배너 제거 등 |
 | 2 | **복습 UX 보완** | ✅ 완료 (2026-04-18) |
 | 3 | **Story Learning** | ✅ 완료 (2026-04-20) — story-deutsch-b1-snowwhite 시즌 1 운영 중 |
+| 3.5 | **Leni Cheer DM v2** | ✅ 완료 (2026-04-22) — n8n postgres 이관, OpenAI 개인화 메시지, dual-message 포맷 |
 | 4 | **다국어 지원** | 로드맵 항목 |
 | 5 | **결제 시스템** | Stripe 또는 토스페이먼츠 연동 (유료 상품 출시 시) |
 | 6 | **SNS 연결 관리 화면** | /account에서 Discord/Telegram/KakaoTalk 연결 관리 |
@@ -629,3 +683,7 @@ app/
 | 2026-04-20 | n8n 워크플로우: Snow White B1 S1 생성기 완성 (gpt-4.1, 챕터별 시놉시스 하드코딩) |
 | 2026-04-20 | admin.layout.tsx: refresh_token_not_found 처리, 세션 쿠키 갱신 전달 |
 | 2026-04-20 | routes.ts: /my-learning, /products/:slug/progress, /story/:stageId, story result API 등록 |
+| 2026-04-22 | Leni Cheer DM v2 구현 완료 — n8n postgres 직접연결, OpenAI 개인화 cheer DM, ||| dual-message 포맷, dispatch 세션 재확인 로직 |
+| 2026-04-22 | nv2_sessions partial UNIQUE index 추가 (new/review 중복 방지) + 23505 graceful handling 3개 함수 |
+| 2026-04-22 | n8n_worker RLS 추가 (nv2_profiles, nv2_product_sessions, nv2_schedules) |
+| 2026-04-22 | dispatch.tsx ?schedule_id 파라미터 추가 (강제 발송 테스트용) |
