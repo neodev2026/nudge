@@ -1,7 +1,8 @@
 # Leni Cheer DM v2 — 기획 및 설계 문서
 
 **작성일**: 2026-04-21  
-**상태**: 설계 확정. 구현 대기.  
+**최종 업데이트**: 2026-04-22  
+**상태**: 구현 완료.  
 **구현 담당**: Claude Code
 
 ---
@@ -122,54 +123,60 @@ cheer:HH|product_name|session_label|message
 
 ### 트리거
 
-- **Schedule Trigger**: 하루 2회
-  - 오전 슬롯용: UTC 00:00 (KST 09:00 기준 2시간 전인 KST 07:00 = UTC 22:00 전날)
-  - 저녁 슬롯용: UTC 10:00 (KST 19:00 기준 2시간 전인 KST 17:00 = UTC 08:00)
-  - ※ 실제 UTC 시각은 서비스 주요 사용자 타임존에 맞춰 조정. `scheduled_at`을 사용자별로 계산하므로 n8n 트리거 시각은 "가장 이른 타임존 사용자의 발송 2시간 전"으로 설정하면 됨.
-  - ※ 각 트리거에 `slot_type` 파라미터 세팅: `"morning"` / `"evening"`
+- **Schedule Trigger**: `0 */2 * * *` (2시간마다)
+  - 실행할 때마다 현재 시각이 09:00 또는 19:00 슬롯에 해당하는지 워크플로우 내부에서 판별
+  - 슬롯에 해당하지 않는 실행은 대상 사용자 없음으로 자연 종료됨
+  - ~~오전/저녁별 별도 트리거 2개~~ → 단일 트리거로 통합 구현
 
-### 노드 구성
+### 노드 구성 (실제 구현: 13개)
+
+DB 연결 방식: **Postgres 직접 연결** (`supabase-nudge-n8n_worker` credential, id: `c4XNXQBW2Z7gkFSC`)  
+→ REST API 대신 Postgres 직접 연결로 구현 (RLS 제약으로 REST API 사용 불가)
 
 ```
-[1] Schedule Trigger
-      ↓
-[2] Supabase: 미완료 세션 사용자 조회
-      nv2_sessions JOIN nv2_product_sessions JOIN nv2_learning_products
-      WHERE status IN ('pending', 'in_progress')
-      + nv2_profiles (discord_id, display_name, timezone)
-      + nv2_subscriptions (is_active = true)
-      dedup by auth_user_id (user당 1개 세션만)
-      ↓
-[3] Supabase: 사용자별 완료 세션 수 조회
-      SELECT COUNT(*) FROM nv2_sessions
-      WHERE auth_user_id = ? AND status = 'completed'
-      ↓
-[4] Code: 학습 콘텐츠 조회 준비 (상품 유형 판별)
-      product.meta.story 존재 여부 → story 상품 분기
-      그 외 → 일반 learning 카드 분기
-      ↓
-[5] Supabase: 학습 콘텐츠 조회
-      nv2_product_session_stages
-        → nv2_stages (stage_type = 'learning')
-        → nv2_cards (card_type IN ('title', 'description', 'example'))
-      사용자가 아직 완료하지 않은 stage 우선 (nv2_stage_progress.completed_at IS NULL)
-      랜덤 2~3개 추출
-      story 상품: nv2_cards.card_data.hook_text 사용
-      ↓
-[6] Code: OpenAI 프롬프트 조합
-      (아래 §6-1 참조)
-      ↓
-[7] OpenAI: gpt-4o-mini 호출
-      API Key: OPENAI_API_SECRET_NUDGE_LENI_CHAT (기존 Leni 채팅과 동일)
-      JSON 응답: { incomplete_message, complete_message }
-      ↓
-[8] Code: message_body 조합 + scheduled_at 계산
-      message_body = `cheer:${hour}|${product_name}|${session_label}|${incomplete_message}|||${complete_message}`
-      scheduled_at = 사용자 timezone 기준 발송 시각을 UTC로 변환
-      ↓
-[9] Supabase: nv2_schedules INSERT
-      auth_user_id, schedule_type='cheer', delivery_url, message_body, scheduled_at, status='pending'
+[1]  Schedule Trigger
+       ↓
+[2]  Get Incomplete Sessions (Postgres)
+       nv2_sessions JOIN nv2_product_sessions JOIN nv2_learning_products JOIN nv2_profiles
+       WHERE status IN ('pending', 'in_progress')
+       + nv2_subscriptions (is_active = true)
+       ↓
+[3]  Filter and Dedup Users
+       user당 1개 세션만 유지
+       ↓
+[4]  Loop Over Users
+       ↓
+[5]  Prepare Queries
+       상품 유형 판별: product_slug에 'hiragana' 또는 'katakana' 포함 → is_script = true
+       ↓
+[6]  Dedup Check (Postgres)
+       오늘 날짜 + auth_user_id + cheer:HH 태그로 이미 큐에 있는지 확인
+       ↓
+[7]  Check Dedup Result
+       이미 있으면 해당 사용자 건너뜀
+       ↓
+[8a] Get Completed Count (Postgres)      ─┐ 병렬
+[8b] Get Content Preview (Postgres)      ─┘
+       학습 카드 조회 (title/description 카드, 랜덤 2~3개)
+       ↓
+[9]  Build Preview
+       콘텐츠 미리보기 텍스트 조합
+       ↓
+[10] Build OpenAI Prompt
+       (아래 §6-1 참조)
+       ↓
+[11] Call OpenAI
+       gpt-4o-mini, JSON 응답: { incomplete_message, complete_message }
+       ↓
+[12] Parse Response and Build Schedule
+       message_body = `cheer:${hour}|${product_name}|${session_label}|${incomplete_message}|||${complete_message}`
+       scheduled_at = 사용자 timezone 기준 발송 시각을 UTC로 변환
+       ↓
+[13] Insert nv2_schedules (Postgres)
+       auth_user_id, schedule_type='cheer', delivery_url, message_body, scheduled_at, status='pending'
 ```
+
+> **is_script 판별 변경**: 설계 단계에서는 `meta.story` 기반 story 분기를 검토했으나, 실제 구현에서는 `product_slug`에 `'hiragana'` 또는 `'katakana'` 포함 여부로 is_script를 판별한다.
 
 ### 6-1. OpenAI 프롬프트
 
@@ -309,13 +316,11 @@ if (schedule.schedule_type === "cheer") {
 
 ---
 
-## 8. sendCheerDm 개선 (discord.server.ts)
+## 8. sendCheerDm 개선 (discord.server.ts) ✅ 구현 완료
 
-단어 미리보기가 이미 `message` 텍스트 안에 포함되어 있으므로, `sendCheerDm` 함수 시그니처 변경은 불필요하다.
+단어 미리보기가 이미 `message` 텍스트 안에 포함되어 있으므로, 함수 시그니처 변경 없이 embed 구조만 개선했다.
 
-embed 구조만 아래와 같이 개선한다.
-
-### 현재
+### 변경 전
 
 ```
 content: {message}
@@ -324,17 +329,16 @@ embed.description: "{context}\n아래 버튼을 눌러 이어서 학습하세요
 button: "학습 이어하기 →"
 ```
 
-### 변경 후
+### 변경 후 (실제 구현)
 
 ```
-content: {message}           ← AI가 생성한 전체 메시지 (단어 미리보기 포함)
-embed.title: (없음 또는 최소화)
-embed.description: (없음 또는 단순 CTA 1줄)
-button: "학습 이어하기 →"
+content: {message}
+embed.title: ""
+embed.description: "{product_name} · {session_label} →"  (product_name/session_label 없으면 "학습 이어하기")
+embed.color: 0xffa500
 ```
 
-메시지 본문이 이미 풍부하므로 embed는 버튼 표시 용도로만 사용한다.
-구체적인 embed 구조는 Discord 렌더링 테스트 후 결정한다.
+CTA: `[product_name, session_label].filter(Boolean).join(" · ") || "학습 이어하기"`
 
 ---
 
@@ -385,28 +389,38 @@ n8n으로 완전 이관되므로 `enqueue-nudge.tsx` 라우트는 더 이상 Sup
 
 ---
 
-## 11. 구현 파일 목록
+## 11. 구현 파일 목록 ✅ 전체 완료
 
 | 파일 | 변경 유형 | 변경 내용 |
 |---|---|---|
 | `features/v2/shared/constants.ts` | 수정 | `NUDGE_SCHEDULE_TIMES` 2개 슬롯으로 변경, `NUDGE_MESSAGES` / `getRandomNudgeMessage` 주석 처리 |
-| `features/v2/cron/api/dispatch.tsx` | 수정 | cheer 처리 블록: `|||` 파싱 + 세션 상태 재확인 로직 추가 |
-| `features/v2/auth/lib/discord.server.ts` | 수정 | `sendCheerDm` embed 구조 개선 (메시지 본문 중심으로) |
+| `features/v2/cron/api/dispatch.tsx` | 수정 | cheer 처리 블록: `|||` 파싱 + 세션 상태 재확인 로직, `?schedule_id` 강제 발송 파라미터 추가 |
+| `features/v2/auth/lib/discord.server.ts` | 수정 | `sendCheerDm` embed 구조 개선 (메시지 본문 중심) |
 | `features/v2/cron/api/enqueue-nudge.tsx` | 수정 | 파일 상단 `@deprecated` 주석 추가 |
-| **n8n workflow JSON** | 신규 | `leni-cheer-dm-v2` 워크플로우 (§6 노드 구성 참조) |
+| `features/v2/session/schema.ts` | 수정 | nv2_sessions UNIQUE index 추가 (new/review 중복 방지), n8n_worker SELECT policy 추가 |
+| `features/v2/profile/schema.ts` | 수정 | n8n_worker SELECT policy 추가 |
+| `features/v2/schedule/schema.ts` | 수정 | n8n_worker SELECT + INSERT policy 추가 |
+| `features/v2/cron/lib/queries.server.ts` | 수정 | `createCronNewSession` / `createCronReviewSession` — error.code 23505 graceful handling |
+| `features/v2/session/lib/queries.server.ts` | 수정 | `createNv2UserSession` — error.code 23505 graceful handling |
+| `n8n/leni-cheer-dm-v2.json` | 신규 | 13노드 워크플로우, Postgres 직접연결 (§6 노드 구성 참조) |
 
-> **DB 스키마 변경 없음**: `nv2_schedules.message_body`는 `TEXT` 컬럼이므로 포맷 확장에 마이그레이션 불필요.
+> **DB 스키마 변경**: `nv2_sessions`에 partial UNIQUE index 2개 추가 (migration 0057). `nv2_schedules.message_body`는 TEXT 컬럼이므로 포맷 확장에 별도 마이그레이션 불필요.
+>
+> **n8n_worker RLS**: n8n이 REST API 대신 Postgres 직접 연결을 사용하므로, `nv2_profiles`, `nv2_product_sessions`, `nv2_schedules` 3개 테이블에 n8n_worker 역할용 RLS 정책 추가 필요 (migration 0056).
 
 ---
 
-## 12. 구현 순서 권장
+## 12. 구현 순서 (실제 진행)
 
-1. `constants.ts` — 슬롯 변경 및 기존 메시지 상수 주석 처리
-2. `dispatch.tsx` — cheer 처리 블록 교체 (레거시 호환 포함)
-3. `discord.server.ts` — `sendCheerDm` embed 개선
-4. `enqueue-nudge.tsx` — deprecated 주석 추가
-5. n8n 워크플로우 구성 및 테스트
-6. Supabase Cron 대시보드에서 `enqueue-nudge` job 비활성화
+1. ✅ `constants.ts` — 슬롯 변경 및 기존 메시지 상수 주석 처리
+2. ✅ `dispatch.tsx` — cheer 처리 블록 교체 (레거시 호환 포함), `?schedule_id` 파라미터 추가
+3. ✅ `discord.server.ts` — `sendCheerDm` embed 개선
+4. ✅ `enqueue-nudge.tsx` — deprecated 주석 추가
+5. ✅ schema.ts 3개 — n8n_worker RLS 추가 (nv2_profiles, nv2_product_sessions, nv2_schedules)
+6. ✅ schema.ts (session) — nv2_sessions UNIQUE index 추가 (중복 세션 버그 수정)
+7. ✅ queries.server.ts 2개 — 23505 graceful handling
+8. ✅ n8n 워크플로우 import 및 테스트
+9. Supabase Cron 대시보드에서 `enqueue-nudge` job 비활성화 (운영 작업)
 
 ---
 
@@ -419,14 +433,16 @@ n8n으로 완전 이관되므로 `enqueue-nudge.tsx` 라우트는 더 이상 Sup
 | 레거시 포맷 (기존 큐 잔존 행) | `|||` 없음 → 기존 로직 그대로 동작 |
 | OpenAI 호출 실패 (n8n) | n8n 재시도 정책에 따라 처리. 실패 시 해당 사용자 행 INSERT 건너뜀 (발송 없음, 다음 슬롯에서 재시도됨) |
 | discord_id 없는 사용자 | 기존과 동일 — cheer skip |
+| 로컬 강제 발송 테스트 | `POST /api/v2/cron/dispatch?schedule_id={id}` — n8n INSERT된 row를 즉시 발송 |
+| 중복 세션 방지 | 같은 user + product_session으로 INSERT 재시도 시 23505 → 기존 세션 반환 |
 
 ---
 
-## 14. 미결 사항 (구현 시 결정)
+## 14. 미결 사항 (구현 완료 시점 기준)
 
-| 항목 | 내용 |
+| 항목 | 결정 내용 |
 |---|---|
-| n8n 트리거 정확한 UTC 시각 | 서비스 주요 사용자 타임존 분포 확인 후 결정 |
-| `sendCheerDm` embed 최종 구조 | Discord 렌더링 테스트 후 결정 |
-| OpenAI 호출 실패 시 fallback | 현재 설계: 해당 사용자 발송 없음. 필요 시 고정 템플릿 fallback 추가 가능 |
-| story 상품 `hook_text` 조회 경로 | `nv2_cards.card_data->>'hook_text'` 확인 필요 |
+| n8n 트리거 정확한 UTC 시각 | ✅ `0 */2 * * *` 단일 트리거로 구현. 슬롯 판별은 워크플로우 내부에서 처리 |
+| `sendCheerDm` embed 최종 구조 | ✅ content=AI 메시지, embed.description=CTA 1줄, color=0xffa500 |
+| OpenAI 호출 실패 시 fallback | ✅ 현재 설계 유지: 실패 시 해당 사용자 건너뜀 (다음 슬롯에서 자동 재시도) |
+| story 상품 `hook_text` 조회 경로 | ✅ `nv2_cards.card_data->>'hook_text'` 확인 후 적용 |

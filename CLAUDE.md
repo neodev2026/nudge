@@ -17,6 +17,11 @@
 - loader 패턴: useLoaderData<typeof loader>() 사용 (Route.ComponentProps 금지)
 - RLS 우회: adminClient 사용
 
+## 디버깅 규칙
+- loader 에러 추적: 문제 발생 시 단계별 `console.log`를 즉시 추가해 어느 쿼리가 실패하는지 먼저 특정한다. 가설로 코드를 수정하기 전에 반드시 원인을 확인한다.
+- Supabase 에러 throw: `if (err) throw err` 금지. 반드시 `throw new Error(err.message)`로 감싸 ErrorBoundary가 인식할 수 있는 Error 인스턴스로 던진다.
+- `.in()` 쿼리 크기 주의: PostgREST는 `.in()` 조건을 URL 파라미터로 전송한다. 수십 개 이상의 ID가 들어가면 URL 길이 초과로 `TypeError: fetch failed`가 발생한다. 부모-자식 관계(예: stage → cards)는 항상 nested select를 사용한다.
+
 ## 설계 문서
 - doc\nudge-v2-design-2026-04-20.md
 - doc\nudge-story-learning-spec.md

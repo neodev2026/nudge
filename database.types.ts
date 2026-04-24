@@ -687,6 +687,87 @@ export type Database = {
         }
         Relationships: []
       }
+      nv2_marathon_answers: {
+        Row: {
+          answered_at: string
+          created_at: string
+          id: string
+          is_correct: boolean
+          question_direction: string
+          run_id: string
+          stage_id: string
+          updated_at: string
+        }
+        Insert: {
+          answered_at?: string
+          created_at?: string
+          id?: string
+          is_correct: boolean
+          question_direction: string
+          run_id: string
+          stage_id: string
+          updated_at?: string
+        }
+        Update: {
+          answered_at?: string
+          created_at?: string
+          id?: string
+          is_correct?: boolean
+          question_direction?: string
+          run_id?: string
+          stage_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      nv2_marathon_runs: {
+        Row: {
+          auth_user_id: string
+          completed_at: string | null
+          created_at: string
+          elapsed_seconds: number | null
+          id: string
+          last_stage_index: number
+          product_id: string
+          run_number: number
+          score: number | null
+          started_at: string
+          status: Database["public"]["Enums"]["nv2_marathon_run_status"]
+          total_questions: number | null
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id: string
+          completed_at?: string | null
+          created_at?: string
+          elapsed_seconds?: number | null
+          id?: string
+          last_stage_index?: number
+          product_id: string
+          run_number: number
+          score?: number | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["nv2_marathon_run_status"]
+          total_questions?: number | null
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string
+          completed_at?: string | null
+          created_at?: string
+          elapsed_seconds?: number | null
+          id?: string
+          last_stage_index?: number
+          product_id?: string
+          run_number?: number
+          score?: number | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["nv2_marathon_run_status"]
+          total_questions?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       nv2_product_session_stages: {
         Row: {
           created_at: string
@@ -1481,6 +1562,7 @@ export type Database = {
         | "feedback"
       nv2_chat_role: "leni" | "user"
       nv2_link_access_type: "public" | "members_only"
+      nv2_marathon_run_status: "in_progress" | "completed"
       nv2_product_category:
         | "language"
         | "medical"
@@ -1702,6 +1784,7 @@ export const Constants = {
       ],
       nv2_chat_role: ["leni", "user"],
       nv2_link_access_type: ["public", "members_only"],
+      nv2_marathon_run_status: ["in_progress", "completed"],
       nv2_product_category: [
         "language",
         "medical",
