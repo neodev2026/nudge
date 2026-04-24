@@ -31,7 +31,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
          product_id,
          title,
          session_number,
-         nv2_learning_products!inner(name)
+         nv2_learning_products!inner(name, slug)
        )`
     )
     .eq("session_id", sessionId)
@@ -66,6 +66,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
   return {
     sessionId,
     productName: ps?.nv2_learning_products?.name ?? "",
+    productSlug: (ps?.nv2_learning_products?.slug ?? null) as string | null,
     sessionTitle: ps?.title ?? "",
     sessionNumber: ps?.session_number ?? null,
     sessionKind: (session as any).session_kind as "new" | "review",
@@ -79,6 +80,7 @@ export default function SessionChoicePage() {
   const {
     sessionId,
     productName,
+    productSlug,
     sessionTitle,
     sessionNumber,
     sessionKind,
@@ -198,6 +200,26 @@ export default function SessionChoicePage() {
               </>
             }
           />
+
+          {/* Banner C: 마라톤 모드 — only shown when product slug is available */}
+          {productSlug && (
+            <BannerCard
+              imageSrc="/images/leni/leni-study.jpg"
+              badge={{ label: "전체 연속 학습", className: "bg-green-50 text-green-600" }}
+              title="마라톤 모드"
+              description={
+                <>전체 단어를 처음부터 끝까지 한 번에 학습해요.<br />5개마다 미니 퀴즈, 50개마다 복습 퀴즈가 나와요.</>
+              }
+              cta={
+                <Link
+                  to={`/products/${productSlug}/marathon`}
+                  className="block w-full py-2.5 text-center text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  마라톤 모드 →
+                </Link>
+              }
+            />
+          )}
         </div>
       </div>
     </div>
