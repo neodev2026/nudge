@@ -52,6 +52,11 @@ export default [
       route("/writing/:stageId/result",      "features/v2/writing/api/result.tsx"),
       route("/story/:stageId/result",        "features/v2/story/api/result.tsx"),
       route("/auth/delete-account",             "features/v2/auth/screens/delete-account.tsx"),
+
+      // Marathon API
+      route("/marathon/:productSlug/start",          "features/v2/marathon/api/start.tsx"),
+      route("/marathon/:runId/save-progress",        "features/v2/marathon/api/save-progress.tsx"),
+      route("/marathon/:runId/complete",             "features/v2/marathon/api/complete.tsx"),
     ]),
   ]),
 
@@ -115,6 +120,10 @@ export default [
     route("/dictation/:stageId",        "features/v2/dictation/screens/dictation-page.tsx"),
     route("/writing/:stageId",          "features/v2/writing/screens/writing-page.tsx"),
 
+    // Marathon screens
+    route("/products/:slug/marathon",                         "features/v2/marathon/screens/marathon-page.tsx"),
+    route("/products/:slug/marathon/result/:runId",           "features/v2/marathon/screens/marathon-result-page.tsx"),
+
     ...prefix("/legal", [
       route("/:slug", "features/legal/screens/policy.tsx"),
     ]),
@@ -132,6 +141,9 @@ export default [
 
   // ── Maintenance ──────────────────────────────────────────────────────────
   route("/maintenance", "features/v2/home/screens/maintenance-page.tsx"),
+
+  // ── Print pages (standalone — no layout wrapper, full HTML via root only) ─
+  route("/products/:slug/marathon/print", "features/v2/marathon/screens/marathon-print-page.tsx"),
 
   // ── Legacy routes ────────────────────────────────────────────────────────
   // [Dashboard — v1]
