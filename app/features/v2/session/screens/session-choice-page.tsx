@@ -1,11 +1,10 @@
 /**
  * /sessions/:sessionId
  *
- * Session choice page — user selects between self-directed list or Leni chat.
- * Displays review context banner when session_kind === "review".
+ * Session choice page — purpose-based mode selection.
+ * Displays Marathon → Session list → Leni chat in order.
  */
-import { useLoaderData } from "react-router";
-import { Link } from "react-router";
+import { useLoaderData, Link, useNavigate } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -40,9 +39,11 @@ export async function loader({ params }: LoaderFunctionArgs) {
   if (sessionErr || !session) throw new Response("Not Found", { status: 404 });
 
   const authUserId = (session as any).auth_user_id as string | null;
+  const ps = (session as any).nv2_product_sessions;
 
   let subscriptionTurns = 0;
   let chargedTurns = 0;
+  let marathonRun: { last_stage_index: number } | null = null;
 
   if (authUserId) {
     try {
@@ -59,9 +60,25 @@ export async function loader({ params }: LoaderFunctionArgs) {
     } catch {
       // non-critical — render with 0 turns
     }
-  }
 
-  const ps = (session as any).nv2_product_sessions;
+    if (ps?.product_id) {
+      try {
+        const { data: run } = await adminClient
+          .from("nv2_marathon_runs")
+          .select("last_stage_index")
+          .eq("auth_user_id", authUserId)
+          .eq("product_id", ps.product_id)
+          .eq("status", "in_progress")
+          .order("started_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        marathonRun = run ?? null;
+      } catch {
+        // non-critical — render without resume info
+      }
+    }
+  }
 
   return {
     sessionId,
@@ -73,6 +90,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     reviewRound: (session as any).review_round as number | null,
     subscriptionTurns,
     chargedTurns,
+    marathonRun,
   };
 }
 
@@ -87,10 +105,16 @@ export default function SessionChoicePage() {
     reviewRound,
     subscriptionTurns,
     chargedTurns,
+    marathonRun,
   } = useLoaderData<typeof loader>();
 
+  const navigate = useNavigate();
   const totalTurns = subscriptionTurns + chargedTurns;
   const is_review = sessionKind === "review";
+
+  const marathonLabel = marathonRun
+    ? `${marathonRun.last_stage_index + 1}번째 단어부터 이어하기 →`
+    : "처음부터 마라톤 시작 →";
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center">
@@ -136,16 +160,15 @@ export default function SessionChoicePage() {
         <div className="px-4 pt-5 pb-1">
           <h1 className="text-lg font-medium text-gray-900">학습 방법 선택</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {is_review
-              ? "어떻게 복습할까요?"
-              : "오늘은 어떻게 공부할까요?"}
+            {is_review ? "어떻게 복습할까요?" : "오늘은 어떻게 공부할까요?"}
           </p>
         </div>
 
-        {/* Banners */}
+        {/* Option cards */}
         <div className="flex flex-col gap-3 px-4 pt-4 pb-8 flex-1">
 
-          {/* Banner A: 학습 목록 */}
+          {/* === LEGACY: image card layout (replaced by purpose-based layout) ===
+
           <BannerCard
             imageSrc="/images/leni/leni-study.jpg"
             badge={{ label: "자기주도", className: "bg-blue-50 text-blue-600" }}
@@ -165,7 +188,6 @@ export default function SessionChoicePage() {
             }
           />
 
-          {/* Banner B: Leni와 학습 */}
           <BannerCard
             imageSrc="/images/leni/leni-chat.jpg"
             badge={{ label: "AI 튜터", className: "bg-amber-50 text-amber-600" }}
@@ -201,7 +223,6 @@ export default function SessionChoicePage() {
             }
           />
 
-          {/* Banner C: 마라톤 모드 — only shown when product slug is available */}
           {productSlug && (
             <BannerCard
               imageSrc="/images/leni/leni-study.jpg"
@@ -220,6 +241,81 @@ export default function SessionChoicePage() {
               }
             />
           )}
+
+          === END LEGACY === */}
+
+          {/* Option 1: Marathon — only when product slug is available */}
+          {productSlug && (
+            <OptionCard
+              icon="🏃"
+              title="흘려듣기"
+              badge="시간 없을 때 추천"
+              badgeClassName="bg-green-50 text-green-600"
+              subtitle="마라톤 모드로 틀어놓고 듣기"
+            >
+              <Link
+                to={`/products/${productSlug}/marathon`}
+                className="block w-full py-3 text-center text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors"
+              >
+                {marathonLabel}
+              </Link>
+            </OptionCard>
+          )}
+
+          {/* Option 2: Session list */}
+          <OptionCard
+            icon="📚"
+            title="제대로 익히기"
+            badge="기본 학습"
+            badgeClassName="bg-blue-50 text-blue-600"
+            subtitle="퀴즈와 문장 연습으로 기억에 새기기"
+          >
+            <Link
+              to={`/sessions/${sessionId}/list`}
+              className="block w-full py-3 text-center text-sm font-medium text-gray-800 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors"
+            >
+              {is_review ? "복습 목록으로 →" : "세션 학습 목록으로 →"}
+            </Link>
+          </OptionCard>
+
+          {/* Option 3: Leni chat */}
+          <OptionCard
+            icon="💬"
+            title="Leni와 대화"
+            badge="AI 튜터"
+            badgeClassName="bg-amber-50 text-amber-600"
+            subtitle="약점을 짚어주고 실전 연습"
+          >
+            <div className="bg-gray-50 rounded-xl px-3 py-2.5 mb-3 flex items-center gap-4">
+              <TurnStat label="월정기권" value={subscriptionTurns} />
+              <div className="w-px h-6 bg-gray-200" />
+              <TurnStat label="충전권" value={chargedTurns} />
+              <div className="flex-1 text-right">
+                {totalTurns > 0
+                  ? <p className="text-xs text-gray-400">총 {totalTurns}턴 남음</p>
+                  : <p className="text-xs text-amber-500 font-medium">턴이 없어요</p>
+                }
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mb-3">
+              베타 기간 중 관리자가 무료로 충전해 드리고 있어요.
+            </p>
+            <button
+              onClick={() => navigate(`/sessions/${sessionId}/chat`)}
+              disabled={totalTurns === 0}
+              className={`w-full py-3 text-center text-sm font-medium rounded-xl border transition-colors ${
+                totalTurns > 0
+                  ? "text-gray-800 bg-gray-50 border-gray-200 hover:bg-gray-100"
+                  : "text-gray-400 bg-gray-50 border-gray-100 cursor-not-allowed"
+              }`}
+            >
+              {totalTurns > 0
+                ? (is_review ? "Leni와 복습 시작 →" : "Leni와 학습 시작 →")
+                : "턴이 부족해요"
+              }
+            </button>
+          </OptionCard>
+
         </div>
       </div>
     </div>
@@ -230,31 +326,63 @@ export default function SessionChoicePage() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function BannerCard({
-  imageSrc, badge, title, description, cta,
+function OptionCard({
+  icon,
+  title,
+  badge,
+  badgeClassName,
+  subtitle,
+  children,
 }: {
-  imageSrc: string;
-  badge: { label: string; className: string };
+  icon: string;
   title: string;
-  description: React.ReactNode;
-  cta: React.ReactNode;
+  badge: string;
+  badgeClassName: string;
+  subtitle: string;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-100 overflow-hidden bg-white">
-      <div className="h-40">
-        <img src={imageSrc} alt="" className="w-full h-full object-cover" />
-      </div>
-      <div className="px-4 py-4">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-base font-medium text-gray-900">{title}</span>
-          <span className={`text-xs px-2 py-0.5 rounded ${badge.className}`}>{badge.label}</span>
+    <div className="rounded-2xl border border-gray-100 bg-white px-4 py-4">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">{icon}</span>
+          <span className="text-base font-semibold text-gray-900">{title}</span>
         </div>
-        <p className="text-sm text-gray-500 leading-relaxed mb-3">{description}</p>
-        {cta}
+        <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ml-2 ${badgeClassName}`}>{badge}</span>
       </div>
+      <p className="text-sm text-gray-500 leading-relaxed mb-3">{subtitle}</p>
+      {children}
     </div>
   );
 }
+
+// === LEGACY: BannerCard (image card layout, replaced by OptionCard) ===
+// function BannerCard({
+//   imageSrc, badge, title, description, cta,
+// }: {
+//   imageSrc: string;
+//   badge: { label: string; className: string };
+//   title: string;
+//   description: React.ReactNode;
+//   cta: React.ReactNode;
+// }) {
+//   return (
+//     <div className="rounded-2xl border border-gray-100 overflow-hidden bg-white">
+//       <div className="h-40">
+//         <img src={imageSrc} alt="" className="w-full h-full object-cover" />
+//       </div>
+//       <div className="px-4 py-4">
+//         <div className="flex items-center gap-2 mb-2">
+//           <span className="text-base font-medium text-gray-900">{title}</span>
+//           <span className={`text-xs px-2 py-0.5 rounded ${badge.className}`}>{badge.label}</span>
+//         </div>
+//         <p className="text-sm text-gray-500 leading-relaxed mb-3">{description}</p>
+//         {cta}
+//       </div>
+//     </div>
+//   );
+// }
+// === END LEGACY ===
 
 function TurnStat({ label, value }: { label: string; value: number }) {
   return (
