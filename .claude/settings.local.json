@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node -e \"const { PostgrestError } = require\\('./node_modules/@supabase/postgrest-js/dist/cjs/index.js'\\); console.log\\('PostgrestError extends Error:', new PostgrestError\\({message:'test',details:'',hint:'',code:''}\\) instanceof Error\\)\")"
+      "Bash(node -e \"const { PostgrestError } = require\\('./node_modules/@supabase/postgrest-js/dist/cjs/index.js'\\); console.log\\('PostgrestError extends Error:', new PostgrestError\\({message:'test',details:'',hint:'',code:''}\\) instanceof Error\\)\")",
+      "Bash(xargs grep *)"
     ]
   }
 }
