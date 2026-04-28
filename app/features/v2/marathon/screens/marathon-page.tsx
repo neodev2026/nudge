@@ -84,46 +84,51 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 // ---------------------------------------------------------------------------
-// TTS — module-level flag shared across cards (stops on navigation)
+// TTS — module-level generation counter shared across cards.
+// Each stopTts() increments _tts_gen; every playTtsTwice() invocation captures
+// its own generation at call time. Stale onend/onerror callbacks check the
+// generation before proceeding, which prevents React Strict Mode's effect
+// double-invoke from letting a cancelled utterance's delayed onend callback
+// re-enter a new invocation's speak() loop.
 // ---------------------------------------------------------------------------
 
-let _tts_looping = false;
+let _tts_gen = 0;
 
 function stopTts() {
-  _tts_looping = false;
+  _tts_gen++;
   if (typeof window !== "undefined" && window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
 }
 
-function playTtsTwice(text: string, lang: string, onDone?: () => void) {
+// Plays an ordered list of utterances in sequence, 300ms apart.
+// Each stopTts() increments _tts_gen; this function captures my_gen at call
+// time and bails on any stale callback, making it safe under React Strict Mode
+// double-invoke and card-change cleanups.
+function playTtsSequence(
+  steps: Array<{ text: string; lang: string; rate?: number }>,
+  onDone?: () => void
+) {
   stopTts();
   if (typeof window === "undefined" || !window.speechSynthesis) return;
-
-  _tts_looping = true;
-  let count = 0;
-
-  const speak = () => {
-    if (!_tts_looping) return;
-    if (count >= 2) {
-      _tts_looping = false;
-      onDone?.();
-      return;
-    }
-    count++;
+  const my_gen = _tts_gen;
+  let step_idx = 0;
+  const playNext = () => {
+    if (_tts_gen !== my_gen) return;
+    if (step_idx >= steps.length) { onDone?.(); return; }
+    const { text, lang, rate = 0.9 } = steps[step_idx++];
     const utt = new SpeechSynthesisUtterance(text);
     utt.lang = lang;
-    utt.rate = 0.9;
-    utt.onend = () => {
-      if (_tts_looping) setTimeout(speak, 300);
-    };
-    utt.onerror = () => {
-      _tts_looping = false;
-      onDone?.();
-    };
+    utt.rate = rate;
+    utt.onend = () => { if (_tts_gen === my_gen) setTimeout(playNext, 300); };
+    utt.onerror = () => { /* intentionally empty */ };
     window.speechSynthesis.speak(utt);
   };
-  speak();
+  playNext();
+}
+
+function playTtsTwice(text: string, lang: string, onDone?: () => void, rate = 0.9) {
+  playTtsSequence([{ text, lang, rate }, { text, lang, rate }], onDone);
 }
 
 const TTS_LANG_MAP: Record<string, string> = {
@@ -135,12 +140,39 @@ const TTS_LANG_MAP: Record<string, string> = {
   es: "es-ES",
 };
 
-function getTtsLang(card_data: V2CardData): string {
-  return TTS_LANG_MAP[card_data.meta?.target_locale ?? "de"] ?? "de-DE";
+function getTtsLang(card_data: V2CardData | null | undefined): string {
+  return TTS_LANG_MAP[card_data?.meta?.target_locale ?? "de"] ?? "de-DE";
 }
 
 function hasTts(card_type: string): boolean {
-  return card_type === "title" || card_type === "example";
+  return card_type === "title" || card_type === "example" || card_type === "description";
+}
+
+type TtsStep = { text: string; lang: string; rate: number };
+
+// Returns the auto-play sequence for a card on entry.
+// title/example: front → back → front → back (interleaved for memorization)
+// description:   back → back (Korean explanation, read twice)
+function getTtsAutoPlaySteps(
+  card_type: string,
+  data: V2CardData,
+  target_lang: string
+): TtsStep[] | null {
+  if (card_type === "title" || card_type === "example") {
+    const front = data.presentation?.front;
+    const back = data.presentation?.back;
+    if (!front) return null;
+    const f: TtsStep = { text: front, lang: target_lang, rate: 0.9 };
+    const b: TtsStep | null = back ? { text: back, lang: "ko-KR", rate: 0.9 * 1.2 } : null;
+    return b ? [f, b, f, b] : [f, f];
+  }
+  if (card_type === "description") {
+    const text = data.presentation?.back;
+    if (!text) return null;
+    const s: TtsStep = { text, lang: "ko-KR", rate: 0.9 * 1.2 };
+    return [s, s];
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -260,7 +292,7 @@ function generateQuizQuestions(
 type Phase =
   | { type: "entry" }
   | { type: "stream" }
-  | { type: "mini_quiz"; questions: QuizQuestion[]; completed_count: number }
+  | { type: "mini_quiz"; questions: QuizQuestion[]; completed_count: number; follow_up_review?: { questions: QuizQuestion[]; completed_count: number } }
   | { type: "review_quiz"; questions: QuizQuestion[]; completed_count: number }
   | { type: "final_quiz"; questions: QuizQuestion[] }
   | { type: "complete" };
@@ -291,6 +323,7 @@ export default function MarathonPage() {
   >([]);
   const started_at_ref = useRef<Date>(new Date());
   const quiz_only_ref = useRef(false);
+  const jump_stage_ref = useRef<number | null>(null); // 0-based target index
 
   // Load settings from localStorage after mount
   useEffect(() => {
@@ -308,6 +341,16 @@ export default function MarathonPage() {
         const questions = generateQuizQuestions(stages, stages);
         set_final_answers([]);
         set_phase({ type: "final_quiz", questions });
+      } else if (jump_stage_ref.current !== null) {
+        const target_idx = jump_stage_ref.current;
+        jump_stage_ref.current = null;
+        set_current_stage_idx(target_idx);
+        set_current_card_idx(0);
+        set_phase({ type: "stream" });
+        save_fetcher.submit(
+          { last_stage_index: target_idx },
+          { method: "POST", action: `/api/v2/marathon/${new_run_id}/save-progress`, encType: "application/json" }
+        );
       } else {
         set_current_stage_idx(last_stage_index);
         set_current_card_idx(0);
@@ -349,6 +392,11 @@ export default function MarathonPage() {
 
   function handleQuickQuiz() {
     quiz_only_ref.current = true;
+    handleStart(true);
+  }
+
+  function handleJumpToStage(stage_num: number) {
+    jump_stage_ref.current = stage_num - 1; // convert to 0-based index
     handleStart(true);
   }
 
@@ -410,31 +458,51 @@ export default function MarathonPage() {
         return;
       }
 
-      // Check quiz trigger
-      if (completed_count % 50 === 0 && !settings.skip_review_quiz) {
-        const range_start = settings.review_quiz_cumulative
-          ? 0
-          : completed_count - 50;
-        const target = stages.slice(range_start, completed_count);
-        const questions = generateQuizQuestions(target, stages);
-        set_current_stage_idx(next_idx);
-        set_current_card_idx(0);
-        set_phase({ type: "review_quiz", questions, completed_count });
+      // Check quiz trigger.
+      // At multiples of 50: mini quiz runs first (if enabled), then review quiz
+      // follows via follow_up_review. This preserves the natural learning flow
+      // instead of skipping the mini quiz checkpoint.
+      set_current_stage_idx(next_idx);
+      set_current_card_idx(0);
+
+      if (completed_count % 50 === 0) {
+        const has_review = !settings.skip_review_quiz;
+        const has_mini = !settings.skip_mini_quiz;
+        const range_start = settings.review_quiz_cumulative ? 0 : completed_count - 50;
+        const review_questions = has_review
+          ? generateQuizQuestions(stages.slice(range_start, completed_count), stages)
+          : null;
+        const mini_questions = has_mini
+          ? generateQuizQuestions(stages.slice(completed_count - 5, completed_count), stages)
+          : null;
+
+        if (mini_questions) {
+          set_phase({
+            type: "mini_quiz",
+            questions: mini_questions,
+            completed_count,
+            follow_up_review: review_questions
+              ? { questions: review_questions, completed_count }
+              : undefined,
+          });
+        } else if (review_questions) {
+          set_phase({ type: "review_quiz", questions: review_questions, completed_count });
+        }
       } else if (completed_count % 5 === 0 && !settings.skip_mini_quiz) {
         const target = stages.slice(completed_count - 5, completed_count);
         const questions = generateQuizQuestions(target, stages);
-        set_current_stage_idx(next_idx);
-        set_current_card_idx(0);
         set_phase({ type: "mini_quiz", questions, completed_count });
-      } else {
-        set_current_stage_idx(next_idx);
-        set_current_card_idx(0);
       }
     }
   }
 
   function handleQuizDone() {
-    set_phase({ type: "stream" });
+    if (phase.type === "mini_quiz" && phase.follow_up_review) {
+      const { questions, completed_count } = phase.follow_up_review;
+      set_phase({ type: "review_quiz", questions, completed_count });
+    } else {
+      set_phase({ type: "stream" });
+    }
   }
 
   function handleFinalQuizDone(
@@ -494,6 +562,7 @@ export default function MarathonPage() {
         on_start={() => handleStart(false)}
         on_restart={() => handleStart(true)}
         on_quick_quiz={handleQuickQuiz}
+        on_jump_to_stage={handleJumpToStage}
       />
     );
   }
@@ -524,8 +593,12 @@ export default function MarathonPage() {
   }
 
   if (phase.type === "mini_quiz" || phase.type === "review_quiz") {
+    const quiz_tts_lang = getTtsLang(
+      stages[0]?.cards.find((c) => c.card_type === "title")?.card_data as V2CardData | undefined
+    );
     return (
       <QuizView
+        key={`${phase.type}-${phase.completed_count}`}
         questions={phase.questions}
         quiz_label={
           phase.type === "review_quiz"
@@ -536,6 +609,7 @@ export default function MarathonPage() {
         }
         settings={settings}
         save_answers={false}
+        tts_lang={quiz_tts_lang}
         on_done={handleQuizDone}
       />
     );
@@ -583,6 +657,7 @@ function EntryView({
   on_start,
   on_restart,
   on_quick_quiz,
+  on_jump_to_stage,
 }: {
   product_name: string;
   product_slug: string;
@@ -598,7 +673,9 @@ function EntryView({
   on_start: () => void;
   on_restart: () => void;
   on_quick_quiz: () => void;
+  on_jump_to_stage: (stage_num: number) => void;
 }) {
+  const [jump_input, set_jump_input] = useState("");
   const has_progress =
     in_progress_run && in_progress_run.last_stage_index > 0;
 
@@ -685,6 +762,29 @@ function EntryView({
           >
             🖨️ 전체 출력
           </a>
+
+          {/* Stage jump */}
+          <div className="flex gap-2 mt-1">
+            <input
+              type="number"
+              min={1}
+              max={total_stages}
+              value={jump_input}
+              onChange={(e) => set_jump_input(e.target.value)}
+              placeholder={`1 ~ ${total_stages}`}
+              className="flex-1 rounded-2xl border-2 border-[#e8ecf5] bg-white px-4 py-3 text-sm font-bold text-[#1a2744] placeholder:text-[#c0c7d6] focus:border-[#1a2744] outline-none"
+            />
+            <button
+              disabled={is_starting || !jump_input || Number(jump_input) < 1 || Number(jump_input) > total_stages}
+              onClick={() => {
+                const n = Number(jump_input);
+                if (n >= 1 && n <= total_stages) on_jump_to_stage(n);
+              }}
+              className="rounded-2xl bg-[#1a2744] px-5 py-3 text-sm font-extrabold text-white transition-all hover:bg-[#243358] disabled:opacity-40 active:scale-[0.98]"
+            >
+              이동 →
+            </button>
+          </div>
         </div>
       </div>
 
@@ -737,20 +837,58 @@ function StreamView({
 
   const [countdown, set_countdown] = useState<number | null>(null);
   const countdown_ref = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [tts_done, set_tts_done] = useState(false);
+  // Read settings/on_next via refs so effect deps stay as [stage_index, card_index]
+  // and loadSettings() firing after mount doesn't re-trigger the effect.
+  const settings_ref = useRef(settings);
+  settings_ref.current = settings;
+  const on_next_ref = useRef(on_next);
+  on_next_ref.current = on_next;
+  // Incremented each time the card changes. TTS onDone closures check this to
+  // guard against stale callbacks firing after the card has already advanced
+  // (e.g. when speechSynthesis.cancel() triggers onerror on some browsers).
+  const gen_ref = useRef(0);
 
-  // Auto-play TTS on card entry
+  // Auto-play TTS on card entry, then start auto-advance countdown if enabled.
+  // Single effect avoids stale-state issue: when moving from a TTS card to a
+  // non-TTS card, tts_done would stay `true` (no change), so a separate effect
+  // gated on tts_done would never re-fire. Calling startCountdown() directly
+  // from the TTS callback (or immediately for non-TTS cards) sidesteps this.
+  //
+  // on_next MUST NOT be called inside a useState functional-update callback —
+  // React Strict Mode invokes those callbacks twice for side-effect detection,
+  // which caused description cards to be skipped (on_next fired twice per card).
+  // Use a local `ticks` variable and call on_next_ref.current() directly.
   useEffect(() => {
-    set_tts_done(false);
+    gen_ref.current += 1;
+    const my_gen = gen_ref.current;
+
     set_countdown(null);
     if (countdown_ref.current) clearInterval(countdown_ref.current);
 
-    if (has_tts && data) {
-      playTtsTwice(data.presentation.front, tts_lang, () => {
-        set_tts_done(true);
-      });
+    const startCountdown = () => {
+      if (gen_ref.current !== my_gen) return; // stale TTS callback — card already changed
+      const s = settings_ref.current;
+      if (!s.auto_advance) return;
+      let ticks = s.auto_advance_delay;
+      set_countdown(ticks);
+      countdown_ref.current = setInterval(() => {
+        ticks -= 1;
+        if (ticks <= 0) {
+          clearInterval(countdown_ref.current!);
+          countdown_ref.current = null;
+          set_countdown(null);
+          on_next_ref.current();
+        } else {
+          set_countdown(ticks);
+        }
+      }, 1000);
+    };
+
+    const steps = has_tts && data ? getTtsAutoPlaySteps(card?.card_type ?? "", data, tts_lang) : null;
+    if (steps) {
+      playTtsSequence(steps, startCountdown);
     } else {
-      set_tts_done(true);
+      startCountdown();
     }
 
     return () => {
@@ -759,27 +897,6 @@ function StreamView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage_index, card_index]);
-
-  // Auto-advance countdown after TTS done
-  useEffect(() => {
-    if (!settings.auto_advance || !tts_done) return;
-
-    set_countdown(settings.auto_advance_delay);
-    countdown_ref.current = setInterval(() => {
-      set_countdown((c) => {
-        if (c === null || c <= 1) {
-          clearInterval(countdown_ref.current!);
-          on_next();
-          return null;
-        }
-        return c - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (countdown_ref.current) clearInterval(countdown_ref.current);
-    };
-  }, [tts_done, settings.auto_advance, settings.auto_advance_delay]);
 
   function handleNext() {
     if (countdown_ref.current) clearInterval(countdown_ref.current);
@@ -844,7 +961,10 @@ function StreamView({
               </div>
               {has_tts && (
                 <button
-                  onClick={() => playTtsTwice(data.presentation.front, tts_lang)}
+                  onClick={() => playTtsSequence([
+                    { text: data.presentation.front, lang: tts_lang, rate: 0.9 },
+                    ...(data.presentation.back ? [{ text: data.presentation.back, lang: "ko-KR", rate: 0.9 * 1.2 }] : []),
+                  ])}
                   className="mt-4 flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold bg-[#fdf8f0] text-[#6b7a99] hover:bg-[#e8ecf5] hover:text-[#1a2744]"
                 >
                   <span>🔊</span> 발음 듣기
@@ -854,9 +974,17 @@ function StreamView({
           )}
 
           {card?.card_type === "description" && (
-            <div className="rounded-2xl bg-[#fdf8f0] p-5 text-base leading-[1.8] font-bold text-[#1a2744]">
-              {data.presentation.back}
-            </div>
+            <>
+              <div className="rounded-2xl bg-[#fdf8f0] p-5 text-base leading-[1.8] font-bold text-[#1a2744]">
+                {data.presentation.back}
+              </div>
+              <button
+                onClick={() => playTtsTwice(data.presentation.back, "ko-KR", undefined, 0.9 * 1.2)}
+                className="mt-4 flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold bg-[#fdf8f0] text-[#6b7a99] hover:bg-[#e8ecf5] hover:text-[#1a2744]"
+              >
+                <span>🔊</span> 다시 듣기
+              </button>
+            </>
           )}
 
           {card?.card_type === "example" && (
@@ -867,7 +995,10 @@ function StreamView({
               <p className="text-sm text-[#6b7a99]">{data.presentation.back}</p>
               {has_tts && (
                 <button
-                  onClick={() => playTtsTwice(data.presentation.front, tts_lang)}
+                  onClick={() => playTtsSequence([
+                    { text: data.presentation.front, lang: tts_lang, rate: 0.9 },
+                    ...(data.presentation.back ? [{ text: data.presentation.back, lang: "ko-KR", rate: 0.9 * 1.2 }] : []),
+                  ])}
                   className="mt-4 flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold bg-[#fdf8f0] text-[#6b7a99] hover:bg-[#e8ecf5] hover:text-[#1a2744]"
                 >
                   <span>🔊</span> 발음 듣기
@@ -964,12 +1095,14 @@ function QuizView({
   quiz_label,
   settings,
   save_answers,
+  tts_lang,
   on_done,
 }: {
   questions: QuizQuestion[];
   quiz_label: string;
   settings: MarathonSettings;
   save_answers: boolean;
+  tts_lang?: string;
   on_done: (
     answers?: Array<{
       stage_id: string;
@@ -1045,12 +1178,17 @@ function QuizView({
     set_selected(option);
     set_confirmed(true);
     set_time_left(null);
+    if (tts_lang) {
+      const word = q.question_direction === "word_to_meaning" ? q.question : q.correct_answer;
+      playTtsTwice(word, tts_lang);
+    }
   }
 
   // Keep ref current on every render so timer callbacks always call the latest version
   handle_next_ref.current = handleNext;
 
   function handleJumpToLast() {
+    stopTts();
     if (q_index >= questions.length - 1) return;
     const skipped = questions.slice(q_index, questions.length - 1).map((sq) => ({
       stage_id: sq.stage_id,
@@ -1066,6 +1204,7 @@ function QuizView({
   }
 
   function handleNext() {
+    stopTts();
     const is_correct = selected === q.correct_answer;
     const answer = {
       stage_id: q.stage_id,
