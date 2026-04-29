@@ -214,12 +214,19 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     console.log("[story_chapter] no stage_ids found — all_pss_rows empty");
   }
 
+  const { data: product_row } = await adminClient
+    .from("nv2_learning_products")
+    .select("slug")
+    .eq("id", product_session.product_id)
+    .single();
+
   return {
     session_id: params.sessionId,
     session_title,
     session_number: product_session.session_number,
     session_kind: session_kind as "new" | "review",
     review_round: review_round as number | null,
+    productSlug: product_row?.slug ?? null,
     // session_status: used to prevent auto-complete firing when session was
     // already marked completed in a previous visit (e.g. after reset).
     session_status: identity.status,
@@ -262,6 +269,7 @@ export default function SessionPage() {
     is_anonymous,
     auth_user_id,
     link_access,
+    productSlug,
   } = useLoaderData<typeof loader>();
 
   const is_review = session_kind === "review";
@@ -347,12 +355,21 @@ export default function SessionPage() {
       {/* ── Header ── */}
       <div className="border-b border-[#1a2744]/[0.07] bg-white/70 px-6 py-5 backdrop-blur-sm">
         <div className="mx-auto max-w-lg">
-          <button
-            onClick={() => window.history.back()}
-            className="text-xs font-semibold text-[#6b7a99] hover:text-[#1a2744]"
-          >
-            ← 뒤로
-          </button>
+          {productSlug ? (
+            <Link
+              to={`/products/${productSlug}`}
+              className="text-xs font-semibold text-[#6b7a99] hover:text-[#1a2744]"
+            >
+              ← 상품 페이지
+            </Link>
+          ) : (
+            <button
+              onClick={() => window.history.back()}
+              className="text-xs font-semibold text-[#6b7a99] hover:text-[#1a2744]"
+            >
+              ← 뒤로
+            </button>
+          )}
           <div className="mt-3 flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2">

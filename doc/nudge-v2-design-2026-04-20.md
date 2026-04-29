@@ -1,8 +1,8 @@
 # Nudge v2 설계 문서
 
 **작성일**: 2026-03-23  
-**최종 업데이트**: 2026-04-22 (v12)  
-**상태**: Vercel 배포 완료. Deutsch A1·A2·B1 / 히라가나 / 카타카나 / Spanish A1·A2·B1·B2 콘텐츠 등록 완료. Leni AI 채팅 + dictation/writing 스테이지 구현 완료. 이메일/Google/Discord 회원가입·로그인 구현 완료. 상품 구매 및 무료 체험 플로우 구현 완료. 이메일 학습 알림 구현 완료. 어드민 통계 대시보드 구현 완료. 복습 UX 보완 완료. Story Learning 구현 완료. Leni Cheer DM v2 구현 완료 (n8n 이관). 클로즈 베타 테스트 진행 중 (7명).
+**최종 업데이트**: 2026-04-28 (v13)  
+**상태**: Vercel 배포 완료. Deutsch A1·A2·B1 / 히라가나 / 카타카나 / Spanish A1·A2·B1·B2 콘텐츠 등록 완료. Leni AI 채팅 + dictation/writing 스테이지 구현 완료. 이메일/Google/Discord 회원가입·로그인 구현 완료. 상품 구매 및 무료 체험 플로우 구현 완료. 이메일 학습 알림 구현 완료. 어드민 통계 대시보드 구현 완료. 복습 UX 보완 완료. Story Learning 구현 완료. Leni Cheer DM v2 구현 완료 (n8n 이관). **마라톤 모드 구현 완료** (TTS 시퀀스 재생, 미니/복습/최종 퀴즈, 스테이지 점프). 클로즈 베타 테스트 진행 중 (7명).
 
 ---
 
@@ -137,7 +137,7 @@ SNS DM 링크 클릭 (로그인 불필요 — public access)
 [복습 배너] session_kind === "review"일 때만 표시
   - "🔁 복습 N회차" + "반복이 기억을 만들어요 💪" 안내
 
-[본문] 두 개의 배너 (모바일 기준 세로 스택)
+[본문] 세 개의 배너 (모바일 기준 세로 스택)
 
 [배너 A: 학습 목록]
   - 배지: "자기주도"
@@ -149,6 +149,11 @@ SNS DM 링크 클릭 (로그인 불필요 — public access)
   - 설명: 신규 / 복습에 따라 문구 분기
   - 턴 잔여: 월정기권 N턴 | 충전권 N턴
   - 버튼: "Leni와 학습 시작 →" / "Leni와 복습 시작 →" → /sessions/:sessionId/chat
+
+[배너 C: 마라톤 모드] productSlug가 있을 때만 표시
+  - 배지: "전체 연속 학습"
+  - 설명: "전체 단어를 처음부터 끝까지 한 번에 학습, 5개마다 미니 퀴즈, 50개마다 복습 퀴즈"
+  - 버튼: "마라톤 모드 →" → /products/:slug/marathon
 ```
 
 ### 세션 목록 페이지 UI 구조 (`/sessions/:sessionId/list`)
@@ -513,12 +518,144 @@ app/
 │       │   └── screens/
 │       │       ├── my-learning-page.tsx         ✅ /my-learning (구독 상품 진행 현황)
 │       │       └── progress-page.tsx            ✅ /products/:slug/progress (상품별 진도)
+│       ├── marathon/
+│       │   ├── screens/
+│       │   │   ├── marathon-page.tsx            ✅ /products/:slug/marathon (클라이언트 상태머신, TTS, 퀴즈)
+│       │   │   ├── marathon-result-page.tsx     ✅ /products/:slug/marathon/result/:runId
+│       │   │   └── marathon-print-page.tsx      ✅ /products/:slug/marathon/print
+│       │   ├── api/
+│       │   │   ├── start.tsx                    ✅ POST /api/v2/marathon/:slug/start
+│       │   │   ├── save-progress.tsx            ✅ POST /api/v2/marathon/:runId/save-progress
+│       │   │   └── complete.tsx                 ✅ POST /api/v2/marathon/:runId/complete
+│       │   ├── lib/queries.server.ts            ✅ getMarathonProduct/Stages/Runs
+│       │   └── schema.ts                        ✅ nv2_marathon_runs, nv2_marathon_answers
 │       ├── cron/
 │       │   └── api/dispatch.tsx                 ✅ Discord DM / 이메일 채널 분기, ?schedule_id 강제 발송, cheer dual-message 처리
 │       └── chat/
 │           ├── screens/chat-page.tsx            ✅ story 말풍선 추가 (챕터 읽기 → 새 탭)
 │           └── lib/leni.server.ts               ✅ 신규/복습 시스템 프롬프트 분리
 ```
+
+---
+
+## 15. 마라톤 모드
+
+### 개요
+
+전체 학습 단어를 처음부터 끝까지 연속으로 학습하는 모드. 세션 단위 학습과 별개로 `/products/:slug/marathon`에서 직접 진입. 코드는 모두 `marathon-page.tsx` 단일 파일의 클라이언트 사이드 상태 머신으로 구현.
+
+### Phase 상태 머신
+
+```
+entry
+  → (시작 / 재개 / 스테이지 점프)
+  → stream          ← 카드 하나씩 표시 + TTS 자동 재생
+      ↓ 스테이지 5개마다 (skip_mini_quiz=false)
+  → mini_quiz       ← 직전 5스테이지 5문항
+      ↓ (50의 배수 스테이지에서 mini_quiz 완료 후)
+  → review_quiz     ← 직전 50스테이지 또는 누적 N문항
+      ↓ 퀴즈 완료
+  → stream          (복귀)
+      ↓ 전체 완주
+  → final_quiz      ← 전체 단어 퀴즈 (DB 저장)
+      ↓
+  → complete        → /products/:slug/marathon/result/:runId
+```
+
+**50 스테이지 경계 처리**: mini_quiz의 `follow_up_review` 필드로 미니 퀴즈 완료 후 복습 퀴즈를 연결. 미니 퀴즈를 건너뛰지 않고 mini → review 순서 보장.
+
+### 진입점 (EntryView)
+
+```
+[이어하기]          진행 중인 런이 있을 때 → 저장된 last_stage_index부터 재개
+[처음부터 시작]     새 런 생성 (기존 in_progress 런 초기화)
+[마라톤 시작]       진행 중인 런이 없을 때 → 새 런 생성
+[전체 퀴즈 바로 시작] 학습 없이 전체 final_quiz 즉시 시작
+[스테이지 이동]     번호 입력 (1~N) → 해당 스테이지부터 새 런 시작
+[전체 출력]        /products/:slug/marathon/print (새 탭)
+```
+
+### StreamView
+
+```
+[상단] 일시정지 버튼 | N / total_stages | ⚙️ 설정
+[진행바] 전체 대비 현재 스테이지 비율 (초록 바)
+[카드 영역]
+  title 카드:   단어(front) + 의미(back) + 발음듣기 버튼
+  description:  설명(back) + 다시듣기 버튼
+  example:      예문(front) + 번역(back) + 발음듣기 버튼
+  etymology:    어원(front) + 설명(back)
+  image:        이미지(front) + 설명(back)
+[다음 →]        자동 넘김 카운트다운 표시 (N)
+[카드 N / M]    현재 스테이지 내 카드 위치
+[퀴즈로 점프]    다음 50 스테이지 경계까지 건너뛰기 (조건부 표시)
+```
+
+### TTS 재생 방식
+
+| 상황 | 재생 순서 | 비고 |
+|---|---|---|
+| title/example 카드 진입 | front → back → front → back | 타겟 언어 0.9x, 한국어 1.08x |
+| description 카드 진입 | back → back | 한국어 1.08x |
+| 발음듣기 버튼 (title/example) | front → back (1회씩) | |
+| 다시듣기 버튼 (description) | back → back | |
+| 퀴즈 정답 확인 시 | word (2회) | mini/review 퀴즈만 |
+
+**TTS 구현**: `playTtsSequence(steps[], onDone)` — `_tts_gen` 세대 카운터로 React Strict Mode 이중 호출 및 카드 전환 시 stale 콜백 방지. `stopTts()`는 `_tts_gen`을 증가시켜 진행 중인 모든 TTS 콜백을 무효화.
+
+### 설정 (localStorage 저장)
+
+| 키 | 기본값 | 설명 |
+|---|---|---|
+| auto_advance | false | 자동 넘김 |
+| auto_advance_delay | 3 | 자동 넘김 대기 시간 (초) |
+| quiz_time_limit | false | 퀴즈 시간제한 |
+| quiz_time_limit_seconds | 8 | 퀴즈 제한 시간 |
+| skip_mini_quiz | false | 미니 퀴즈 건너뛰기 |
+| skip_review_quiz | false | 복습 퀴즈 건너뛰기 |
+| review_quiz_cumulative | false | 복습 퀴즈 누적 포함 |
+
+### QuizView (미니/복습/최종 퀴즈 공용)
+
+```
+4지선다 — word_to_meaning 또는 meaning_to_word 랜덤
+정답 확인 후:
+  - 정답/오답 피드백 표시
+  - tts_lang 있으면 단어 발음 2회 자동 재생 (mini/review만)
+  - "다음 문제 →" 버튼 (3초 자동 넘김 토글)
+하단:
+  - 3초 후 자동 넘김 토글
+  - "마지막 문제로 점프" (건너뛴 문제 오답 처리)
+```
+
+**퀴즈 레이블**: mini(`미니 퀴즈 · N개 완료`), review 비누적(`복습 퀴즈 · 51~100번`), review 누적(`복습 퀴즈 · 누적 100개`)
+
+**key prop**: mini → review 전환 시 `key={phase.type + phase.completed_count}`로 QuizView 강제 재마운트 (내부 상태 초기화).
+
+### API 엔드포인트
+
+| 엔드포인트 | 설명 |
+|---|---|
+| `POST /api/v2/marathon/:slug/start` | 런 생성/재개/초기화. `{ restart: boolean }` |
+| `POST /api/v2/marathon/:runId/save-progress` | `{ last_stage_index }` 중간 저장 |
+| `POST /api/v2/marathon/:runId/complete` | 최종 퀴즈 결과 저장 (score, answers[]) |
+
+### DB 테이블
+
+| 테이블 | 주요 컬럼 |
+|---|---|
+| `nv2_marathon_runs` | auth_user_id, product_id, run_number, status(in_progress/completed), last_stage_index, score, total_questions, elapsed_seconds |
+| `nv2_marathon_answers` | run_id, stage_id, question_direction, is_correct |
+
+모든 쿼리는 `product_id` 파라미터 기반 — 어떤 상품이든 동일 코드로 동작.
+
+### 결과 페이지 (`/products/:slug/marathon/result/:runId`)
+
+완주 기록 목록: 런 번호, 점수, 정답률, 소요 시간.
+
+### 출력 페이지 (`/products/:slug/marathon/print`)
+
+전체 단어 A4 인쇄 시트: 번호 | 단어 | 의미(가림 가능) | 예문 | 쓰기 칸 ×3. 인증 불필요.
 
 ---
 
@@ -687,3 +824,13 @@ app/
 | 2026-04-22 | nv2_sessions partial UNIQUE index 추가 (new/review 중복 방지) + 23505 graceful handling 3개 함수 |
 | 2026-04-22 | n8n_worker RLS 추가 (nv2_profiles, nv2_product_sessions, nv2_schedules) |
 | 2026-04-22 | dispatch.tsx ?schedule_id 파라미터 추가 (강제 발송 테스트용) |
+| 2026-04-28 | 마라톤 모드 구현 완료 — entry/stream/mini_quiz/review_quiz/final_quiz/complete 6-phase 상태머신 |
+| 2026-04-28 | TTS: _tts_gen 세대 카운터 도입 (React Strict Mode 이중 호출 방지), playTtsSequence() 추가 |
+| 2026-04-28 | TTS 재생 순서: title/example → front→back→front→back, description → back×2 |
+| 2026-04-28 | 발음듣기 버튼: front→back 1회 시퀀스 |
+| 2026-04-28 | 자동 넘김: gen_ref/settings_ref/on_next_ref 패턴으로 stale closure 및 Strict Mode 부작용 해결 |
+| 2026-04-28 | 50 스테이지 경계: follow_up_review 필드로 mini_quiz → review_quiz 순서 보장 |
+| 2026-04-28 | QuizView key prop 추가 — mini→review 전환 시 내부 상태 초기화 |
+| 2026-04-28 | 퀴즈 정답 확인 시 단어 TTS 자동 재생 (mini/review 퀴즈) |
+| 2026-04-28 | 스테이지 점프 UI — EntryView에 번호 입력 → jump_stage_ref → handleStart(true) |
+| 2026-04-28 | session-choice-page 마라톤 배너 추가 (productSlug 있을 때 표시) |

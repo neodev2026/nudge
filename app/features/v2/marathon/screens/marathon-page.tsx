@@ -41,9 +41,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     data: { user },
   } = await client.auth.getUser();
 
-  if (!user) {
-    throw redirect(`/login?next=/products/${slug}/marathon`);
-  }
+  // Allow anonymous (unauthenticated) access for preview — no progress saved.
+  const userId = user?.id ?? null;
 
   const { createClient } = await import("@supabase/supabase-js");
   const adminClient = createClient(
@@ -54,24 +53,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const product = await getMarathonProduct(adminClient, slug);
   if (!product) throw new Response("Not Found", { status: 404 });
 
-  const has_subscription = await checkMarathonSubscription(
-    adminClient,
-    user.id,
-    product.id
-  );
-  if (!has_subscription) {
-    throw redirect(`/products/${slug}`);
+  if (userId) {
+    const has_subscription = await checkMarathonSubscription(
+      adminClient,
+      userId,
+      product.id
+    );
+    if (!has_subscription) {
+      throw redirect(`/products/${slug}`);
+    }
   }
 
   const [stages, in_progress_run] = await Promise.all([
     getMarathonStages(adminClient, product.id),
-    getMarathonInProgressRun(adminClient, user.id, product.id),
+    userId
+      ? getMarathonInProgressRun(adminClient, userId, product.id)
+      : Promise.resolve(null),
   ]);
 
   return {
     productSlug: slug,
     productName: product.name,
     productId: product.id,
+    userId,
     stages,
     inProgressRun: in_progress_run
       ? {
@@ -302,7 +306,7 @@ type Phase =
 // ---------------------------------------------------------------------------
 
 export default function MarathonPage() {
-  const { productSlug, productName, productId, stages, inProgressRun } =
+  const { productSlug, productName, productId, userId, stages, inProgressRun } =
     useLoaderData<typeof loader>();
 
   const navigate = useNavigate();
@@ -366,6 +370,13 @@ export default function MarathonPage() {
     }
   }, [complete_fetcher.data]);
 
+  // Anon mode: complete phase has no run_id to save — navigate back to product page
+  useEffect(() => {
+    if (phase.type === "complete" && !run_id) {
+      navigate(`/products/${productSlug}`);
+    }
+  }, [phase.type, run_id]);
+
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
@@ -380,6 +391,23 @@ export default function MarathonPage() {
   }
 
   function handleStart(restart: boolean) {
+    if (!userId) {
+      // Anon mode: no DB run — transition directly without calling the start API.
+      started_at_ref.current = new Date();
+      if (quiz_only_ref.current) {
+        quiz_only_ref.current = false;
+        const questions = generateQuizQuestions(stages, stages);
+        set_final_answers([]);
+        set_phase({ type: "final_quiz", questions });
+      } else {
+        const target_idx = jump_stage_ref.current ?? 0;
+        jump_stage_ref.current = null;
+        set_current_stage_idx(target_idx);
+        set_current_card_idx(0);
+        set_phase({ type: "stream" });
+      }
+      return;
+    }
     start_fetcher.submit(
       { restart },
       {

@@ -149,10 +149,17 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     }
   }
 
+  const { data: product_row } = await adminClient
+    .from("nv2_learning_products")
+    .select("slug")
+    .eq("id", product_session.product_id)
+    .single();
+
   return {
     session_id: params.sessionId,
     session_title,
     session_number: product_session.session_number,
+    productSlug: product_row?.slug ?? null,
     display_name,
     history_rows: history_rows ?? [],
     intro_cards,
@@ -373,6 +380,7 @@ export default function ChatPage() {
     quiz_stage_id,
     story_stage_id,
     story_hook_text,
+    productSlug,
   } = useLoaderData<typeof loader>();
 
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
@@ -539,15 +547,24 @@ export default function ChatPage() {
         <div className="px-4 py-3">
           <div className="mx-auto flex max-w-lg items-center gap-3">
             {/* Back button */}
-            <button
-              onClick={() => window.history.back()}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#6b7a99] transition hover:bg-[#f0f2f8] hover:text-[#1a2744]"
-              aria-label="뒤로"
-            >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
+            {productSlug ? (
+              <Link
+                to={`/products/${productSlug}`}
+                className="shrink-0 text-xs font-semibold text-[#6b7a99] hover:text-[#1a2744]"
+              >
+                ← 상품 페이지
+              </Link>
+            ) : (
+              <button
+                onClick={() => window.history.back()}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[#6b7a99] transition hover:bg-[#f0f2f8] hover:text-[#1a2744]"
+                aria-label="뒤로"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                  <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            )}
 
             {/* Leni avatar — 2x size */}
             <div className="relative h-16 w-16 shrink-0">
