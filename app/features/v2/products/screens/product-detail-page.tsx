@@ -137,6 +137,25 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     });
   }
 
+  // Marathon in-progress run — only for word products with active subscription
+  let marathonRun: { last_stage_index: number } | null = null;
+  if (user && is_subscribed && !is_story) {
+    try {
+      const { data: run } = await adminClient
+        .from("nv2_marathon_runs")
+        .select("last_stage_index")
+        .eq("auth_user_id", user.id)
+        .eq("product_id", product.id)
+        .eq("status", "in_progress")
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      marathonRun = run ?? null;
+    } catch {
+      // non-critical — render without resume info
+    }
+  }
+
   return {
     product: {
       ...product,
@@ -149,6 +168,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     is_subscribed,
     session_count: session_count ?? 0,
     session_previews,
+    marathonRun,
   };
 }
 
@@ -184,6 +204,7 @@ export default function ProductDetailPage() {
     first_stage, first_product_session,
     is_authenticated, is_subscribed,
     session_count, session_previews,
+    marathonRun,
   } = useLoaderData<typeof loader>();
 
   const icon = product.icon ?? CATEGORY_ICONS[product.category] ?? "📚";
@@ -194,15 +215,6 @@ export default function ProductDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#fdf8f0]">
-      {/* Back link */}
-      <div className="border-b border-[#1a2744]/[0.07] bg-white/60 px-6 py-4 backdrop-blur-sm">
-        <div className="mx-auto max-w-2xl">
-          <Link to="/products" className="text-sm font-semibold text-[#6b7a99] hover:text-[#1a2744]">
-            ← 학습 상품
-          </Link>
-        </div>
-      </div>
-
       <div className="mx-auto max-w-2xl px-6 py-8 space-y-5">
 
         {/* ── Product header card ── */}
@@ -261,6 +273,7 @@ export default function ProductDetailPage() {
             is_authenticated={is_authenticated}
             is_subscribed={is_subscribed}
             is_story={is_story}
+            marathon_run={marathonRun}
           />
         </div>
 
@@ -431,6 +444,7 @@ function CTASection({
   is_authenticated,
   is_subscribed,
   is_story,
+  marathon_run,
 }: {
   product_slug: string;
   first_stage: { id: string } | null;
@@ -438,6 +452,7 @@ function CTASection({
   is_authenticated: boolean;
   is_subscribed: boolean;
   is_story: boolean;
+  marathon_run: { last_stage_index: number } | null;
 }) {
   const [show_trial_modal, set_show_trial_modal] = useState(false);
   const fetcher = useFetcher<{ ok?: boolean; session_id?: string; error?: string }>();
@@ -445,7 +460,8 @@ function CTASection({
 
   useEffect(() => {
     if (fetcher.data?.ok && fetcher.data.session_id) {
-      window.location.href = `/sessions/${fetcher.data.session_id}`;
+      // Direct to session list — user already chose "세션 학습" on the product page
+      window.location.href = `/sessions/${fetcher.data.session_id}/list`;
     }
   }, [fetcher.data]);
 
@@ -482,22 +498,105 @@ function CTASection({
     fetcher.submit({}, { method: "POST", action: `/api/v2/products/${product_slug}/start` });
   }
 
+  // Story products: keep original single-button layout (no marathon)
+  if (is_story) {
+    return (
+      <div className="space-y-3">
+        <button
+          onClick={handleStartLearning}
+          disabled={is_loading}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4caf72] py-4 text-base font-extrabold text-white shadow-[0_4px_16px_rgba(76,175,114,0.30)] transition-all hover:-translate-y-px hover:bg-[#5ecb87] disabled:opacity-60"
+        >
+          {is_loading ? "준비 중..." : is_subscribed ? "학습 시작 →" : is_authenticated ? "구매하고 학습 시작 →" : "로그인하고 학습 시작 →"}
+        </button>
+        <button
+          onClick={() => set_show_trial_modal(true)}
+          className="w-full rounded-2xl border border-[#e8ecf5] bg-white py-3.5 text-sm font-bold text-[#6b7a99] transition-all hover:border-[#d0d7e8] hover:text-[#1a2744]"
+        >
+          즉시 무료 체험
+        </button>
+        {fetcher.data?.error && (
+          <p className="rounded-xl bg-red-50 px-4 py-3 text-xs font-bold text-red-600 text-center">
+            {fetcher.data.error}
+          </p>
+        )}
+        {show_trial_modal && (
+          <TrialModal product_slug={product_slug} onClose={() => set_show_trial_modal(false)} />
+        )}
+      </div>
+    );
+  }
+
+  // Word products: marathon-primary layout
+  const marathon_label = (() => {
+    if (!is_authenticated) return "로그인하고 마라톤 시작 →";
+    if (!is_subscribed) return "구매 후 마라톤 시작 →";
+    if (marathon_run) return `${marathon_run.last_stage_index + 1}번째 단어부터 이어하기 →`;
+    return "🏃 마라톤 학습 시작 →";
+  })();
+
+  const marathon_href = (() => {
+    if (!is_authenticated) return `/login?next=${encodeURIComponent(`/products/${product_slug}/marathon`)}`;
+    if (!is_subscribed) return `/products/${product_slug}/checkout`;
+    return `/products/${product_slug}/marathon`;
+  })();
+
+  const session_label = (() => {
+    if (!is_authenticated) return "로그인하고 세션 시작 →";
+    if (!is_subscribed) return "구매 후 세션 시작 →";
+    return "세션 학습 시작 →";
+  })();
+
   return (
     <div className="space-y-3">
-      <button
-        onClick={handleStartLearning}
-        disabled={is_loading}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4caf72] py-4 text-base font-extrabold text-white shadow-[0_4px_16px_rgba(76,175,114,0.30)] transition-all hover:-translate-y-px hover:bg-[#5ecb87] disabled:opacity-60"
-      >
+      {/* === LEGACY: single session CTA button (replaced by marathon-primary layout) ===
+      <button onClick={handleStartLearning} disabled={is_loading}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#4caf72] py-4 text-base font-extrabold text-white shadow-[0_4px_16px_rgba(76,175,114,0.30)] transition-all hover:-translate-y-px hover:bg-[#5ecb87] disabled:opacity-60">
         {is_loading ? "준비 중..." : is_subscribed ? "학습 시작 →" : is_authenticated ? "구매하고 학습 시작 →" : "로그인하고 학습 시작 →"}
       </button>
-
-      <button
-        onClick={() => set_show_trial_modal(true)}
-        className="w-full rounded-2xl border border-[#e8ecf5] bg-white py-3.5 text-sm font-bold text-[#6b7a99] transition-all hover:border-[#d0d7e8] hover:text-[#1a2744]"
-      >
+      <button onClick={() => set_show_trial_modal(true)}
+        className="w-full rounded-2xl border border-[#e8ecf5] bg-white py-3.5 text-sm font-bold text-[#6b7a99] transition-all hover:border-[#d0d7e8] hover:text-[#1a2744]">
         즉시 무료 체험
       </button>
+      === END LEGACY === */}
+
+      {/* Primary: Marathon */}
+      <Link
+        to={marathon_href}
+        className="flex w-full items-center justify-center rounded-2xl bg-[#1a2744] py-4 text-base font-extrabold text-white shadow-[0_4px_16px_rgba(26,39,68,0.20)] transition-all hover:-translate-y-px hover:bg-[#243460]"
+      >
+        {marathon_label}
+      </Link>
+
+      {/* Secondary: Session */}
+      {is_authenticated && is_subscribed ? (
+        <button
+          onClick={() => fetcher.submit({}, { method: "POST", action: `/api/v2/products/${product_slug}/start` })}
+          disabled={is_loading}
+          className="flex w-full items-center justify-center rounded-2xl border-2 border-[#1a2744] bg-white py-4 text-base font-extrabold text-[#1a2744] transition-all hover:bg-[#1a2744]/5 disabled:opacity-60"
+        >
+          {is_loading ? "준비 중..." : session_label}
+        </button>
+      ) : (
+        <Link
+          to={!is_authenticated
+            ? `/login?next=${encodeURIComponent(`/products/${product_slug}`)}`
+            : `/products/${product_slug}/checkout`}
+          className="flex w-full items-center justify-center rounded-2xl border-2 border-[#1a2744] bg-white py-4 text-base font-extrabold text-[#1a2744] transition-all hover:bg-[#1a2744]/5"
+        >
+          {session_label}
+        </Link>
+      )}
+
+      {/* Tertiary: Trial — hidden when subscribed */}
+      {!is_subscribed && (
+        <button
+          onClick={() => set_show_trial_modal(true)}
+          className="w-full rounded-2xl border border-[#e8ecf5] bg-white py-3.5 text-sm font-bold text-[#6b7a99] transition-all hover:border-[#d0d7e8] hover:text-[#1a2744]"
+        >
+          즉시 무료 체험
+        </button>
+      )}
 
       {fetcher.data?.error && (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-xs font-bold text-red-600 text-center">
@@ -506,10 +605,7 @@ function CTASection({
       )}
 
       {show_trial_modal && (
-        <TrialModal
-          product_slug={product_slug}
-          onClose={() => set_show_trial_modal(false)}
-        />
+        <TrialModal product_slug={product_slug} onClose={() => set_show_trial_modal(false)} />
       )}
     </div>
   );
