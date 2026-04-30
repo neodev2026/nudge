@@ -42,6 +42,7 @@ import { Toaster } from "sonner";
 
 import { Dialog } from "./core/components/ui/dialog";
 import { Sheet } from "./core/components/ui/sheet";
+import { FeedbackButton } from "./features/v2/feedback/components/FeedbackButton";
 import i18next from "./core/lib/i18next.server";
 import { themeSessionResolver } from "./core/lib/theme-session.server";
 import { cn } from "./core/lib/utils";
@@ -291,6 +292,7 @@ export default function App() {
     <Sheet>
       <Dialog>
         <Outlet />
+        <FeedbackButton />
       </Dialog>
     </Sheet>
   );
