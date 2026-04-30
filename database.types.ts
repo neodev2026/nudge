@@ -639,6 +639,42 @@ export type Database = {
           },
         ]
       }
+      nv2_feedback: {
+        Row: {
+          admin_note: string | null
+          auth_user_id: string | null
+          category: Database["public"]["Enums"]["nv2_feedback_category"]
+          content: string
+          created_at: string
+          id: string
+          is_resolved: boolean
+          page_url: string
+          updated_at: string
+        }
+        Insert: {
+          admin_note?: string | null
+          auth_user_id?: string | null
+          category: Database["public"]["Enums"]["nv2_feedback_category"]
+          content: string
+          created_at?: string
+          id?: string
+          is_resolved?: boolean
+          page_url: string
+          updated_at?: string
+        }
+        Update: {
+          admin_note?: string | null
+          auth_user_id?: string | null
+          category?: Database["public"]["Enums"]["nv2_feedback_category"]
+          content?: string
+          created_at?: string
+          id?: string
+          is_resolved?: boolean
+          page_url?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       nv2_learning_products: {
         Row: {
           category: Database["public"]["Enums"]["nv2_product_category"]
@@ -1561,6 +1597,7 @@ export type Database = {
         | "dictation"
         | "feedback"
       nv2_chat_role: "leni" | "user"
+      nv2_feedback_category: "error" | "content" | "suggestion" | "other"
       nv2_link_access_type: "public" | "members_only"
       nv2_marathon_run_status: "in_progress" | "completed"
       nv2_product_category:
@@ -1783,6 +1820,7 @@ export const Constants = {
         "feedback",
       ],
       nv2_chat_role: ["leni", "user"],
+      nv2_feedback_category: ["error", "content", "suggestion", "other"],
       nv2_link_access_type: ["public", "members_only"],
       nv2_marathon_run_status: ["in_progress", "completed"],
       nv2_product_category: [

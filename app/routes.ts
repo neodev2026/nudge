@@ -57,6 +57,9 @@ export default [
       route("/marathon/:productSlug/start",          "features/v2/marathon/api/start.tsx"),
       route("/marathon/:runId/save-progress",        "features/v2/marathon/api/save-progress.tsx"),
       route("/marathon/:runId/complete",             "features/v2/marathon/api/complete.tsx"),
+
+      // Feedback
+      route("/feedback/submit", "features/v2/feedback/api/submit.tsx"),
     ]),
   ]),
 
@@ -77,6 +80,7 @@ export default [
       route("/products/:id/stages/new",            "features/admin/screens/stage-new.tsx"),
       route("/products/:id/stages/:stageId",       "features/admin/screens/stage-edit.tsx"),
       route("/products/:id/sessions/:sessionId",   "features/admin/screens/session-edit.tsx"),
+      route("/feedback",                           "features/admin/screens/feedback.tsx"),
     ]),
   ]),
   ...prefix("/admin/api", [

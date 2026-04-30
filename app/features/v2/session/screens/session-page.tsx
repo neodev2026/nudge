@@ -165,15 +165,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     hook_text: string | null;
   } | null = null;
 
-  // Debug: log product_session_id to server console
-  console.log("[story_chapter] product_session_id:", identity.product_session_id);
-
   const { data: all_pss_rows, error: pss_err } = await adminClient
     .from("nv2_product_session_stages")
     .select("stage_id")
     .eq("product_session_id", identity.product_session_id);
-
-  console.log("[story_chapter] all_pss_rows:", JSON.stringify(all_pss_rows), "err:", pss_err?.message);
 
   const all_stage_ids = (all_pss_rows ?? []).map((r: any) => r.stage_id);
 
@@ -184,8 +179,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       .in("id", all_stage_ids)
       .eq("stage_type", "story")
       .limit(1);
-
-    console.log("[story_chapter] story_stage_rows:", JSON.stringify(story_stage_rows), "err:", ss_err?.message);
 
     const story_stage_id = story_stage_rows?.[0]?.id ?? null;
 
@@ -198,8 +191,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
         .eq("is_active", true)
         .maybeSingle();
 
-      console.log("[story_chapter] story_card:", story_card ? "found" : "null", "err:", sc_err?.message);
-
       if (story_card?.card_data) {
         const d = story_card.card_data as any;
         story_chapter = {
@@ -207,11 +198,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
           chapter_title:  d.chapter_title  ?? null,
           hook_text:      d.hook_text      ?? null,
         };
-        console.log("[story_chapter] resolved:", JSON.stringify(story_chapter));
       }
     }
-  } else {
-    console.log("[story_chapter] no stage_ids found — all_pss_rows empty");
   }
 
   const { data: product_row } = await adminClient
