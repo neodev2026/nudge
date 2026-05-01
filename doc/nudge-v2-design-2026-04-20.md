@@ -1,8 +1,8 @@
 # Nudge v2 설계 문서
 
 **작성일**: 2026-03-23  
-**최종 업데이트**: 2026-04-28 (v13)  
-**상태**: Vercel 배포 완료. Deutsch A1·A2·B1 / 히라가나 / 카타카나 / Spanish A1·A2·B1·B2 콘텐츠 등록 완료. Leni AI 채팅 + dictation/writing 스테이지 구현 완료. 이메일/Google/Discord 회원가입·로그인 구현 완료. 상품 구매 및 무료 체험 플로우 구현 완료. 이메일 학습 알림 구현 완료. 어드민 통계 대시보드 구현 완료. 복습 UX 보완 완료. Story Learning 구현 완료. Leni Cheer DM v2 구현 완료 (n8n 이관). **마라톤 모드 구현 완료** (TTS 시퀀스 재생, 미니/복습/최종 퀴즈, 스테이지 점프). 클로즈 베타 테스트 진행 중 (7명).
+**최종 업데이트**: 2026-05-01 (v14)  
+**상태**: Vercel 배포 완료. Deutsch A1·A2·B1 / 히라가나 / 카타카나 / Spanish A1·A2·B1·B2 콘텐츠 등록 완료. Leni AI 채팅 + dictation/writing 스테이지 구현 완료. 이메일/Google/Discord 회원가입·로그인 구현 완료. 상품 구매 및 무료 체험 플로우 구현 완료. 이메일 학습 알림 구현 완료. 어드민 통계 대시보드 구현 완료. 복습 UX 보완 완료. Story Learning 구현 완료. Leni Cheer DM v2 구현 완료 (n8n 이관). 마라톤 모드 구현 완료 (TTS 시퀀스 재생, 미니/복습/최종 퀴즈, 스테이지 점프). **마라톤 nudge DM 구현 완료** (카드 커서 기반 미리보기, run_id 보안 토큰 resume 링크, 로그인 없이 진행 저장). 클로즈 베타 테스트 진행 중 (7명).
 
 ---
 
@@ -269,6 +269,7 @@ cheer 타입 + discord_id 없음 → skip (cheer는 Discord 전용)
 |---|---|
 | `sendWelcomeEmail` | Google OAuth 신규 가입 직후 (google-callback.tsx) |
 | `sendSessionEmail` | Cron dispatch — 새 세션 / 복습 세션 알림 |
+| `sendMarathonNudgeEmail` | Cron dispatch — marathon_nudge 스케줄 발송 (카드 front/back 미리보기 포함) |
 
 - 발신자: `Nudge <nudge@mail.neowithai.com>`
 - 인증 도메인: `mail.neowithai.com`
@@ -391,7 +392,7 @@ getLeniResponse(
 
 ## 12. Cron 자동화
 
-### Job 구성 (4개)
+### Job 구성 (5개)
 
 | Job | 주기 | 역할 |
 |---|---|---|
@@ -399,10 +400,38 @@ getLeniResponse(
 | `enqueue-daily` | 30분 | send_hour 코호트 DM 큐 생성 |
 | ~~`enqueue-nudge`~~ | ~~30분~~ | ~~미완료 세션 cheer DM 큐 생성~~ → **n8n 이관 (deprecated)** |
 | `dispatch` | 5분 | pending 스케줄 발송 (Discord DM / 이메일) |
+| `marathon-nudge` | 30분 | 마라톤 진행 중 사용자에게 카드 미리보기 nudge DM 발송 |
+
+### marathon-nudge 크론 상세
+
+- **엔드포인트**: `POST /api/v2/cron/marathon-nudge`
+- **대상**: `nv2_marathon_runs.status = 'in_progress'` AND `last_stage_index > 0` 인 런
+- **발송 조건**: 구독 활성 상태 + 발송 윈도우 내 + 동일 윈도우 중복 없음
+
+**발송 윈도우** (사용자 로컬 타임 기준, profile.timezone):
+
+| 슬롯 | 허용 범위 |
+|---|---|
+| 06:00 | 05:45 ~ 06:15 |
+| 09:00 | 08:45 ~ 09:15 |
+| 12:00 | 11:45 ~ 12:15 |
+| 15:00 | 14:45 ~ 15:15 |
+| 18:00 | 17:45 ~ 18:15 |
+| 21:00 | 20:45 ~ 21:15 |
+
+**nudge_card_cursor**: 런별로 마지막으로 미리보기한 카드 위치(0-based 전역 인덱스)를 추적. 매 발송마다 +1 전진.
+
+**cursor sync**: 사용자가 마라톤을 진행하여 cursor가 실제 진행보다 뒤처진 경우 `firstCardIndexOfStage(last_stage_index + 1, counts)`로 fast-forward.
+
+**message_body 포맷**: `marathon:{slug}|{lastStageIndex}|{cursor}|{front}|{back}`
+
+**DM 내용**: 카드 front/back 임베드 미리보기 + "이어하기 →" 버튼
+
+**resume URL**: `/products/:slug/marathon/:runId/resume` (run_id가 URL에 포함되어 로그인 없이 진행 저장 가능)
 
 ### DM 발송 원칙
 
-- Cron(`enqueue-daily` / `dispatch`)만 DM/이메일 발송
+- Cron(`enqueue-daily` / `dispatch` / `marathon-nudge`)만 DM/이메일 발송
 - `start-learning`, `session/complete`에서 DM 발송 없음
 - cheer DM은 Discord 전용 (이메일 fallback 없음)
 
@@ -475,6 +504,17 @@ cheer:HH|product_name|session_label|incomplete_message|||complete_message
 - 발송 후 status → `sent`로 업데이트
 - n8n에서 insert된 cheer DM 로컬 테스트 용도
 
+### 마라톤 nudge 단위 테스트
+
+`npm run test` — vitest 기반, `tests/marathon-nudge.test.ts`
+
+순수 함수 19개 테스트 커버:
+- `getLocalTime`: UTC → 로컬 타임 변환, hour 24 → 0 정규화
+- `isWithinSendWindow`: 6개 발송 슬롯 ±15분 판정
+- `isSameWindow`: 날짜 교차 false positive 방지
+- `buildMarathonMessageBody`: message_body 포맷 검증
+- `needsCursorSync`: cursor vs lastStageIndex 비교
+
 ---
 
 ## 14. 파일 구조 (주요 변경 포함)
@@ -521,16 +561,20 @@ app/
 │       ├── marathon/
 │       │   ├── screens/
 │       │   │   ├── marathon-page.tsx            ✅ /products/:slug/marathon (클라이언트 상태머신, TTS, 퀴즈)
+│       │   │   ├── marathon-resume-page.tsx     ✅ /products/:slug/marathon/:runId/resume (DM 링크 진입, auth 불필요)
 │       │   │   ├── marathon-result-page.tsx     ✅ /products/:slug/marathon/result/:runId
 │       │   │   └── marathon-print-page.tsx      ✅ /products/:slug/marathon/print
 │       │   ├── api/
 │       │   │   ├── start.tsx                    ✅ POST /api/v2/marathon/:slug/start
-│       │   │   ├── save-progress.tsx            ✅ POST /api/v2/marathon/:runId/save-progress
-│       │   │   └── complete.tsx                 ✅ POST /api/v2/marathon/:runId/complete
-│       │   ├── lib/queries.server.ts            ✅ getMarathonProduct/Stages/Runs
-│       │   └── schema.ts                        ✅ nv2_marathon_runs, nv2_marathon_answers
+│       │   │   ├── save-progress.tsx            ✅ POST /api/v2/marathon/:runId/save-progress (runId로 인증, auth 불필요)
+│       │   │   └── complete.tsx                 ✅ POST /api/v2/marathon/:runId/complete (runId로 인증, auth 불필요)
+│       │   ├── lib/queries.server.ts            ✅ getMarathonProduct/Stages/Runs + stageCardCountsFromStages/firstCardIndexOfStage/getCardAtCursor
+│       │   └── schema.ts                        ✅ nv2_marathon_runs (nudge_card_cursor 추가), nv2_marathon_answers
 │       ├── cron/
-│       │   └── api/dispatch.tsx                 ✅ Discord DM / 이메일 채널 분기, ?schedule_id 강제 발송, cheer dual-message 처리
+│       │   ├── api/
+│       │   │   ├── dispatch.tsx                 ✅ Discord DM / 이메일 채널 분기, ?schedule_id 강제 발송, cheer/marathon_nudge 처리
+│       │   │   └── marathon-nudge.tsx           ✅ POST /api/v2/cron/marathon-nudge (발송 윈도우, cursor 관리, schedule enqueue)
+│       │   └── lib/queries.server.ts            ✅ getLastMarathonNudge 추가
 │       └── chat/
 │           ├── screens/chat-page.tsx            ✅ story 말풍선 추가 (챕터 읽기 → 새 탭)
 │           └── lib/leni.server.ts               ✅ 신규/복습 시스템 프롬프트 분리
@@ -634,20 +678,48 @@ entry
 
 ### API 엔드포인트
 
-| 엔드포인트 | 설명 |
-|---|---|
-| `POST /api/v2/marathon/:slug/start` | 런 생성/재개/초기화. `{ restart: boolean }` |
-| `POST /api/v2/marathon/:runId/save-progress` | `{ last_stage_index }` 중간 저장 |
-| `POST /api/v2/marathon/:runId/complete` | 최종 퀴즈 결과 저장 (score, answers[]) |
+| 엔드포인트 | 인증 방식 | 설명 |
+|---|---|---|
+| `POST /api/v2/marathon/:slug/start` | auth.getUser() | 런 생성/재개/초기화. `{ restart: boolean }` |
+| `POST /api/v2/marathon/:runId/save-progress` | runId UUID (auth 불필요) | `{ last_stage_index }` 중간 저장 |
+| `POST /api/v2/marathon/:runId/complete` | runId UUID (auth 불필요) | 최종 퀴즈 결과 저장 (score, answers[]) |
+| `POST /api/v2/cron/marathon-nudge` | CRON_SECRET | 마라톤 nudge 스케줄 생성 |
+
+**save-progress / complete 인증**: `runId`(UUID v4)가 보안 토큰 역할 — `nv2_sessions.session_id`와 동일한 패턴. 메신저 인앱 브라우저에서 쿠키 없이도 저장 가능.
 
 ### DB 테이블
 
 | 테이블 | 주요 컬럼 |
 |---|---|
-| `nv2_marathon_runs` | auth_user_id, product_id, run_number, status(in_progress/completed), last_stage_index, score, total_questions, elapsed_seconds |
+| `nv2_marathon_runs` | auth_user_id, product_id, run_number, status(in_progress/completed), last_stage_index, **nudge_card_cursor**, score, total_questions, elapsed_seconds |
 | `nv2_marathon_answers` | run_id, stage_id, question_direction, is_correct |
 
+- `nudge_card_cursor`: 런별 nudge DM 카드 커서 (0-based 전역 인덱스). 발송마다 +1 전진.
+- `nv2_schedule_type` enum에 `marathon_nudge` 추가 (migration 0060).
+
 모든 쿼리는 `product_id` 파라미터 기반 — 어떤 상품이든 동일 코드로 동작.
+
+### card_data 구조 (`V2CardData`)
+
+```typescript
+{
+  presentation: {
+    front: string;  // 단어 / 이미지 URL / 질문
+    back: string;   // 의미 / 답
+    hint?: string;
+  };
+  details: { explanation, example_context?, visual_cue? };
+  meta: { target_locale, learner_locale, logic_key };
+}
+```
+
+nudge DM의 front/back은 `card_data.presentation.front` / `.back`에서 추출.
+
+### DM resume 진입점 (`/products/:slug/marathon/:runId/resume`)
+
+- **로더**: `runId`로 `nv2_marathon_runs` 조회 → `auth_user_id` 추출 (auth.getUser() 불필요)
+- **컴포넌트**: `autoResume=true` 수신 시 진입 화면 건너뛰고 `last_stage_index`부터 즉시 스트림 시작
+- **보안**: runId UUID(128-bit random)가 보안 토큰 — `nv2_sessions.session_id`와 동일한 패턴
 
 ### 결과 페이지 (`/products/:slug/marathon/result/:runId`)
 
@@ -688,6 +760,9 @@ entry
 25. **nv2_product_sessions count**: 상품의 총 세션 수는 `total_stages / 5` 계산 대신 `nv2_product_sessions` 테이블 count 직접 조회.
 26. **cheer DM message_body 포맷**: `cheer:HH|product_name|session_label|incomplete_message|||complete_message`. `|||`가 구분자로, dispatch.tsx가 발송 직전 세션 상태를 재확인하여 어느 메시지를 보낼지 결정. legacy 포맷(`cheer:HH|message`)도 지원.
 27. **is_script 판별**: n8n 워크플로우에서 `product_slug`에 `'hiragana'` 또는 `'katakana'`가 포함되면 스크립트 상품으로 분기 처리 (cheer 메시지 생성 방식 차이).
+28. **marathon_nudge message_body 포맷**: `marathon:{slug}|{lastStageIndex}|{cursor}|{front}|{back}`. dispatch.tsx가 파싱하여 DM/이메일 발송.
+29. **runId 보안 토큰**: `nv2_marathon_runs.id`(UUID v4)를 DM resume URL에 포함. save-progress·complete API는 `auth.getUser()` 대신 runId만으로 인증. `nv2_sessions.session_id`와 동일한 패턴으로 메신저 인앱 브라우저 지원.
+30. **marathon autoResume**: loader가 `autoResume: true`를 반환하면 컴포넌트는 초기 phase를 `"entry"` 대신 `"stream"`으로, `current_stage_idx`를 `last_stage_index`로 초기화하여 진입 화면 없이 즉시 학습 시작.
 
 ---
 
@@ -834,3 +909,13 @@ entry
 | 2026-04-28 | 퀴즈 정답 확인 시 단어 TTS 자동 재생 (mini/review 퀴즈) |
 | 2026-04-28 | 스테이지 점프 UI — EntryView에 번호 입력 → jump_stage_ref → handleStart(true) |
 | 2026-04-28 | session-choice-page 마라톤 배너 추가 (productSlug 있을 때 표시) |
+| 2026-05-01 | marathon_nudge 크론 구현 완료 — 6개 발송 윈도우(06/09/12/15/18/21 ±15분), nudge_card_cursor 기반 카드 미리보기 |
+| 2026-05-01 | nv2_marathon_runs에 nudge_card_cursor 컬럼 추가 (migration 0060) |
+| 2026-05-01 | nv2_schedule_type enum에 marathon_nudge 추가 |
+| 2026-05-01 | sendMarathonNudgeDm (discord.server.ts) — 카드 임베드 + 이어하기 버튼 |
+| 2026-05-01 | sendMarathonNudgeEmail (email.server.ts) — HTML 카드 블록 + CTA 버튼 |
+| 2026-05-01 | dispatch.tsx에 marathon_nudge 분기 추가 |
+| 2026-05-01 | marathon-resume-page.tsx 추가 — /products/:slug/marathon/:runId/resume, runId로 auth 없이 사용자 식별 |
+| 2026-05-01 | save-progress·complete API에서 auth.getUser() 제거 — runId UUID가 보안 토큰 역할 (session_id 패턴 적용) |
+| 2026-05-01 | getCardAtCursor 버그 수정 — card_data.front/back → card_data.presentation.front/back |
+| 2026-05-01 | vitest 설정 및 marathon-nudge 순수 함수 단위 테스트 19개 추가 |
