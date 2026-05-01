@@ -8,15 +8,10 @@
  */
 import type { ActionFunctionArgs } from "react-router";
 import { createClient } from "@supabase/supabase-js";
-import makeServerClient from "~/core/lib/supa-client.server";
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const { runId } = params;
   if (!runId) return Response.json({ ok: false, error: "missing runId" }, { status: 400 });
-
-  const [client] = makeServerClient(request);
-  const { data: { user } } = await client.auth.getUser();
-  if (!user) return Response.json({ ok: false, error: "unauthenticated" }, { status: 401 });
 
   const body = await request.json().catch(() => ({}));
   const { last_stage_index } = body;
@@ -29,11 +24,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+  // runId (UUID v4) acts as the security token — same model as nv2_sessions.session_id.
+  // No auth cookie required; the unguessable UUID is sufficient for identity verification.
   const { error } = await adminClient
     .from("nv2_marathon_runs")
     .update({ last_stage_index })
     .eq("id", runId)
-    .eq("auth_user_id", user.id)
     .eq("status", "in_progress");
 
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });

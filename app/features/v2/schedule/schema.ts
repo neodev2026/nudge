@@ -22,6 +22,7 @@ export const nv2ScheduleType = pgEnum("nv2_schedule_type", [
   "review",
   "cheer",
   "welcome",
+  "marathon_nudge",
 ]);
 
 export const nv2ScheduleStatus = pgEnum("nv2_schedule_status", [
