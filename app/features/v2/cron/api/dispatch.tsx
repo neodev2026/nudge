@@ -41,10 +41,10 @@ export async function action({ request }: Route.ActionArgs) {
     markCronScheduleSent,
     markCronScheduleFailedOrRetry,
   } = await import("../lib/queries.server");
-  const { sendSessionDm, sendCheerDm } = await import(
+  const { sendSessionDm, sendCheerDm, sendMarathonNudgeDm } = await import(
     "~/features/v2/auth/lib/discord.server"
   );
-  const { sendSessionEmail } = await import(
+  const { sendSessionEmail, sendMarathonNudgeEmail } = await import(
     "~/features/v2/auth/lib/email.server"
   );
 
@@ -173,6 +173,46 @@ export async function action({ request }: Route.ActionArgs) {
             product_name || undefined,
             session_label || undefined
           );
+        } else if (schedule.schedule_type === ("marathon_nudge" as any)) {
+          // message_body format: marathon:{slug}|{lastStageIndex}|{cursor}|{front}|{back}
+          const raw = schedule.message_body ?? "";
+          const without_prefix = raw.replace(/^marathon:/, "");
+          const [slug, last_idx_str, , front, back] = without_prefix.split("|");
+          const last_stage_index = parseInt(last_idx_str ?? "0", 10);
+
+          const resume_url = schedule.delivery_url;
+
+          const { data: product } = await client
+            .from("nv2_learning_products")
+            .select("name")
+            .eq("slug", slug ?? "")
+            .maybeSingle();
+
+          const product_name = product?.name ?? slug ?? "";
+
+          if (use_discord) {
+            await sendMarathonNudgeDm(
+              discord_id!,
+              resume_url,
+              product_name,
+              last_stage_index,
+              front ?? "",
+              back ?? ""
+            );
+          } else if (use_email) {
+            await sendMarathonNudgeEmail({
+              to: email!,
+              product_name,
+              last_stage_index,
+              front: front ?? "",
+              back: back ?? "",
+              resume_url,
+            });
+          } else {
+            throw new Error(
+              `No delivery channel for auth_user_id=${schedule.auth_user_id}`
+            );
+          }
         } else {
           // new / review / welcome
           // message_body format: "product_name|session_title|kind"

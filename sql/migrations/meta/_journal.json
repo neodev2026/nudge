@@ -421,6 +421,13 @@
       "when": 1777454478525,
       "tag": "0059_demonic_roughhouse",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1777569946446,
+      "tag": "0060_chief_misty_knight",
+      "breakpoints": true
     }
   ]
 }

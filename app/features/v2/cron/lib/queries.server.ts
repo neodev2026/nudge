@@ -562,6 +562,37 @@ export async function advanceCronReviewProgress(
 }
 
 // ---------------------------------------------------------------------------
+// marathon-nudge
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the most recent marathon_nudge schedule for a given user + product slug
+ * within the last 24 hours. Used to detect same-window duplicate sends.
+ */
+export async function getLastMarathonNudge(
+  client: SupabaseClient<Database>,
+  auth_user_id: string,
+  slug: string
+) {
+  const cutoff = new Date();
+  cutoff.setHours(cutoff.getHours() - 24);
+
+  const { data, error } = await client
+    .from("nv2_schedules")
+    .select("schedule_id, created_at")
+    .eq("auth_user_id", auth_user_id)
+    .eq("schedule_type", "marathon_nudge" as any)
+    .like("message_body", `marathon:${slug}|%`)
+    .gte("created_at", cutoff.toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // Chat turn retention
 // ---------------------------------------------------------------------------
 

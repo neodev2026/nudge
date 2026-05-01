@@ -136,6 +136,52 @@ export async function getMarathonCompletedRunCount(
 // Result page — all completed runs with their answers
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Pure helpers — no DB access, operate on pre-fetched MarathonStage[]
+// ---------------------------------------------------------------------------
+
+/** Returns the card count for each stage (index 0 = first stage). */
+export function stageCardCountsFromStages(stages: MarathonStage[]): number[] {
+  return stages.map((s) => s.cards.length);
+}
+
+/**
+ * Returns the global cursor index of the first card in the given stage.
+ * stageIndex is 0-based. Equivalent to sum of card counts for stages 0…(stageIndex-1).
+ */
+export function firstCardIndexOfStage(
+  stageIndex: number,
+  stageCardCounts: number[]
+): number {
+  return stageCardCounts.slice(0, stageIndex).reduce((a, n) => a + n, 0);
+}
+
+/**
+ * Looks up the card at the given global cursor position.
+ * Returns { front, back } or null if cursor exceeds total cards.
+ */
+export function getCardAtCursor(
+  stages: MarathonStage[],
+  cursor: number
+): { front: string; back: string } | null {
+  let idx = 0;
+  for (const stage of stages) {
+    for (const card of stage.cards) {
+      if (idx === cursor) {
+        const data = card.card_data as any;
+        return {
+          front: String(data?.presentation?.front ?? ""),
+          back: String(data?.presentation?.back ?? ""),
+        };
+      }
+      idx++;
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+
 export async function getMarathonCompletedRuns(
   client: SupabaseClient<Database>,
   auth_user_id: string,
