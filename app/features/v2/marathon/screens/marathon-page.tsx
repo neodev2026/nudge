@@ -84,6 +84,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           last_stage_index: in_progress_run.last_stage_index,
         }
       : null,
+    autoResume: false,
   };
 }
 
@@ -306,7 +307,7 @@ type Phase =
 // ---------------------------------------------------------------------------
 
 export default function MarathonPage() {
-  const { productSlug, productName, productId, userId, stages, inProgressRun } =
+  const { productSlug, productName, productId, userId, stages, inProgressRun, autoResume } =
     useLoaderData<typeof loader>();
 
   const navigate = useNavigate();
@@ -314,11 +315,16 @@ export default function MarathonPage() {
   const save_fetcher = useFetcher();
   const complete_fetcher = useFetcher<{ ok: boolean }>();
 
-  const [phase, set_phase] = useState<Phase>({ type: "entry" });
+  // DM resume link: skip entry screen and start streaming immediately.
+  const [phase, set_phase] = useState<Phase>(
+    autoResume && inProgressRun ? { type: "stream" } : { type: "entry" }
+  );
   const [run_id, set_run_id] = useState<string | null>(
     inProgressRun?.id ?? null
   );
-  const [current_stage_idx, set_current_stage_idx] = useState(0);
+  const [current_stage_idx, set_current_stage_idx] = useState(
+    autoResume && inProgressRun ? inProgressRun.last_stage_index : 0
+  );
   const [current_card_idx, set_current_card_idx] = useState(0);
   const [settings, set_settings] = useState<MarathonSettings>(DEFAULT_SETTINGS);
   const [show_settings, set_show_settings] = useState(false);

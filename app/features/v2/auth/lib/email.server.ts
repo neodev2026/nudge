@@ -160,6 +160,55 @@ export async function sendWelcomeEmail(
  * @param session_title - Session title (e.g. "Session 14")
  * @param review_round  - Review round number (null for new sessions)
  */
+/**
+ * Sends a marathon nudge email with the current card preview and a resume link.
+ *
+ * Called by dispatch.tsx when the user has no discord_id.
+ */
+export async function sendMarathonNudgeEmail({
+  to,
+  product_name,
+  last_stage_index,
+  front,
+  back,
+  resume_url,
+}: {
+  to: string;
+  product_name: string;
+  last_stage_index: number;
+  front: string;
+  back: string;
+  resume_url: string;
+}): Promise<void> {
+  const subject = `🏃 ${product_name} 마라톤 — 계속 달려볼까요?`;
+  const preheader = `${last_stage_index}번 단어까지 완료! 지금 이어서 학습해보세요.`;
+
+  const card_block = front
+    ? `<div style="background-color:#f0f4ff;border-radius:12px;padding:16px 20px;margin:16px 0;">
+        <p style="margin:0 0 4px;font-size:16px;font-weight:800;color:#1a2744;">${front}</p>
+        <p style="margin:0;font-size:14px;color:#6b7a99;">${back}</p>
+      </div>`
+    : "";
+
+  const body_html = `
+    <p style="margin:0 0 8px;font-size:20px;font-weight:900;color:#1a2744;letter-spacing:-0.5px;">
+      🏃 ${product_name} 마라톤 학습
+    </p>
+    <p style="margin:0 0 16px;font-size:14px;color:#6b7a99;line-height:1.7;">
+      ${last_stage_index}번 단어까지 완료했어요!
+    </p>
+    ${card_block}
+    ${ctaButton("이어하기 →", resume_url, "#4caf72")}
+  `;
+
+  await resendClient.emails.send({
+    from: FROM,
+    to,
+    subject,
+    html: buildHtmlEmail({ preheader, body_html }),
+  });
+}
+
 export async function sendSessionEmail(
   email: string,
   session_url: string,
