@@ -246,6 +246,42 @@ export async function sendSessionCompleteDm(
 }
 
 /**
+ * Sends a marathon nudge DM with the current card preview and a resume link.
+ *
+ * @param sns_id           - Discord user ID
+ * @param resume_url       - Full URL to /products/:slug/marathon?resume=true
+ * @param product_name     - Product name (e.g. "Deutsch A1")
+ * @param last_stage_index - Number of stages completed so far
+ * @param front            - Card front text (empty string if cursor exhausted)
+ * @param back             - Card back text (empty string if cursor exhausted)
+ */
+export async function sendMarathonNudgeDm(
+  sns_id: string,
+  resume_url: string,
+  product_name: string,
+  last_stage_index: number,
+  front: string,
+  back: string
+): Promise<void> {
+  const channel_id = await openDmChannel(sns_id);
+
+  const description = front
+    ? `> **${front}**\n> ${back}\n\n마라톤을 이어서 달려볼까요?`
+    : `마라톤을 이어서 달려볼까요?`;
+
+  await postEmbedWithButton(channel_id, {
+    content: `🏃 **${product_name}** 마라톤 — ${last_stage_index}번 단어 완료!`,
+    embed: {
+      title: "",
+      description,
+      color: 0x4caf72,
+    },
+    button_label: "이어하기 →",
+    button_url: resume_url,
+  });
+}
+
+/**
  * Adds a Discord user to a guild (server) using their OAuth access token.
  * This is required so the bot can send DMs to users who share no mutual guild.
  *

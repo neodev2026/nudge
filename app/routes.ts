@@ -34,6 +34,7 @@ export default [
       route("/enqueue-daily", "features/v2/cron/api/enqueue-daily.tsx"),
       route("/enqueue-nudge", "features/v2/cron/api/enqueue-nudge.tsx"),
       route("/dispatch",      "features/v2/cron/api/dispatch.tsx"),
+      route("/marathon-nudge","features/v2/cron/api/marathon-nudge.tsx"),
     ]),
 
     // v2 action endpoints
@@ -126,6 +127,7 @@ export default [
 
     // Marathon screens
     route("/products/:slug/marathon",                         "features/v2/marathon/screens/marathon-page.tsx"),
+    route("/products/:slug/marathon/:runId/resume",           "features/v2/marathon/screens/marathon-resume-page.tsx"),
     route("/products/:slug/marathon/result/:runId",           "features/v2/marathon/screens/marathon-result-page.tsx"),
 
     ...prefix("/legal", [

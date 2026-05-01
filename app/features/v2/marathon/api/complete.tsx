@@ -12,15 +12,10 @@
  */
 import type { ActionFunctionArgs } from "react-router";
 import { createClient } from "@supabase/supabase-js";
-import makeServerClient from "~/core/lib/supa-client.server";
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const { runId } = params;
   if (!runId) return Response.json({ ok: false, error: "missing runId" }, { status: 400 });
-
-  const [client] = makeServerClient(request);
-  const { data: { user } } = await client.auth.getUser();
-  if (!user) return Response.json({ ok: false, error: "unauthenticated" }, { status: 401 });
 
   const body = await request.json().catch(() => ({}));
   const { score, total_questions, elapsed_seconds, answers } = body;
@@ -41,6 +36,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const now = new Date().toISOString();
 
+  // runId (UUID v4) acts as the security token — same model as nv2_sessions.session_id.
   // Mark run as completed
   const { error: run_error } = await adminClient
     .from("nv2_marathon_runs")
@@ -53,7 +49,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       last_stage_index: total_questions, // set to end to prevent stale resume
     })
     .eq("id", runId)
-    .eq("auth_user_id", user.id)
     .eq("status", "in_progress");
 
   if (run_error) return Response.json({ ok: false, error: run_error.message }, { status: 500 });

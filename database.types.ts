@@ -764,6 +764,7 @@ export type Database = {
           elapsed_seconds: number | null
           id: string
           last_stage_index: number
+          nudge_card_cursor: number
           product_id: string
           run_number: number
           score: number | null
@@ -779,6 +780,7 @@ export type Database = {
           elapsed_seconds?: number | null
           id?: string
           last_stage_index?: number
+          nudge_card_cursor?: number
           product_id: string
           run_number: number
           score?: number | null
@@ -794,6 +796,7 @@ export type Database = {
           elapsed_seconds?: number | null
           id?: string
           last_stage_index?: number
+          nudge_card_cursor?: number
           product_id?: string
           run_number?: number
           score?: number | null
@@ -1615,7 +1618,12 @@ export type Database = {
         | "r4_pending"
         | "mastered"
       nv2_schedule_status: "pending" | "sent" | "failed" | "opened"
-      nv2_schedule_type: "new" | "review" | "cheer" | "welcome"
+      nv2_schedule_type:
+        | "new"
+        | "review"
+        | "cheer"
+        | "welcome"
+        | "marathon_nudge"
       nv2_session_kind: "new" | "review"
       nv2_session_status: "pending" | "in_progress" | "completed"
       nv2_stage_type:
@@ -1840,7 +1848,13 @@ export const Constants = {
         "mastered",
       ],
       nv2_schedule_status: ["pending", "sent", "failed", "opened"],
-      nv2_schedule_type: ["new", "review", "cheer", "welcome"],
+      nv2_schedule_type: [
+        "new",
+        "review",
+        "cheer",
+        "welcome",
+        "marathon_nudge",
+      ],
       nv2_session_kind: ["new", "review"],
       nv2_session_status: ["pending", "in_progress", "completed"],
       nv2_stage_type: [

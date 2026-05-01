@@ -49,6 +49,9 @@ export const nv2_marathon_runs = pgTable(
     // 0-based index of the next stage to start (resume position)
     last_stage_index: integer("last_stage_index").notNull().default(0),
 
+    // Global card cursor for nudge DMs — 0-based flat index across all stages
+    nudge_card_cursor: integer("nudge_card_cursor").notNull().default(0),
+
     // Total time from started_at to completed_at in seconds
     elapsed_seconds: integer("elapsed_seconds"),
 
