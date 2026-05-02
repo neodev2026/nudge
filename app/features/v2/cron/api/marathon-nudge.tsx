@@ -260,10 +260,10 @@ export async function action({ request }: Route.ActionArgs) {
         const tz = profile.timezone ?? "Asia/Seoul";
 
         // Guard: send window
-        // if (!isWithinSendWindow(nowUtc, tz)) {
-        //   results.skipped++;
-        //   continue;
-        // }
+        if (!isWithinSendWindow(nowUtc, tz)) {
+          results.skipped++;
+          continue;
+        }
 
         // Guard: duplicate in same window
         const last_nudge = await getLastMarathonNudge(

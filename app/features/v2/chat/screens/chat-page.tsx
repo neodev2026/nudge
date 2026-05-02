@@ -42,6 +42,8 @@ interface ChatMessage {
   role: MessageRole;
   bubble_type: BubbleType;
   text: string;
+  translation?: string;  // learner-language translation for language/script products
+  tts?: boolean;         // whether to show TTS play button
   cards?: CardObject[];
   stage_id?: string;
   stage_type?: string;   // for quiz bubble URL routing
@@ -151,16 +153,34 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
   const { data: product_row } = await adminClient
     .from("nv2_learning_products")
-    .select("slug")
+    .select("slug, meta")
     .eq("id", product_session.product_id)
     .single();
+
+  const product_meta = (product_row?.meta ?? {}) as {
+    language?: string;
+    story?: unknown;
+  };
+  // language code for TTS on Leni message bubbles (e.g. "de", "es", "ja")
+  const product_language = product_meta.language ?? null;
+
+  // Load turn balance so remaining turns display correctly on page load
+  const { data: balance_row } = await adminClient
+    .from("nv2_turn_balance")
+    .select("subscription_turns, charged_turns")
+    .eq("auth_user_id", auth_user.id)
+    .maybeSingle();
+  const initial_remaining_turns =
+    (balance_row?.subscription_turns ?? 0) + (balance_row?.charged_turns ?? 0);
 
   return {
     session_id: params.sessionId,
     session_title,
     session_number: product_session.session_number,
     productSlug: product_row?.slug ?? null,
+    product_language,
     display_name,
+    initial_remaining_turns,
     history_rows: history_rows ?? [],
     intro_cards,
     quiz_stage_id,
@@ -178,10 +198,14 @@ const TTS_LANG_MAP: Record<string, string> = {
   ko: "ko-KR", fr: "fr-FR", es: "es-ES",
 };
 
+function stripEmoji(text: string): string {
+  return text.replace(/\p{Extended_Pictographic}/gu, "").replace(/\s+/g, " ").trim();
+}
+
 function speakOnce(text: string, lang: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
+  const utt = new SpeechSynthesisUtterance(stripEmoji(text));
   utt.lang = lang;
   utt.rate = 0.9;
   window.speechSynthesis.speak(utt);
@@ -271,6 +295,8 @@ function buildInitialMessages(
       }
 
       const text = typeof parsed.text === "string" ? parsed.text : "";
+      const translation = typeof parsed.translation === "string" ? parsed.translation : undefined;
+      const tts = typeof parsed.tts === "boolean" ? parsed.tts : undefined;
       const type = parsed.type as string | undefined;
 
       // ── card/quiz bubbles from new format (bubbles array) ─────────────────
@@ -283,6 +309,8 @@ function buildInitialMessages(
             role: row.role as MessageRole,
             bubble_type: "text",
             text,
+            translation,
+            tts,
             session_id,
           });
         }
@@ -338,6 +366,8 @@ function buildInitialMessages(
         role: row.role as MessageRole,
         bubble_type: "text",
         text,
+        translation,
+        tts,
         session_id,
       });
     }
@@ -381,6 +411,8 @@ export default function ChatPage() {
     story_stage_id,
     story_hook_text,
     productSlug,
+    product_language,
+    initial_remaining_turns,
   } = useLoaderData<typeof loader>();
 
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
@@ -389,8 +421,8 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [is_typing, set_is_typing] = useState(false);
   const [is_session_complete, set_is_session_complete] = useState(false);
-  const [remaining_turns, set_remaining_turns] = useState<number | null>(null);
-  const [out_of_turns, set_out_of_turns] = useState(false);
+  const [remaining_turns, set_remaining_turns] = useState<number | null>(initial_remaining_turns);
+  const [out_of_turns, set_out_of_turns] = useState(initial_remaining_turns === 0);
 
   const bottom_ref = useRef<HTMLDivElement>(null);
   const input_ref = useRef<HTMLTextAreaElement>(null);
@@ -472,6 +504,8 @@ export default function ChatPage() {
           role: "leni",
           bubble_type: "text",
           text: data.text,
+          translation: typeof data.translation === "string" ? data.translation : undefined,
+          tts: typeof data.tts === "boolean" ? data.tts : undefined,
         },
       ];
 
@@ -625,7 +659,7 @@ export default function ChatPage() {
                 />
               );
             }
-            return <MessageBubble key={msg.id} message={msg} />;
+            return <MessageBubble key={msg.id} message={msg} productLanguage={product_language} />;
           })}
 
           {is_typing && <TypingIndicator />}
@@ -702,11 +736,20 @@ export default function ChatPage() {
 }
 
 // ---------------------------------------------------------------------------
-// MessageBubble — plain text
+// MessageBubble — plain text (with optional translation + TTS for Leni)
 // ---------------------------------------------------------------------------
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({
+  message,
+  productLanguage,
+}: {
+  message: ChatMessage;
+  productLanguage: string | null;
+}) {
   const is_leni = message.role === "leni";
+  const tts_lang = productLanguage ? (TTS_LANG_MAP[productLanguage] ?? "de-DE") : null;
+  const show_tts = is_leni && message.tts === true && tts_lang !== null && message.text;
+
   return (
     <div className={["flex items-end gap-2", is_leni ? "justify-start" : "justify-end"].join(" ")}>
       {is_leni && (
@@ -715,12 +758,24 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         </div>
       )}
       <div className={[
-        "max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap",
+        "max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
         is_leni
           ? "rounded-bl-sm bg-white text-[#1a2744] shadow-[0_2px_12px_rgba(26,39,68,0.08)]"
           : "rounded-br-sm bg-[#1a2744] text-white",
       ].join(" ")}>
-        {message.text}
+        <p className="whitespace-pre-wrap">{message.text}</p>
+        {is_leni && message.translation && (
+          <p className="mt-1 text-xs text-[#6b7a99]">({message.translation})</p>
+        )}
+        {show_tts && (
+          <button
+            onClick={() => speakOnce(message.text, tts_lang!)}
+            className="mt-1.5 flex items-center gap-1 text-xs text-[#4caf72] hover:text-[#3d9e61]"
+            aria-label="발음 듣기"
+          >
+            🔊 발음 듣기
+          </button>
+        )}
       </div>
     </div>
   );
