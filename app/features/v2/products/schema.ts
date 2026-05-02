@@ -57,11 +57,13 @@ export const nv2ProductCategory = pgEnum("nv2_product_category", [
  * language:         ISO 639-1 code  e.g. "en", "de", "ja"
  * level:            CEFR level       e.g. "A1", "B1", "C2"
  * learner_language: ISO 639-1 code  e.g. "ko" (learner's native language)
+ * script:           writing system for script products e.g. "hiragana" | "katakana"
  */
 export interface LanguageMeta {
-  language: string;         // ISO 639-1: "en" | "de" | "ja" | ...
-  level: string;            // CEFR:     "A1" | "A2" | "B1" | "B2" | "C1" | "C2"
+  language: string;          // ISO 639-1: "en" | "de" | "ja" | ...
+  level: string;             // CEFR:     "A1" | "A2" | "B1" | "B2" | "C1" | "C2"
   learner_language?: string; // ISO 639-1: learner's native/preferred language e.g. "ko"
+  script?: 'hiragana' | 'katakana'; // writing system for Japanese script products
 }
 
 /**

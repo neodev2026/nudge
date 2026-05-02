@@ -27,8 +27,8 @@ const CATEGORIES = [
   { value: "other",      label: "💬 기타" },
 ] as const;
 
-const TRIGGER_CLASS =
-  "fixed bottom-6 right-6 z-50 flex items-center rounded-full bg-[#1a2744] px-4 py-3 text-white shadow-lg transition-opacity hover:opacity-90";
+const TRIGGER_BASE =
+  "fixed z-50 flex items-center rounded-full bg-[#1a2744] px-4 py-3 text-white shadow-lg transition-opacity hover:opacity-90";
 
 // ---------------------------------------------------------------------------
 // FeedbackForm — shared form content for both Popover and Sheet
@@ -110,6 +110,13 @@ export function FeedbackButton() {
   const [submitting, setSubmitting] = useState(false);
   const location = useLocation();
   const isDesktop = useMediaQuery("(min-width: 768px)");
+
+  // On chat pages (mobile), raise the button above the persistent input bar
+  const isChatPage = location.pathname.endsWith("/chat");
+  const TRIGGER_CLASS = [
+    TRIGGER_BASE,
+    isChatPage && !isDesktop ? "bottom-28 right-4" : "bottom-6 right-6",
+  ].join(" ");
 
   const handleSubmit = async () => {
     if (!category || content.length < 10 || submitting) return;

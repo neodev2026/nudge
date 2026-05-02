@@ -161,13 +161,25 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   let leni_response;
   try {
-    // Fetch product category for system prompt
+    // Fetch product category and meta for system prompt
     const { data: product_row } = await adminClient
       .from("nv2_learning_products")
-      .select("category")
+      .select("category, meta")
       .eq("id", product_session.product_id)
       .maybeSingle();
     const product_category = product_row?.category ?? "language";
+    const product_meta = (product_row?.meta ?? {}) as {
+      language?: string;
+      level?: string;
+      learner_language?: string;
+      script?: string;
+      story?: string;
+      season?: number;
+      setting?: string;
+    };
+
+    // TODO: query nv2_quiz_results for per-word weak words once is_correct tracking is added
+    const weak_words: { front: string; back: string }[] = [];
 
     leni_response = await getLeniResponse(
       user_message,
@@ -178,7 +190,9 @@ export async function action({ request, params }: Route.ActionArgs) {
       session_title,
       product_category,
       (identity.session_kind ?? "new") as "new" | "review",
-      identity.review_round ?? null
+      identity.review_round ?? null,
+      product_meta,
+      weak_words
     );
   } catch (err) {
     console.error("[chat/message] getLeniResponse failed:", err);
@@ -308,6 +322,8 @@ export async function action({ request, params }: Route.ActionArgs) {
     // Store full bubbles array including card data for history restoration
     content: JSON.stringify({
       text: leni_response.text,
+      translation: leni_response.translation,
+      tts: leni_response.tts,
       bubbles: resolved_bubbles,
       complete_stages: leni_response.complete_stages,
     }),
@@ -334,6 +350,8 @@ export async function action({ request, params }: Route.ActionArgs) {
     {
       ok: true,
       text: leni_response.text,
+      translation: leni_response.translation,
+      tts: leni_response.tts,
       bubbles: resolved_bubbles,
       complete_stages: leni_response.complete_stages,
       session_complete: leni_response.session_complete,
