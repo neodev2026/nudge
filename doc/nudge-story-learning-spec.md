@@ -1,8 +1,9 @@
 # Nudge v2 — Story Learning 기능 기획서
 
 **작성일**: 2026-04-18  
-**상태**: 기획 확정, 개발 대기  
-**관련 문서**: nudge-v2-design-2026-04-17.md
+**최종 업데이트**: 2026-05-02  
+**상태**: 운영 중 (story-deutsch-b1-snowwhite 시즌 1). Leni 채팅 목표 언어 대화로 전환 완료.  
+**관련 문서**: nudge-v2-design-2026-04-20.md
 
 ---
 
@@ -284,10 +285,17 @@ Leni 🇩🇪
 
 ### Leni 채팅 연동
 
-Leni 채팅 화면에서 카드 목록 아래에 story 말풍선 자동 표시:
-- 초록 테마, hook_text 미리보기, "챕터 읽기 →" 버튼
+**인트로 (클라이언트 구성, Leni 응답 아님)**:
+- 학습 카드 버블 (learning stage 수만큼)
+- story 말풍선: 초록 테마, hook_text 미리보기, "챕터 읽기 →" 버튼
 - 클릭 시 새 탭으로 story-page 열기 (`?next=close`)
 - story 완료 후 탭 자동 닫힘
+
+**Leni 대화 (첫 메시지 전송 이후)**:
+- `buildStorySessionPrompt` 적용 — targetLanguage 전용 대화 파트너
+- 대화 소재: `meta.story`/`meta.season`/`meta.setting` 기반 챕터 배경·등장인물·세션 단어
+- language 상품과 동일한 CRITICAL RULES 1~7 (translation 필드, TTS, Rule 7 등) 적용
+- 사용자가 learnerLanguage로 입력 시 해당 입력의 targetLanguage 번역 자동 제공
 
 ---
 
@@ -509,3 +517,6 @@ POST /admin/api/cards/upsert
 | 2026-04-20 | Leni 채팅 story 말풍선 추가 (새 탭 열기, ?next=close 완료 후 닫힘) |
 | 2026-04-20 | session-page 챕터 요약 카드: hook_text + 학습 흐름 3단계 표시 |
 | 2026-04-20 | story-deutsch-b1-snowwhite 시즌 1 (20챕터) 런칭 |
+| 2026-05-02 | Leni 채팅 방식 전환: buildNewSessionPrompt(한국어 기반) → buildStorySessionPrompt(목표 언어 전용 대화) |
+| 2026-05-02 | meta 필드 확인: story/season/setting 모두 세팅 완료 ({"story":"snowwhite","season":1,"setting":"modern Germany"}) |
+| 2026-05-02 | Rule 7: 사용자 learnerLanguage 입력 → 입력 내용의 targetLanguage 번역 자동 제공, 언어 전환 요청만 방어 응답 |
