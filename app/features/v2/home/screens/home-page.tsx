@@ -13,6 +13,11 @@ import { Link, useLoaderData } from "react-router";
 
 import makeServerClient from "~/core/lib/supa-client.server";
 import { getNv2ActiveProducts } from "~/features/v2/products/queries";
+import {
+  groupProductsByCategory,
+  CATEGORY_ORDER,
+  CATEGORY_LABELS,
+} from "~/features/v2/products/lib/product-categories";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -73,11 +78,11 @@ function getProductSubtitle(product: Product): string {
 // ─── Meta ────────────────────────────────────────────────────────────────────
 
 export const meta: Route.MetaFunction = () => [
-  { title: "Nudge — 단어가 흘러갑니다. 따라하다 보면 외워집니다." },
+  { title: "Nudge — 보고, 듣고, 따라하세요. 끊김없이 완주하고, 무한반복." },
   {
     name: "description",
     content:
-      "TTS가 읽어주면 따라하세요. 자동으로 넘어가는 카드를 반복해서 보세요. 마라톤 모드는 멈추지 않습니다.",
+      "TTS가 읽어주면 따라하세요. 완주하면 처음부터 다시. 반복이 기억을 만듭니다. 짬짬이 알림으로, 운동하며 자동넘김으로.",
   },
 ];
 
@@ -116,13 +121,13 @@ export default function HomePage() {
       === END LEGACY === */}
 
       {/* ── HERO ── */}
-      <section className="relative min-h-[calc(100vh-64px)] overflow-hidden px-6 pb-0 pt-8 md:px-10">
+      <section className="relative overflow-hidden px-6 pb-16 pt-16 md:px-10 md:pb-24 md:pt-20">
         {/* Background glows */}
         <div className="pointer-events-none absolute -right-32 -top-32 h-[680px] w-[680px] rounded-full bg-[radial-gradient(circle,rgba(76,175,114,0.13)_0%,transparent_70%)]" />
         <div className="pointer-events-none absolute -bottom-20 -left-20 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(245,166,35,0.10)_0%,transparent_70%)]" />
 
         {/* Content grid — centered with max-width */}
-        <div className="relative z-10 mx-auto grid max-w-5xl grid-cols-1 items-center gap-12 md:min-h-[calc(100vh-80px)] md:grid-cols-2 md:gap-8">
+        <div className="relative z-10 mx-auto grid max-w-5xl grid-cols-1 items-start gap-12 md:grid-cols-2 md:gap-8">
 
           {/* Left — copy */}
           <div className="animate-slide-up">
@@ -134,20 +139,22 @@ export default function HomePage() {
             </div>
 
             <h1 className="mb-5 font-display text-[clamp(2.6rem,4vw,3.6rem)] font-black leading-[1.1] text-[#1a2744]">
-              단어가{" "}
-              <span className="text-[#4caf72]">흘러갑니다.</span>
+              보고, 듣고,{" "}
+              <span className="text-[#4caf72]">따라하세요.</span>
               <br />
-              따라하다 보면{" "}
+              끊김없이 완주하고,{" "}
               <span className="relative inline-block">
-                외워집니다.
+                무한반복.
                 <span className="absolute -bottom-1 left-0 right-0 h-[6px] rounded-sm bg-[#f5a623]/60" />
               </span>
+              <br />
+              왕도는 없습니다.
             </h1>
 
             <p className="mb-8 max-w-[420px] text-[1.05rem] leading-[1.75] text-[#6b7a99]">
               TTS가 읽어주면 따라하세요.<br />
-              자동으로 넘어가는 카드를 반복해서 보세요.<br />
-              마라톤 모드는 멈추지 않습니다. 당신도 멈추지 마세요.
+              완주하면 처음부터 다시. 반복이 기억을 만듭니다.<br />
+              짬짬이 알림으로, 운동하며 자동넘김으로.
             </p>
 
             <div className="mb-10 flex gap-8">
@@ -184,7 +191,7 @@ export default function HomePage() {
           </div>
 
           {/* Right — Leni character (stacks below on mobile) */}
-          <div className="flex items-end justify-center md:h-[calc(100vh-80px)]">
+          <div className="flex items-start justify-center">
             <div className="relative w-full max-w-[420px]">
               {/* Speech bubbles */}
               <div className="absolute right-[-20px] top-[20%] z-20 animate-bubble-1 rounded-[18px_18px_18px_4px] bg-white px-4 py-2.5 shadow-[0_8px_32px_rgba(26,39,68,0.10)] md:right-[-30px]">
@@ -252,16 +259,16 @@ export default function HomePage() {
               desc: "재생 버튼을 누르고 TTS를 따라하세요.\n보고, 따라하고, 반복. 이게 전부입니다.",
             },
             {
-              num: "02", icon: "👂",
-              badge: "이동 중에도 OK",
-              title: "멈추지 않기",
-              desc: "자동으로 넘어가는 카드를 반복해서 보세요.\n마라톤 모드는 당신이 멈추지 않는 한 계속됩니다.",
+              num: "02", icon: "🏃",
+              badge: "멈추지 마세요",
+              title: "끊김없이 완주",
+              desc: "마라톤 모드로 전체를 처음부터 끝까지.\n완주하면 처음부터 다시. 무한반복이 기억을 만듭니다.",
             },
             {
               num: "03", icon: "📬",
               badge: "매일 조금씩",
-              title: "알림으로 이어하기",
-              desc: "어제 멈춘 곳을 알림 링크 하나로 바로 재개.\n매일 조금씩, 부담 없이 전진합니다.",
+              title: "알림으로 짬짬이",
+              desc: "어제 멈춘 곳을 알림 링크 하나로 바로 재개.\n운동하며 자동넘김으로, 이동 중 흘려들으며.",
             },
           ].map(({ num, icon, badge, title, desc }) => (
             <div
@@ -441,8 +448,8 @@ export default function HomePage() {
       {/* ── FOOTER CTA ── */}
       <section className="px-10 py-24 text-center">
         <h2 className="mb-4 font-display text-[clamp(1.8rem,3vw,2.5rem)] font-black leading-snug text-[#1a2744]">
-          단어가 흘러갑니다.<br />
-          따라하다 보면 외워집니다.
+          보고, 듣고, 따라하세요.<br />
+          완주하고, 무한반복.
         </h2>
         <p className="mx-auto mb-10 max-w-[520px] text-base leading-[1.8] text-[#6b7a99]">
           알림 하나로 시작하세요.
@@ -473,7 +480,7 @@ export default function HomePage() {
       === END LEGACY === */}
 
       <footer className="bg-[#1a2744] py-8 text-center text-sm text-white/40">
-        <strong className="text-white/70">Nudge</strong> · 단어가 흘러갑니다. 따라하다 보면 외워집니다.
+        <strong className="text-white/70">Nudge</strong> · 보고, 듣고, 따라하세요. 완주하고, 무한반복.
       </footer>
 
       {/* Animation keyframes */}
@@ -516,11 +523,33 @@ function ProductGrid({ products }: { products: Product[] }) {
     return <ProductGridEmpty />;
   }
 
+  const grouped = groupProductsByCategory(products);
+  const firstProductId = CATEGORY_ORDER
+    .flatMap(cat => grouped[cat])
+    .find(Boolean)?.id;
+
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {products.map((product, i) => (
-        <ProductCard key={product.id} product={product} featured={i === 0} />
-      ))}
+    <div className="space-y-10">
+      {CATEGORY_ORDER.map(cat => {
+        const items = grouped[cat];
+        if (items.length === 0) return null;
+        return (
+          <div key={cat}>
+            <h3 className="mb-4 text-sm font-extrabold uppercase tracking-wider text-white/50">
+              {CATEGORY_LABELS[cat]}
+            </h3>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {items.map(product => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  featured={product.id === firstProductId}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

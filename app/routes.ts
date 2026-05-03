@@ -100,6 +100,7 @@ export default [
   // Applied to: landing, product list/detail, login, join
   layout("core/layouts/v2-nav.layout.tsx", [
     index("features/v2/home/screens/home-page.tsx"),
+    route("/guide",          "features/v2/guide/screens/guide-page.tsx"),
     route("/products",       "features/v2/products/screens/products-page.tsx"),
     route("/products/:slug/checkout", "features/v2/products/screens/checkout.tsx"),
     route("/products/:slug/progress", "features/v2/products/screens/progress-page.tsx"),

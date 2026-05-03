@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm test *)",
       "Bash(psql postgresql://postgres.mqdgyqkjhnpjhgwgfzth:***REMOVED***@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres -c ' *)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(Get-ChildItem -Path \"e:\\\\dev\\\\nudge\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ]
   }
 }

@@ -19,6 +19,11 @@ import {
   getNv2ProductsByCategory,
 } from "~/features/v2/products/queries";
 import type { NV2ProductMeta, LanguageMeta } from "~/features/v2/products/schema";
+import {
+  groupProductsByCategory as groupByLanguageCategory,
+  CATEGORY_ORDER as LANGUAGE_CATEGORY_ORDER,
+  CATEGORY_LABELS as LANGUAGE_CATEGORY_LABELS,
+} from "~/features/v2/products/lib/product-categories";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -176,18 +181,43 @@ export default function ProductsPage() {
         {grouped.size === 0 ? (
           <EmptyState />
         ) : (
-          Array.from(grouped.entries()).map(([category, items]) => (
-            <section key={category}>
-              <h2 className="mb-5 font-display text-lg font-extrabold text-[#1a2744]">
-                {CATEGORY_LABELS[category] ?? category}
-              </h2>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {items.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
-            </section>
-          ))
+          Array.from(grouped.entries()).map(([category, items]) => {
+            if (category === 'language') {
+              const langGrouped = groupByLanguageCategory(items);
+              return (
+                <section key={category} className="space-y-10">
+                  {LANGUAGE_CATEGORY_ORDER.map(langCat => {
+                    const langItems = langGrouped[langCat];
+                    if (!langItems.length) return null;
+                    return (
+                      <div key={langCat}>
+                        <h2 className="mb-5 font-display text-lg font-extrabold text-[#1a2744]">
+                          {LANGUAGE_CATEGORY_LABELS[langCat]}
+                        </h2>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          {langItems.map(product => (
+                            <ProductCard key={product.id} product={product} />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </section>
+              );
+            }
+            return (
+              <section key={category}>
+                <h2 className="mb-5 font-display text-lg font-extrabold text-[#1a2744]">
+                  {CATEGORY_LABELS[category] ?? category}
+                </h2>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {items.map(product => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+              </section>
+            );
+          })
         )}
       </div>
     </div>
