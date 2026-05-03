@@ -6,7 +6,7 @@
  *   - Unauthenticated: "로그인" + "회원가입" buttons
  *   - Authenticated:   avatar dropdown with display_name + logout
  */
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { Avatar, AvatarFallback, AvatarImage } from "~/core/components/ui/avatar";
 import { Button } from "~/core/components/ui/button";
 import {
@@ -26,26 +26,52 @@ interface V2NavProps {
   } | null;
 }
 
+const LANDING_NAV_LINKS = [
+  { href: "#how",      label: "어떻게 하나요" },
+  { href: "#products", label: "학습 상품" },
+  { href: "#leni",     label: "Leni 소개" },
+  { href: "#roadmap",  label: "로드맵" },
+] as const;
+
 export function V2Nav({ user }: V2NavProps) {
+  const { pathname } = useLocation();
+  const isLanding = pathname === "/";
+
   return (
     <nav className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-[#1a2744]/[0.07] bg-[#fdf8f0]/90 px-6 backdrop-blur-xl md:px-10">
-      {/* Logo */}
+      {/* Logo + BETA badge */}
       <Link to="/" className="flex items-center">
         <span className="font-display text-2xl font-black tracking-tight text-[#1a2744]">
           Nudge<span className="text-[#4caf72]">.</span>
         </span>
+        <span className="ml-1.5 rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-amber-700">
+          BETA
+        </span>
       </Link>
 
-      {/* Center nav links */}
+      {/* Center nav links — landing: section anchors, others: product search */}
       <ul className="hidden gap-8 md:flex">
-        <li>
-          <Link
-            to="/products"
-            className="text-sm font-semibold text-[#6b7a99] transition-colors hover:text-[#1a2744]"
-          >
-            학습 상품
-          </Link>
-        </li>
+        {isLanding ? (
+          LANDING_NAV_LINKS.map(({ href, label }) => (
+            <li key={href}>
+              <a
+                href={href}
+                className="text-sm font-semibold text-[#6b7a99] transition-colors hover:text-[#1a2744]"
+              >
+                {label}
+              </a>
+            </li>
+          ))
+        ) : (
+          <li>
+            <Link
+              to="/products"
+              className="text-sm font-semibold text-[#6b7a99] transition-colors hover:text-[#1a2744]"
+            >
+              학습 상품 검색
+            </Link>
+          </li>
+        )}
       </ul>
 
       {/* Right: auth controls */}

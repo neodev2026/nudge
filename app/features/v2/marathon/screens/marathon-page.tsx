@@ -586,6 +586,7 @@ export default function MarathonPage() {
         product_slug={productSlug}
         total_stages={stages.length}
         in_progress_run={inProgressRun}
+        is_logged_in={!!userId}
         is_starting={start_fetcher.state !== "idle"}
         settings={settings}
         show_settings={show_settings}
@@ -681,6 +682,7 @@ function EntryView({
   product_slug,
   total_stages,
   in_progress_run,
+  is_logged_in,
   is_starting,
   settings,
   show_settings,
@@ -697,6 +699,7 @@ function EntryView({
   product_slug: string;
   total_stages: number;
   in_progress_run: { id: string; run_number: number; last_stage_index: number } | null;
+  is_logged_in: boolean;
   is_starting: boolean;
   settings: MarathonSettings;
   show_settings: boolean;
@@ -731,6 +734,19 @@ function EntryView({
             ⚙️ 설정
           </button>
         </div>
+
+        {/* Non-logged-in banner */}
+        {!is_logged_in && (
+          <div className="bg-muted rounded-lg p-3 mb-4 text-sm text-muted-foreground flex items-center justify-between gap-2">
+            <span>진행 상황이 저장되지 않아요.</span>
+            <a
+              href={`/login?next=/products/${product_slug}/marathon`}
+              className="text-primary font-medium whitespace-nowrap hover:underline"
+            >
+              로그인하면 이어할 수 있어요 →
+            </a>
+          </div>
+        )}
 
         {/* Hero */}
         <div className="rounded-3xl bg-white p-8 shadow-[0_8px_40px_rgba(26,39,68,0.10)] mb-6 text-center">
