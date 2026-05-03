@@ -195,7 +195,7 @@ interface MarathonSettings {
 }
 
 const DEFAULT_SETTINGS: MarathonSettings = {
-  auto_advance: false,
+  auto_advance: true,
   auto_advance_delay: 3,
   quiz_time_limit: false,
   quiz_time_limit_seconds: 8,
@@ -723,15 +723,15 @@ function EntryView({
         <div className="flex items-center justify-between mb-8">
           <a
             href={`/products/${product_slug}`}
-            className="text-xs font-semibold text-[#6b7a99] hover:text-[#1a2744]"
+            className="text-sm font-bold text-[#6b7a99] hover:text-[#1a2744] transition-colors"
           >
             ← 상품 페이지
           </a>
           <button
             onClick={on_show_settings}
-            className="text-xs font-semibold text-[#6b7a99] hover:text-[#1a2744] flex items-center gap-1"
+            className="text-sm font-bold text-[#1a2744] flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 hover:bg-[#1a2744]/[0.06] transition-colors"
           >
-            ⚙️ 설정
+            <span className="text-base">⚙️</span> 설정
           </button>
         </div>
 
