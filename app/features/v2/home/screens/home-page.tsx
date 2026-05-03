@@ -4,7 +4,8 @@
  * Landing page for Nudge v2.
  * - Accessible by all users (no auth required)
  * - Fetches active products from nv2_learning_products table
- * - Discord CTA triggers the OAuth flow at /auth/discord/start
+ * - Primary CTA: marathon trial at /products/{slug}/marathon (no login required)
+ * - Secondary CTA: Discord OAuth flow at /auth/discord/start
  */
 import type { Route } from "./+types/home-page";
 
@@ -12,6 +13,19 @@ import { Link, useLoaderData } from "react-router";
 
 import makeServerClient from "~/core/lib/supa-client.server";
 import { getNv2ActiveProducts } from "~/features/v2/products/queries";
+import {
+  groupProductsByCategory,
+  CATEGORY_ORDER,
+  CATEGORY_LABELS,
+} from "~/features/v2/products/lib/product-categories";
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const TRIAL_MARATHON_SLUG = "spanish-a1";
+
+export function getTrialMarathonHref(slug: string): string {
+  return `/products/${slug}/marathon`;
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -64,11 +78,11 @@ function getProductSubtitle(product: Product): string {
 // ─── Meta ────────────────────────────────────────────────────────────────────
 
 export const meta: Route.MetaFunction = () => [
-  { title: "Nudge — 알림 하나로 시작하는 오늘의 학습" },
+  { title: "Nudge — 보고, 듣고, 따라하세요. 끊김없이 완주하고, 무한반복." },
   {
     name: "description",
     content:
-      "SNS 알림 하나로 시작하는 오늘의 학습. 가입 불필요. Leni가 매일 학습 링크를 보내드립니다.",
+      "TTS가 읽어주면 따라하세요. 완주하면 처음부터 다시. 반복이 기억을 만듭니다. 짬짬이 알림으로, 운동하며 자동넘김으로.",
   },
 ];
 
@@ -84,13 +98,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export default function HomePage() {
   const { products } = useLoaderData<typeof loader>();
+  const trialHref = getTrialMarathonHref(TRIAL_MARATHON_SLUG);
 
   return (
     <div className="overflow-x-hidden">
       {/* German flag stripe */}
       <div className="h-[5px] bg-[linear-gradient(to_right,#000_33%,#dd0000_33%_66%,#ffce00_66%)]" />
 
-      {/* ── BETA NOTICE BANNER ── */}
+      {/* === LEGACY: landing-only beta banner + header (replaced 2026-05-03, using common V2Nav)
       <div className="bg-[#f5a623]/10 border-b border-[#f5a623]/20 px-6 py-2.5 text-center">
         <p className="text-xs leading-relaxed text-[#6b7a99]">
           <span className="mr-2 inline-block rounded-full bg-[#f5a623] px-2 py-0.5 text-[0.65rem] font-black text-white">BETA</span>
@@ -98,74 +113,54 @@ export default function HomePage() {
           학습 데이터는 서비스 품질 향상에 활용될 수 있습니다.
         </p>
       </div>
-
-      {/* ── NAV ── */}
       <nav className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-[#1a2744]/[0.07] bg-[#fdf8f0]/85 px-10 backdrop-blur-xl">
-        <span className="font-display text-2xl font-black tracking-tight text-[#1a2744]">
-          Nudge<span className="text-[#4caf72]">.</span>
-        </span>
-        <ul className="hidden gap-8 md:flex">
-          {[
-            { href: "#how", label: "어떻게 하나요" },
-            { href: "#products", label: "학습 상품" },
-            { href: "#leni", label: "Leni 소개" },
-            { href: "#roadmap", label: "로드맵" },
-          ].map(({ href, label }) => (
-            <li key={href}>
-              <a
-                href={href}
-                className="text-sm font-semibold text-[#6b7a99] transition-colors hover:text-[#1a2744]"
-              >
-                {label}
-              </a>
-            </li>
-          ))}
-        </ul>
-        <Link
-          to="/auth/discord/start"
-          className="rounded-full bg-[#1a2744] px-5 py-2 text-sm font-extrabold text-white transition-all hover:-translate-y-px hover:bg-[#243358]"
-        >
-          무료로 시작하기
-        </Link>
+        <span>Nudge.</span>
+        section anchors: #how #products #leni #roadmap
+        CTA: Discord로 무료로 시작하기
       </nav>
+      === END LEGACY === */}
 
       {/* ── HERO ── */}
-      <section className="relative min-h-[calc(100vh-64px)] overflow-hidden px-6 pb-0 pt-8 md:px-10">
+      <section className="relative overflow-hidden px-6 pb-16 pt-16 md:px-10 md:pb-24 md:pt-20">
         {/* Background glows */}
         <div className="pointer-events-none absolute -right-32 -top-32 h-[680px] w-[680px] rounded-full bg-[radial-gradient(circle,rgba(76,175,114,0.13)_0%,transparent_70%)]" />
         <div className="pointer-events-none absolute -bottom-20 -left-20 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle,rgba(245,166,35,0.10)_0%,transparent_70%)]" />
 
         {/* Content grid — centered with max-width */}
-        <div className="relative z-10 mx-auto grid max-w-5xl grid-cols-1 items-center gap-12 md:min-h-[calc(100vh-80px)] md:grid-cols-2 md:gap-8">
+        <div className="relative z-10 mx-auto grid max-w-5xl grid-cols-1 items-start gap-12 md:grid-cols-2 md:gap-8">
 
           {/* Left — copy */}
           <div className="animate-slide-up">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-[#1a2744] px-4 py-1.5">
               <span className="inline-block h-[7px] w-[7px] animate-pulse rounded-full bg-[#5ecb87]" />
               <span className="text-xs font-bold tracking-wide text-white">
-                가입 없이 지금 바로 시작
+                알림 하나로 시작
               </span>
             </div>
 
             <h1 className="mb-5 font-display text-[clamp(2.6rem,4vw,3.6rem)] font-black leading-[1.1] text-[#1a2744]">
-              <span className="text-[#4caf72]">알림 하나</span>로<br />
-              시작하는{" "}
+              보고, 듣고,{" "}
+              <span className="text-[#4caf72]">따라하세요.</span>
+              <br />
+              끊김없이 완주하고,{" "}
               <span className="relative inline-block">
-                오늘의 학습
+                무한반복.
                 <span className="absolute -bottom-1 left-0 right-0 h-[6px] rounded-sm bg-[#f5a623]/60" />
               </span>
+              <br />
+              왕도는 없습니다.
             </h1>
 
             <p className="mb-8 max-w-[420px] text-[1.05rem] leading-[1.75] text-[#6b7a99]">
-              Nudge는 SNS 알림으로 오늘의 학습 링크를 보냅니다.<br />
-              앱 설치도, 로그인도, 복잡한 설정도 필요 없어요.<br />
-              Discord 연결 하나로 지금 바로 시작하세요.
+              TTS가 읽어주면 따라하세요.<br />
+              완주하면 처음부터 다시. 반복이 기억을 만듭니다.<br />
+              짬짬이 알림으로, 운동하며 자동넘김으로.
             </p>
 
             <div className="mb-10 flex gap-8">
               {[
-                { num: "3", unit: "개", label: "지원 언어" },
-                { num: "1,200", unit: "개+", label: "학습 콘텐츠" },
+                { num: "5,000", unit: "개+", label: "학습 단어" },
+                { num: "4", unit: "개", label: "지원 언어" },
                 { num: "0", unit: "원", label: "무료 시작" },
               ].map(({ num, unit, label }) => (
                 <div key={label}>
@@ -178,22 +173,25 @@ export default function HomePage() {
               ))}
             </div>
 
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <Link
+                to={trialHref}
+                className="inline-flex items-center justify-center rounded-full bg-[#1a2744] px-7 py-3.5 text-[0.95rem] font-extrabold text-white shadow-[0_4px_20px_rgba(26,39,68,0.25)] transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(26,39,68,0.35)]"
+              >
+                지금 바로 체험 →
+              </Link>
               <Link
                 to="/auth/discord/start"
-                className="inline-flex items-center gap-2 rounded-full bg-[#5865F2] px-7 py-3.5 text-[0.95rem] font-extrabold text-white shadow-[0_4px_20px_rgba(88,101,242,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(88,101,242,0.45)]"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#5865F2] px-7 py-3.5 text-[0.95rem] font-extrabold text-white shadow-[0_4px_20px_rgba(88,101,242,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(88,101,242,0.45)]"
               >
                 <DiscordIcon />
-                Discord로 무료 시작
+                Discord로 시작하기
               </Link>
-              <span className="text-xs text-[#6b7a99]">
-                이미 <strong className="text-[#1a2744]">가입 불필요</strong> — Discord만 있으면 OK
-              </span>
             </div>
           </div>
 
           {/* Right — Leni character (stacks below on mobile) */}
-          <div className="flex items-end justify-center md:h-[calc(100vh-80px)]">
+          <div className="flex items-start justify-center">
             <div className="relative w-full max-w-[420px]">
               {/* Speech bubbles */}
               <div className="absolute right-[-20px] top-[20%] z-20 animate-bubble-1 rounded-[18px_18px_18px_4px] bg-white px-4 py-2.5 shadow-[0_8px_32px_rgba(26,39,68,0.10)] md:right-[-30px]">
@@ -206,9 +204,9 @@ export default function HomePage() {
                 <span className="text-sm font-bold text-[#1a2744]">오늘의 단어가 도착했어요 ✉️</span>
               </div>
 
-              {/* Leni image — PNG with transparent background */}
+              {/* Leni image — max-h on mobile to avoid overflow */}
               <div
-                className="relative"
+                className="relative max-h-[300px] overflow-hidden md:max-h-none md:overflow-visible"
                 style={{ animation: "leniFloat 5s ease-in-out infinite" }}
               >
                 <img
@@ -233,6 +231,16 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* === LEGACY: discord-first hero section (replaced 2026-05-02)
+      <section className="relative min-h-[calc(100vh-64px)] overflow-hidden px-6 pb-0 pt-8 md:px-10">
+        badge: "가입 없이 지금 바로 시작"
+        headline: "알림 하나로 시작하는 오늘의 학습"
+        subtext: "Nudge는 SNS 알림으로 오늘의 학습 링크를 보냅니다. 앱 설치도, 로그인도, 복잡한 설정도 필요 없어요. Discord 연결 하나로 지금 바로 시작하세요."
+        stats: "3개 지원 언어 / 1,200개+ 학습 콘텐츠 / 0원 무료 시작"
+        CTA: single Discord button "Discord로 무료 시작"
+      </section>
+      === END LEGACY === */}
+
       {/* ── HOW IT WORKS ── */}
       <section id="how" className="mx-auto max-w-[1100px] px-10 py-24">
         <p className="mb-3 text-xs font-extrabold uppercase tracking-[2px] text-[#4caf72]">How it works</p>
@@ -240,38 +248,54 @@ export default function HomePage() {
           세 단계면 끝납니다
         </h2>
         <p className="mb-12 max-w-[520px] text-base leading-[1.8] text-[#6b7a99]">
-          복잡한 설정, 앱 설치, 매일 열어봐야 하는 의무 없음. 알림만 확인하세요.
+          앱 설치도, 복잡한 설정도 필요 없습니다. 틀어놓고 따라하세요.
         </p>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {[
             {
-              num: "01", icon: "🔗",
-              title: "Discord 연결",
-              desc: "버튼 하나로 Discord 계정을 연결하세요. 회원가입도, 비밀번호도 필요 없습니다.",
+              num: "01", icon: "🔁",
+              badge: "지금 바로 시작",
+              title: "틀어놓고 따라하기",
+              desc: "재생 버튼을 누르고 TTS를 따라하세요.\n보고, 따라하고, 반복. 이게 전부입니다.",
             },
             {
-              num: "02", icon: "📬",
-              title: "학습 카드 수신",
-              desc: "Leni가 Discord로 오늘의 학습 링크를 보내드려요. 링크 하나만 클릭하면 바로 시작됩니다.",
+              num: "02", icon: "🏃",
+              badge: "멈추지 마세요",
+              title: "끊김없이 완주",
+              desc: "마라톤 모드로 전체를 처음부터 끝까지.\n완주하면 처음부터 다시. 무한반복이 기억을 만듭니다.",
             },
             {
-              num: "03", icon: "✅",
-              title: "Self 평가 후 자동 반복",
-              desc: '"암기 완료"를 누르면 다음 카드가 발송됩니다. 망각 곡선에 맞춰 자동으로 복습됩니다.',
+              num: "03", icon: "📬",
+              badge: "매일 조금씩",
+              title: "알림으로 짬짬이",
+              desc: "어제 멈춘 곳을 알림 링크 하나로 바로 재개.\n운동하며 자동넘김으로, 이동 중 흘려들으며.",
             },
-          ].map(({ num, icon, title, desc }) => (
+          ].map(({ num, icon, badge, title, desc }) => (
             <div
               key={num}
               className="rounded-2xl bg-white p-8 shadow-[0_8px_32px_rgba(26,39,68,0.10)] transition-transform hover:-translate-y-1.5"
             >
               <div className="mb-4 font-display text-5xl font-black leading-none text-[#4caf72]/20">{num}</div>
-              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fdf8f0] text-2xl">{icon}</div>
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fdf8f0] text-2xl">{icon}</div>
+                <span className="rounded-full bg-[#1a2744] px-3 py-1 text-[0.65rem] font-black tracking-wide text-white">
+                  {badge}
+                </span>
+              </div>
               <h3 className="mb-2 font-display text-lg font-extrabold text-[#1a2744]">{title}</h3>
-              <p className="text-sm leading-[1.7] text-[#6b7a99]">{desc}</p>
+              <p className="whitespace-pre-line text-sm leading-[1.7] text-[#6b7a99]">{desc}</p>
             </div>
           ))}
         </div>
       </section>
+
+      {/* === LEGACY: discord-first how-it-works section (replaced 2026-05-02)
+      <section id="how" className="mx-auto max-w-[1100px] px-10 py-24">
+        step 01: "Discord 연결" — 버튼 하나로 Discord 계정을 연결하세요.
+        step 02: "학습 카드 수신" — Leni가 Discord로 오늘의 학습 링크를 보내드려요.
+        step 03: "Self 평가 후 자동 반복" — "암기 완료"를 누르면 다음 카드가 발송됩니다.
+      </section>
+      === END LEGACY === */}
 
       {/* ── PRODUCTS ── */}
       <section id="products" className="bg-[#1a2744] px-10 py-24">
@@ -423,25 +447,40 @@ export default function HomePage() {
 
       {/* ── FOOTER CTA ── */}
       <section className="px-10 py-24 text-center">
-        <p className="mb-3 text-xs font-extrabold uppercase tracking-[2px] text-[#4caf72]">지금 시작</p>
         <h2 className="mb-4 font-display text-[clamp(1.8rem,3vw,2.5rem)] font-black leading-snug text-[#1a2744]">
-          알림 하나로,<br />Leni와 함께 시작해요
+          보고, 듣고, 따라하세요.<br />
+          완주하고, 무한반복.
         </h2>
         <p className="mx-auto mb-10 max-w-[520px] text-base leading-[1.8] text-[#6b7a99]">
-          회원가입 없이 Discord 연결만으로 바로 시작할 수 있습니다.
-          첫 번째 단어 카드가 1분 안에 도착해요.
+          알림 하나로 시작하세요.
         </p>
-        <Link
-          to="/auth/discord/start"
-          className="inline-flex items-center gap-2 rounded-full bg-[#5865F2] px-8 py-4 text-base font-extrabold text-white shadow-[0_4px_20px_rgba(88,101,242,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(88,101,242,0.45)]"
-        >
-          <DiscordIcon />
-          Discord로 무료 시작
-        </Link>
+        <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          <Link
+            to={trialHref}
+            className="inline-flex items-center justify-center rounded-full bg-[#1a2744] px-8 py-4 text-base font-extrabold text-white shadow-[0_4px_20px_rgba(26,39,68,0.25)] transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(26,39,68,0.35)]"
+          >
+            지금 바로 체험 →
+          </Link>
+          <Link
+            to="/auth/discord/start"
+            className="inline-flex items-center gap-2 rounded-full bg-[#5865F2] px-8 py-4 text-base font-extrabold text-white shadow-[0_4px_20px_rgba(88,101,242,0.35)] transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(88,101,242,0.45)]"
+          >
+            <DiscordIcon />
+            Discord로 시작하기
+          </Link>
+        </div>
       </section>
 
+      {/* === LEGACY: discord-only footer CTA (replaced 2026-05-02)
+      <section className="px-10 py-24 text-center">
+        headline: "알림 하나로, Leni와 함께 시작해요"
+        subtext: "회원가입 없이 Discord 연결만으로 바로 시작할 수 있습니다. 첫 번째 단어 카드가 1분 안에 도착해요."
+        CTA: single Discord button "Discord로 무료 시작"
+      </section>
+      === END LEGACY === */}
+
       <footer className="bg-[#1a2744] py-8 text-center text-sm text-white/40">
-        <strong className="text-white/70">Nudge</strong> · 알림 하나로 시작하는 오늘의 학습 · 가입 없이 시작하세요
+        <strong className="text-white/70">Nudge</strong> · 보고, 듣고, 따라하세요. 완주하고, 무한반복.
       </footer>
 
       {/* Animation keyframes */}
@@ -484,11 +523,33 @@ function ProductGrid({ products }: { products: Product[] }) {
     return <ProductGridEmpty />;
   }
 
+  const grouped = groupProductsByCategory(products);
+  const firstProductId = CATEGORY_ORDER
+    .flatMap(cat => grouped[cat])
+    .find(Boolean)?.id;
+
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {products.map((product, i) => (
-        <ProductCard key={product.id} product={product} featured={i === 0} />
-      ))}
+    <div className="space-y-10">
+      {CATEGORY_ORDER.map(cat => {
+        const items = grouped[cat];
+        if (items.length === 0) return null;
+        return (
+          <div key={cat}>
+            <h3 className="mb-4 text-sm font-extrabold uppercase tracking-wider text-white/50">
+              {CATEGORY_LABELS[cat]}
+            </h3>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {items.map(product => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  featured={product.id === firstProductId}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

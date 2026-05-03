@@ -255,8 +255,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     })
     .sort((a, b) => (b.dm_sent_at ?? "").localeCompare(a.dm_sent_at ?? ""));
 
+  const meta_obj = product.meta && typeof product.meta === "object" && !Array.isArray(product.meta)
+    ? (product.meta as Record<string, unknown>)
+    : {};
+  const is_story = !!meta_obj.story;
+
   return {
     product: { id: product.id, name: product.name, slug: product.slug, icon: product.icon, total_stages: product.total_stages },
+    is_story,
     total_sessions: total_sessions_count ?? 0,
     completed_sessions: completed_new.length,
     streak,
@@ -278,6 +284,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export default function ProgressPage() {
   const {
     product,
+    is_story,
     total_sessions,
     completed_sessions,
     streak,
@@ -452,6 +459,8 @@ export default function ProgressPage() {
         <SessionTimeline
           timeline={timeline}
           total_sessions={total_sessions}
+          product_slug={product.slug}
+          is_story={is_story}
         />
 
       </div>
@@ -529,6 +538,8 @@ const PAGE_SIZE = 15;
 function SessionTimeline({
   timeline,
   total_sessions,
+  product_slug,
+  is_story,
 }: {
   timeline: Array<{
     session_id: string;
@@ -543,6 +554,8 @@ function SessionTimeline({
     preview_words: string[];
   }>;
   total_sessions: number;
+  product_slug: string;
+  is_story: boolean;
 }) {
   const [visible_count, set_visible_count] = useState(PAGE_SIZE);
   const visible = timeline.slice(0, visible_count);
@@ -577,8 +590,24 @@ function SessionTimeline({
 
       {/* Timeline rows */}
       {timeline.length === 0 ? (
-        <div className="px-6 py-10 text-center">
+        <div className="px-6 py-10 text-center space-y-4">
           <p className="text-sm text-[#9aa3b5]">아직 시작된 세션이 없어요.</p>
+          <div className="flex flex-col items-center gap-2">
+            {!is_story && (
+              <Link
+                to={`/products/${product_slug}/marathon`}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#1a2744] px-5 py-2.5 text-sm font-extrabold text-white transition-all hover:bg-[#243460]"
+              >
+                🏃 마라톤으로 시작하기 →
+              </Link>
+            )}
+            <Link
+              to={`/products/${product_slug}`}
+              className="text-xs font-bold text-[#6b7a99] hover:text-[#1a2744] transition-colors"
+            >
+              상품 페이지로 →
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="divide-y divide-[#f4f6fb]">
