@@ -118,6 +118,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 // Helpers
 // ---------------------------------------------------------------------------
 
+function isStoryProduct(meta: unknown): boolean {
+  const m = meta && typeof meta === "object" && !Array.isArray(meta)
+    ? (meta as Record<string, unknown>)
+    : {};
+  return !!m.story;
+}
+
 function getProductSubtitle(product: {
   category: string;
   meta: unknown;
@@ -181,51 +188,81 @@ export default function MyLearningPage() {
                 ? Math.round((completed_sessions / total_sessions) * 100)
                 : 0;
             const subtitle = getProductSubtitle(product);
+            const is_story = isStoryProduct(product.meta);
+            const not_started = completed_sessions === 0;
+            const show_actions = !is_story || not_started;
 
             return (
-              <Link
+              <div
                 key={item.sub_id}
-                to={`/products/${product.slug}/progress`}
-                className="group flex items-center gap-5 rounded-3xl bg-white p-5 shadow-[0_4px_24px_rgba(26,39,68,0.08)] transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_32px_rgba(26,39,68,0.12)]"
+                className="group rounded-3xl bg-white shadow-[0_4px_24px_rgba(26,39,68,0.08)] transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_32px_rgba(26,39,68,0.12)] overflow-hidden"
               >
-                {/* Icon */}
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#fdf8f0] text-3xl">
-                  {product.icon ?? "📚"}
-                </div>
+                {/* Main info — links to progress page */}
+                <Link
+                  to={`/products/${product.slug}/progress`}
+                  className="flex items-center gap-5 p-5"
+                >
+                  {/* Icon */}
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#fdf8f0] text-3xl">
+                    {product.icon ?? "📚"}
+                  </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  {subtitle && (
-                    <p className="mb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-[#9aa3b5]">
-                      {subtitle}
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    {subtitle && (
+                      <p className="mb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-[#9aa3b5]">
+                        {subtitle}
+                      </p>
+                    )}
+                    <p className="font-display text-base font-black text-[#1a2744] truncate">
+                      {product.name}
                     </p>
-                  )}
-                  <p className="font-display text-base font-black text-[#1a2744] truncate">
-                    {product.name}
-                  </p>
 
-                  {/* Progress bar */}
-                  <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-[#e8ecf5]">
-                    <div
-                      className="h-full rounded-full bg-[#4caf72] transition-all duration-500"
-                      style={{ width: `${pct}%` }}
-                    />
+                    {/* Progress bar */}
+                    <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-[#e8ecf5]">
+                      <div
+                        className="h-full rounded-full bg-[#4caf72] transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between">
+                      <span className="text-[10px] text-[#9aa3b5]">
+                        {completed_sessions} / {total_sessions} 세션
+                      </span>
+                      <span className="text-[10px] font-bold text-[#4caf72]">
+                        {pct}%
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-1.5 flex items-center justify-between">
-                    <span className="text-[10px] text-[#9aa3b5]">
-                      {completed_sessions} / {total_sessions} 세션
-                    </span>
-                    <span className="text-[10px] font-bold text-[#4caf72]">
-                      {pct}%
-                    </span>
-                  </div>
-                </div>
 
-                {/* Arrow */}
-                <span className="text-[#c3c9d5] transition-colors group-hover:text-[#1a2744]">
-                  →
-                </span>
-              </Link>
+                  {/* Arrow */}
+                  <span className="text-[#c3c9d5] transition-colors group-hover:text-[#1a2744]">
+                    →
+                  </span>
+                </Link>
+
+                {/* Action buttons */}
+                {show_actions && (
+                  <div className="flex gap-2 border-t border-[#f4f6fb] px-5 pb-4 pt-3">
+                    {!is_story && (
+                      <Link
+                        to={`/products/${product.slug}/marathon`}
+                        className="flex items-center gap-1.5 rounded-xl bg-[#1a2744] px-4 py-2 text-xs font-extrabold text-white transition-all hover:bg-[#243460]"
+                      >
+                        🏃 마라톤
+                      </Link>
+                    )}
+                    {not_started && (
+                      <Link
+                        to={`/products/${product.slug}`}
+                        className="flex items-center gap-1 rounded-xl border border-[#e8ecf5] bg-white px-4 py-2 text-xs font-bold text-[#1a2744] transition-all hover:border-[#d0d7e8] hover:bg-[#fdf8f0]"
+                      >
+                        학습 시작 →
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
