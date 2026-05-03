@@ -1,8 +1,8 @@
 # Nudge v2 설계 문서
 
 **작성일**: 2026-03-23  
-**최종 업데이트**: 2026-05-02 (v15)  
-**상태**: Vercel 배포 완료. Deutsch A1·A2·B1 / 히라가나 / 카타카나 / Spanish A1·A2·B1·B2 콘텐츠 등록 완료. Leni AI 채팅 + dictation/writing 스테이지 구현 완료. 이메일/Google/Discord 회원가입·로그인 구현 완료. 상품 구매 및 무료 체험 플로우 구현 완료. 이메일 학습 알림 구현 완료. 어드민 통계 대시보드 구현 완료. 복습 UX 보완 완료. Story Learning 구현 완료. Leni Cheer DM v2 구현 완료 (n8n 이관). 마라톤 모드 구현 완료 (TTS 시퀀스 재생, 미니/복습/최종 퀴즈, 스테이지 점프). **마라톤 nudge DM 구현 완료** (카드 커서 기반 미리보기, run_id 보안 토큰 resume 링크, 로그인 없이 진행 저장). **Leni 학습 방식 전면 개편 완료** (목표 언어 전용 대화 파트너, language/script/story 상품 유형별 프롬프트 분기, translation+TTS 응답 필드). 클로즈 베타 테스트 진행 중 (7명).
+**최종 업데이트**: 2026-05-04 (v16)  
+**상태**: Vercel 배포 완료. Deutsch A1·A2·B1 / 히라가나 / 카타카나 / Spanish A1·A2·B1·B2 콘텐츠 등록 완료. Leni AI 채팅 + dictation/writing 스테이지 구현 완료. 이메일/Google/Discord 회원가입·로그인 구현 완료. 상품 구매 및 무료 체험 플로우 구현 완료. 이메일 학습 알림 구현 완료. 어드민 통계 대시보드 구현 완료. 복습 UX 보완 완료. Story Learning 구현 완료. Leni Cheer DM v2 구현 완료 (n8n 이관). 마라톤 모드 구현 완료 (TTS 시퀀스 재생, 미니/복습/최종 퀴즈, 스테이지 점프). **마라톤 nudge DM 구현 완료** (카드 커서 기반 미리보기, run_id 보안 토큰 resume 링크, 로그인 없이 진행 저장). **Leni 학습 방식 전면 개편 완료** (목표 언어 전용 대화 파트너, language/script/story 상품 유형별 프롬프트 분기, translation+TTS 응답 필드). **랜딩 페이지 마라톤 퍼스트 UX 개편 완료** (새 헤드카피, 언어별 상품 카테고리 분류, /guide 페이지, 모바일 햄버거 메뉴). **나의 학습 관리 UX 개선 완료** (마라톤 바로가기 버튼, 미시작 상품 시작 버튼). 클로즈 베타 테스트 진행 중 (7명).
 
 ---
 
@@ -201,9 +201,13 @@ SNS DM 링크 클릭 (로그인 불필요 — public access)
 
 | 진입점 | 동작 |
 |---|---|
-| 상품 페이지 "학습 시작" (구매 완료) | start-learning API → `/sessions/:id` |
+| 상품 페이지 "마라톤 학습 시작 →" (구매 완료) | `/products/:slug/marathon` 직접 이동 |
+| 상품 페이지 "세션 학습 시작 →" (구매 완료) | start-learning API → `/sessions/:id` |
 | 상품 페이지 "즉시 무료 체험" | trial API → 익명 세션 생성 → `/sessions/:id` |
 | SNS DM 링크 | `/sessions/:sessionId` 바로 이동 (로그인 불필요) |
+| 나의 학습 관리 "🏃 마라톤" 버튼 (비스토리 상품) | `/products/:slug/marathon` 직접 이동 |
+| 나의 학습 관리 "학습 시작 →" 버튼 (미시작 상품) | `/products/:slug` (상품 상세 페이지) |
+| 진행 현황 페이지 빈 타임라인 상태 | "🏃 마라톤으로 시작하기 →" 또는 "상품 페이지로 →" |
 
 ---
 
@@ -620,7 +624,14 @@ cheer:HH|product_name|session_label|incomplete_message|||complete_message
 
 ```
 app/
+├── core/
+│   └── components/
+│       └── v2-nav.tsx                           ✅ 공통 상단 네비게이션 (랜딩/비랜딩 분기, 모바일 햄버거+Sheet 드로어)
 ├── features/
+│   ├── v2/
+│   │   └── guide/
+│   │       └── screens/
+│   │           └── guide-page.tsx               ✅ /guide (3가지 학습 방법 소개: 마라톤/세션/Leni)
 │   ├── admin/
 │   │   ├── lib/
 │   │   │   ├── queries.server.ts               ✅
@@ -654,9 +665,12 @@ app/
 │       │   └── api/
 │       │       └── result.tsx                   ✅ POST /api/v2/story/:stageId/result
 │       ├── products/
+│       │   ├── lib/
+│       │   │   └── product-categories.ts        ✅ 언어 상품 하위 카테고리 분류 (de/es/en/ja/story), CEFR 정렬
 │       │   └── screens/
-│       │       ├── my-learning-page.tsx         ✅ /my-learning (구독 상품 진행 현황)
-│       │       └── progress-page.tsx            ✅ /products/:slug/progress (상품별 진도)
+│       │       ├── my-learning-page.tsx         ✅ /my-learning (구독 상품 진행 현황, 마라톤 버튼, 미시작 시작 버튼)
+│       │       ├── progress-page.tsx            ✅ /products/:slug/progress (상품별 진도, 빈 타임라인 시작 CTA)
+│       │       └── products-page.tsx            ✅ /products (언어 상품 하위 카테고리 분류 표시)
 │       ├── marathon/
 │       │   ├── screens/
 │       │   │   ├── marathon-page.tsx            ✅ /products/:slug/marathon (클라이언트 상태머신, TTS, 퀴즈)
@@ -932,7 +946,7 @@ nudge DM의 front/back은 `card_data.presentation.front` / `.back`에서 추출.
 
 | 순위 | 항목 | 비고 |
 |---|---|---|
-| 1 | **서비스 공개 런칭 준비** | 랜딩 페이지 정비, 베타 배너 제거 등 |
+| 1 | **서비스 공개 런칭 준비** | 랜딩 마라톤 퍼스트 개편 ✅, /guide 페이지 ✅, 모바일 햄버거 메뉴 ✅ — 베타 배너 제거, SEO 등 잔여 작업 |
 | 2 | **복습 UX 보완** | ✅ 완료 (2026-04-18) |
 | 3 | **Story Learning** | ✅ 완료 (2026-04-20) — story-deutsch-b1-snowwhite 시즌 1 운영 중 |
 | 3.5 | **Leni Cheer DM v2** | ✅ 완료 (2026-04-22) — n8n postgres 이관, OpenAI 개인화 메시지, dual-message 포맷 |
@@ -1034,3 +1048,13 @@ nudge DM의 front/back은 `card_data.presentation.front` / `.back`에서 추출.
 | 2026-05-02 | nv2_learning_products.meta: learner_language backfill 완료, season/setting 필드 추가 |
 | 2026-05-02 | FeedbackButton: 모바일 채팅 페이지에서 bottom-28로 위치 조정 (입력바 겹침 방지) |
 | 2026-05-02 | vitest pool: forks로 변경 (vmThreads cryptic 에러 해결), leni-redesign 단위 테스트 27개 추가 |
+| 2026-05-04 | 랜딩 페이지 마라톤 퍼스트 UX 개편 — 헤드카피 "보고, 듣고, 따라하세요 / 완주하고 무한반복 / 왕도는 없습니다", How It Works 마라톤 중심 재작성 |
+| 2026-05-04 | product-categories.ts 신규 — meta.language/meta.story 기반 언어 상품 하위 분류 (de/es/en/ja/story), CEFR 정렬 |
+| 2026-05-04 | 랜딩 ProductGrid 및 /products 페이지: 언어 상품을 언어별 섹션으로 하위 분류하여 표시 |
+| 2026-05-04 | /guide 페이지 신규 — 마라톤/세션/Leni 3가지 학습 방법 소개, 체험 CTA, routes.ts 등록 |
+| 2026-05-04 | v2-nav 개편 — 비랜딩 페이지: "학습 방법"(/guide) + "학습 상품"(/products) 데스크탑 링크, 모바일 햄버거 + Sheet 드로어 (nav 링크 + 인증 섹션) |
+| 2026-05-04 | my-learning 카드 구조 변경 — `<Link>` 단일 래퍼 → `<div>` + 내부 `<Link>` + 액션 버튼 행 (중첩 `<a>` 방지) |
+| 2026-05-04 | my-learning 마라톤 버튼 추가 — 비스토리 상품마다 "🏃 마라톤 →" → `/products/:slug/marathon` |
+| 2026-05-04 | my-learning 미시작 UX 수정 — completed_sessions === 0이면 "학습 시작 →" 버튼 → `/products/:slug` |
+| 2026-05-04 | progress-page 빈 타임라인 시작 CTA 추가 — "🏃 마라톤으로 시작하기 →" (비스토리) + "상품 페이지로 →" |
+| 2026-05-04 | product-categories 단위 테스트 14개 추가 (tests/product-categories.test.ts) |
