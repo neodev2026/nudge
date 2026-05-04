@@ -13,8 +13,9 @@ import {
   getMarathonProduct,
   getMarathonStages,
 } from "../lib/queries.server";
+import type { MarathonLoaderData } from "./marathon-page";
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function loader({ params }: LoaderFunctionArgs): Promise<MarathonLoaderData> {
   const { slug, runId } = params;
   if (!slug || !runId) throw new Response("Not Found", { status: 404 });
 
