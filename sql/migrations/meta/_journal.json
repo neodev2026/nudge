@@ -428,6 +428,20 @@
       "when": 1777569946446,
       "tag": "0060_chief_misty_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1777933155293,
+      "tag": "0061_lively_bloodscream",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1777989701402,
+      "tag": "0062_productive_rawhide_kid",
+      "breakpoints": true
     }
   ]
 }

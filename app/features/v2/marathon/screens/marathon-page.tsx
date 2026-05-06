@@ -88,6 +88,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   };
 }
 
+export type MarathonLoaderData = Awaited<ReturnType<typeof loader>>;
+
 // ---------------------------------------------------------------------------
 // TTS — module-level generation counter shared across cards.
 // Each stopTts() increments _tts_gen; every playTtsTwice() invocation captures

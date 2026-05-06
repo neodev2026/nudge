@@ -768,6 +768,7 @@ export type Database = {
           product_id: string
           run_number: number
           score: number | null
+          season_progress: number
           started_at: string
           status: Database["public"]["Enums"]["nv2_marathon_run_status"]
           total_questions: number | null
@@ -784,6 +785,7 @@ export type Database = {
           product_id: string
           run_number: number
           score?: number | null
+          season_progress?: number
           started_at?: string
           status?: Database["public"]["Enums"]["nv2_marathon_run_status"]
           total_questions?: number | null
@@ -800,10 +802,38 @@ export type Database = {
           product_id?: string
           run_number?: number
           score?: number | null
+          season_progress?: number
           started_at?: string
           status?: Database["public"]["Enums"]["nv2_marathon_run_status"]
           total_questions?: number | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      nv2_marathon_seasons: {
+        Row: {
+          created_at: string
+          ends_at: string
+          id: string
+          starts_at: string
+          timezone: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at: string
+          id?: string
+          starts_at: string
+          timezone: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string
+          id?: string
+          starts_at?: string
+          timezone?: string
+          title?: string
         }
         Relationships: []
       }

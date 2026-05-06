@@ -41,7 +41,8 @@ export default function AdminLayout({ loaderData }: Route.ComponentProps) {
     { href: "/admin/trial-sessions", label: "체험 세션",     icon: "✨" },
     { href: "/admin/leni-turns",     label: "Leni 턴 관리",  icon: "🤖" },
     { href: "/admin/site-settings",  label: "사이트 설정",   icon: "⚙️" },
-    { href: "/admin/feedback",       label: "피드백",         icon: "💬" },
+    { href: "/admin/feedback",           label: "피드백",         icon: "💬" },
+    { href: "/admin/marathon-seasons",   label: "마라톤 시즌",    icon: "🏆" },
   ];
 
   return (

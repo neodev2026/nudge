@@ -5,7 +5,20 @@
       "Bash(psql postgresql://postgres.mqdgyqkjhnpjhgwgfzth:***REMOVED***@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres -c ' *)",
       "Bash(node -e ' *)",
       "Bash(Get-ChildItem -Path \"e:\\\\dev\\\\nudge\" -Recurse -Directory)",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(dir /s /b \"e:\\\\\\\\dev\\\\\\\\nudge\\\\\\\\doc\")",
+      "Bash(git mv *)",
+      "Bash(git add *)",
+      "Bash(node -e \"const d = require\\('./node_modules/drizzle-orm/pg-core/index.js'\\); console.log\\('check:', typeof d.check\\)\")",
+      "Bash(git -C e:/dev/nudge stash)",
+      "Bash(git -C e:/dev/nudge stash pop)",
+      "Bash(git -C e:/dev/nudge checkout .claude/settings.json)",
+      "Bash(node -e \"require\\('./tests/landing.test.ts'\\)\")",
+      "Bash(git -C e:/dev/nudge diff --stat HEAD)",
+      "Bash(git -C e:/dev/nudge status --short)"
+    ],
+    "additionalDirectories": [
+      "e:\\dev\\nudge\\docs"
     ]
   }
 }
