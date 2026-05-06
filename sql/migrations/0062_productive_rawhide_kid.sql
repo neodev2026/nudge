@@ -1,0 +1,1 @@
+ALTER TABLE "nv2_marathon_runs" ADD COLUMN "season_progress" integer DEFAULT 0 NOT NULL;

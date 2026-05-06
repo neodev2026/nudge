@@ -82,6 +82,7 @@ export default [
       route("/products/:id/stages/:stageId",       "features/admin/screens/stage-edit.tsx"),
       route("/products/:id/sessions/:sessionId",   "features/admin/screens/session-edit.tsx"),
       route("/feedback",                           "features/admin/screens/feedback.tsx"),
+      route("/marathon-seasons",                   "features/admin/screens/marathon-seasons.tsx"),
     ]),
   ]),
   ...prefix("/admin/api", [
@@ -100,6 +101,7 @@ export default [
   // Applied to: landing, product list/detail, login, join
   layout("core/layouts/v2-nav.layout.tsx", [
     index("features/v2/home/screens/home-page.tsx"),
+    route("/marathon-ranking", "features/v2/marathon/screens/marathon-ranking-page.tsx"),
     route("/guide",          "features/v2/guide/screens/guide-page.tsx"),
     route("/products",       "features/v2/products/screens/products-page.tsx"),
     route("/products/:slug/checkout", "features/v2/products/screens/checkout.tsx"),

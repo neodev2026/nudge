@@ -96,6 +96,16 @@ export function V2Nav({ user }: V2NavProps) {
                 학습 상품
               </Link>
             </li>
+            <li>
+              <Link
+                to="/marathon-ranking"
+                className={`text-sm font-semibold transition-colors hover:text-[#1a2744] ${
+                  pathname.startsWith("/marathon-ranking") ? "text-[#1a2744]" : "text-[#6b7a99]"
+                }`}
+              >
+                마라톤 랭킹
+              </Link>
+            </li>
           </>
         )}
       </ul>
@@ -188,6 +198,9 @@ export function V2Nav({ user }: V2NavProps) {
                 </DrawerLink>
                 <DrawerLink to="/products" onClick={closeDrawer} active={pathname.startsWith("/products")}>
                   학습 상품
+                </DrawerLink>
+                <DrawerLink to="/marathon-ranking" onClick={closeDrawer} active={pathname.startsWith("/marathon-ranking")}>
+                  마라톤 랭킹
                 </DrawerLink>
               </nav>
 

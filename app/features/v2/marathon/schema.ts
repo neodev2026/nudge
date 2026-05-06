@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   pgEnum,
@@ -48,6 +49,11 @@ export const nv2_marathon_runs = pgTable(
 
     // 0-based index of the next stage to start (resume position)
     last_stage_index: integer("last_stage_index").notNull().default(0),
+
+    // Cumulative stages completed since save-progress was first called after season start.
+    // Incremented atomically by save-progress: GREATEST(0, new_index - old_index).
+    // Starts at 0 for all runs (including pre-season runs), so only season activity counts.
+    season_progress: integer("season_progress").notNull().default(0),
 
     // Global card cursor for nudge DMs — 0-based flat index across all stages
     nudge_card_cursor: integer("nudge_card_cursor").notNull().default(0),
@@ -155,3 +161,29 @@ export const nv2_marathon_answers = pgTable(
 
 export type NV2MarathonAnswer = typeof nv2_marathon_answers.$inferSelect;
 export type NV2NewMarathonAnswer = typeof nv2_marathon_answers.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// nv2_marathon_seasons — time-bounded competition windows for the ranking board
+// ---------------------------------------------------------------------------
+
+export const nv2_marathon_seasons = pgTable(
+  "nv2_marathon_seasons",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    starts_at: timestamp("starts_at", { withTimezone: true }).notNull(),
+    ends_at: timestamp("ends_at", { withTimezone: true }).notNull(),
+    // Display-only timezone label, e.g. 'Asia/Seoul' — not used for DB comparisons
+    timezone: text("timezone").notNull(),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check("starts_before_ends", sql`${t.starts_at} < ${t.ends_at}`),
+    index("nv2_marathon_seasons_starts_at_idx").on(t.starts_at),
+  ]
+);
+
+export type NV2MarathonSeason = typeof nv2_marathon_seasons.$inferSelect;
+export type NV2NewMarathonSeason = typeof nv2_marathon_seasons.$inferInsert;
