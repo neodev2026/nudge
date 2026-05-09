@@ -109,6 +109,29 @@ export default [
     route("/products/:slug",          "features/v2/products/screens/product-detail-page.tsx"),
     route("/my-learning",             "features/v2/products/screens/my-learning-page.tsx"),
 
+    // Language roadmap pages
+    route("/languages/de",       "features/v2/languages/screens/de-roadmap-page.tsx"),
+    route("/languages/de/abc",   "features/v2/languages/screens/de-abc-page.tsx"),
+    route("/languages/de/a1",    "features/v2/languages/screens/de-a1-page.tsx"),
+    route("/languages/de/a2",    "features/v2/languages/screens/de-a2-page.tsx"),
+    route("/languages/de/b1",    "features/v2/languages/screens/de-b1-page.tsx"),
+    route("/languages/de/b2",    "features/v2/languages/screens/de-b2-page.tsx"),
+
+    // Spanish language roadmap pages
+    route("/languages/es",       "features/v2/languages/screens/es-roadmap-page.tsx"),
+    route("/languages/es/abc",   "features/v2/languages/screens/es-abc-page.tsx"),
+    route("/languages/es/a1",    "features/v2/languages/screens/es-a1-page.tsx"),
+    route("/languages/es/a2",    "features/v2/languages/screens/es-a2-page.tsx"),
+    route("/languages/es/b1",    "features/v2/languages/screens/es-b1-page.tsx"),
+    route("/languages/es/b2",    "features/v2/languages/screens/es-b2-page.tsx"),
+
+    // English language roadmap pages
+    route("/languages/en",       "features/v2/languages/screens/en-roadmap-page.tsx"),
+    route("/languages/en/a1",    "features/v2/languages/screens/en-a1-page.tsx"),
+    route("/languages/en/a2",    "features/v2/languages/screens/en-a2-page.tsx"),
+    route("/languages/en/b1",    "features/v2/languages/screens/en-b1-page.tsx"),
+    route("/languages/en/b2",    "features/v2/languages/screens/en-b2-page.tsx"),
+
     // v2 auth pages
     route("/login",   "features/v2/auth/screens/login.tsx"),
     route("/join",    "features/v2/auth/screens/join.tsx"),

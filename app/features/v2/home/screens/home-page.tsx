@@ -304,10 +304,17 @@ export default function HomePage() {
           <h2 className="mb-4 font-display text-[clamp(1.8rem,3vw,2.5rem)] font-black leading-snug text-white">
             지금 바로 시작할 수 있어요
           </h2>
-          <p className="mb-12 max-w-[520px] text-base leading-[1.8] text-white/60">
+          <p className="mb-10 max-w-[520px] text-base leading-[1.8] text-white/60">
             가입 없이 Discord 연결만으로 학습을 시작할 수 있습니다.
           </p>
 
+          {/* Language roadmap entry cards */}
+          <LanguageRoadmapCards />
+
+          {/* 전체 학습 상품 */}
+          <p className="mb-4 text-xs font-extrabold uppercase tracking-wider text-white/40">
+            전체 학습 상품
+          </p>
           <ProductGrid products={products} />
         </div>
       </section>
@@ -508,6 +515,83 @@ export default function HomePage() {
         .animate-float-2  { animation: floatBadge 5.5s ease-in-out 1.8s infinite; }
         .font-display { font-family: 'Nunito', 'Noto Sans KR', sans-serif; }
       `}</style>
+    </div>
+  );
+}
+
+// ─── Language Roadmap Entry Cards ────────────────────────────────────────────
+
+function LanguageRoadmapCards() {
+  const languages = [
+    {
+      flag: "🇩🇪",
+      lang: "독일어",
+      href: "/languages/de",
+      levels: "ABC · A1 · A2 · B1",
+      gradientFrom: "#000000",
+      gradientTo: "#dd0000",
+      accentColor: "#ffce00",
+    },
+    {
+      flag: "🇪🇸",
+      lang: "스페인어",
+      href: "/languages/es",
+      levels: "ABC · A1 · A2 · B1 · B2",
+      gradientFrom: "#c60b1e",
+      gradientTo: "#c60b1e",
+      accentColor: "#ffc400",
+    },
+    {
+      flag: "🇬🇧",
+      lang: "영어",
+      href: "/languages/en",
+      levels: "A1 · A2 · B1 · B2",
+      gradientFrom: "#012169",
+      gradientTo: "#C8102E",
+      accentColor: "#ffffff",
+    },
+  ] as const;
+
+  return (
+    <div className="mb-12">
+      <p className="mb-4 text-xs font-extrabold uppercase tracking-wider text-white/40">
+        학습할 언어를 선택하세요
+      </p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {languages.map(({ flag, lang, href, levels, gradientFrom, gradientTo, accentColor }) => (
+          <Link
+            key={lang}
+            to={href}
+            className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-6 transition-all hover:-translate-y-1 hover:border-white/20 hover:bg-white/10"
+          >
+            <div
+              className="pointer-events-none absolute inset-0 opacity-10 transition-opacity group-hover:opacity-20"
+              style={{
+                background: `linear-gradient(135deg, ${gradientFrom}, ${gradientTo})`,
+              }}
+            />
+            <div className="relative flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">{flag}</span>
+                <div>
+                  <div className="font-display text-lg font-black text-white">
+                    {lang}
+                  </div>
+                  <div className="text-[0.68rem] font-bold tracking-wider text-white/40">
+                    {levels}
+                  </div>
+                </div>
+              </div>
+              <span
+                className="rounded-lg px-3 py-1 text-xs font-extrabold transition-transform group-hover:translate-x-1"
+                style={{ color: accentColor }}
+              >
+                로드맵 →
+              </span>
+            </div>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

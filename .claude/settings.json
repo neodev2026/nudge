@@ -15,10 +15,15 @@
       "Bash(git -C e:/dev/nudge checkout .claude/settings.json)",
       "Bash(node -e \"require\\('./tests/landing.test.ts'\\)\")",
       "Bash(git -C e:/dev/nudge diff --stat HEAD)",
-      "Bash(git -C e:/dev/nudge status --short)"
+      "Bash(git -C e:/dev/nudge status --short)",
+      "Bash(Get-ChildItem -Path \"e:\\\\dev\\\\nudge\" -Recurse -Filter \".github\" -Directory)",
+      "Bash(Select-Object -First 5)",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"e:\\\\dev\\\\nudge\\\\.github\\\\workflows\")",
+      "Bash(git checkout *)"
     ],
     "additionalDirectories": [
-      "e:\\dev\\nudge\\docs"
+      "e:\\dev\\nudge\\docs",
+      "e:\\dev\\nudge\\app\\features\\v2\\languages"
     ]
   }
 }
