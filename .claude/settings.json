@@ -19,7 +19,14 @@
       "Bash(Get-ChildItem -Path \"e:\\\\dev\\\\nudge\" -Recurse -Filter \".github\" -Directory)",
       "Bash(Select-Object -First 5)",
       "PowerShell(New-Item -ItemType Directory -Force -Path \"e:\\\\dev\\\\nudge\\\\.github\\\\workflows\")",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(exit 0)",
+      "Bash(npx supabase *)",
+      "Bash(git tag *)",
+      "Bash(git rm *)",
+      "Bash(git reset *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ],
     "additionalDirectories": [
       "e:\\dev\\nudge\\docs",
