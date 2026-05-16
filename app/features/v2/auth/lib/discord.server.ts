@@ -197,6 +197,36 @@ export async function sendSessionDm(
 }
 
 /**
+ * Sends a Hyper-Sync review DM.
+ *
+ * Sent by dispatch cron when a hyper_sync_review schedule row becomes due.
+ * Card list lives in nv2_schedules.message_body; this function only needs
+ * the user's discord id, the deep link, and the count to render the embed.
+ *
+ * @param sns_id       - Discord user ID
+ * @param review_url   - Full URL to /hyper-sync/review/{scheduleId}
+ * @param total_unknown - Number of cards to review (shown in embed)
+ */
+export async function sendHyperSyncReviewDm(
+  sns_id: string,
+  review_url: string,
+  total_unknown: number
+): Promise<void> {
+  const channel_id = await openDmChannel(sns_id);
+
+  await postEmbedWithButton(channel_id, {
+    content: "⚡ 어제 놓친 표현을 복습할 시간이에요!",
+    embed: {
+      title: "🔁 Hyper-Sync 복습",
+      description: `어제 '기억못함' 표시한 표현 ${total_unknown}개를 다시 점검해봐요.\n3분이면 충분합니다.`,
+      color: 0xc8f564,
+    },
+    button_label: "복습 시작 →",
+    button_url: review_url,
+  });
+}
+
+/**
  * Sends a session completion congratulation DM.
  *
  * Sent after a user completes all stages in a session.

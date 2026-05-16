@@ -41,11 +41,16 @@ export async function action({ request }: Route.ActionArgs) {
     markCronScheduleSent,
     markCronScheduleFailedOrRetry,
   } = await import("../lib/queries.server");
-  const { sendSessionDm, sendCheerDm, sendMarathonNudgeDm } = await import(
+  const { sendSessionDm, sendCheerDm, sendMarathonNudgeDm, sendHyperSyncReviewDm } = await import(
     "~/features/v2/auth/lib/discord.server"
   );
-  const { sendSessionEmail, sendMarathonNudgeEmail } = await import(
-    "~/features/v2/auth/lib/email.server"
+  const {
+    sendSessionEmail,
+    sendMarathonNudgeEmail,
+    sendHyperSyncReviewEmail,
+  } = await import("~/features/v2/auth/lib/email.server");
+  const { parseHyperSyncMessageBody } = await import(
+    "~/features/v2/hyper-sync/lib/message-body"
   );
 
   const client = createClient(
@@ -212,6 +217,30 @@ export async function action({ request }: Route.ActionArgs) {
             throw new Error(
               `No delivery channel for auth_user_id=${schedule.auth_user_id}`
             );
+          }
+        } else if (schedule.schedule_type === ("hyper_sync_review" as any)) {
+          // message_body format: "hyper_sync|{slug}|{session_id}|{card_ids}|{total}"
+          // Prefer Discord DM; fall back to email when Discord isn't connected
+          // (or unsubscribed). Skip only when neither channel is available.
+          const parsed = parseHyperSyncMessageBody(schedule.message_body);
+          const total_unknown = parsed?.totalUnknown ?? parsed?.cardIds.length ?? 0;
+
+          if (use_discord) {
+            await sendHyperSyncReviewDm(
+              discord_id!,
+              schedule.delivery_url,
+              total_unknown
+            );
+          } else if (use_email) {
+            await sendHyperSyncReviewEmail(
+              email!,
+              schedule.delivery_url,
+              total_unknown
+            );
+          } else {
+            await markCronScheduleSent(client as any, schedule_id);
+            results.skipped++;
+            continue;
           }
         } else {
           // new / review / welcome
