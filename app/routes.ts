@@ -63,8 +63,9 @@ export default [
       route("/feedback/submit", "features/v2/feedback/api/submit.tsx"),
 
       // Hyper-Sync API
-      route("/hyper-sync/save-result",    "features/v2/hyper-sync/api/save-result.tsx"),
-      route("/hyper-sync/enqueue-review", "features/v2/hyper-sync/api/enqueue-review.tsx"),
+      route("/hyper-sync/save-result",           "features/v2/hyper-sync/api/save-result.tsx"),
+      route("/hyper-sync/enqueue-review",        "features/v2/hyper-sync/api/enqueue-review.tsx"),
+      route("/hyper-sync/record-review-outcome", "features/v2/hyper-sync/api/record-review-outcome.tsx"),
     ]),
   ]),
 

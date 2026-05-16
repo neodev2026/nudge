@@ -1,43 +1,40 @@
 /**
- * POST /api/v2/hyper-sync/enqueue-review
+ * POST /api/v2/hyper-sync/record-review-outcome
  *
- * Applies session verdicts (both 기억함 and 기억못함) to the SRS state and
- * enqueues review schedules accordingly. Anonymous users get a 200 with
- * { skipped: true, reason: 'anonymous' }.
+ * Applies review verdicts (from /hyper-sync/review completion) to the SRS
+ * state. Pass = step 1 [기억함] only (strict, per SRS-1). Fail = anything else
+ * (later-step pass OR exhausted 5 steps).
+ *
+ * Promotes pass to next round (r1→r2→r3→r4→mastered) using the forgetting
+ * curve intervals (1/3/7/14 days). Resets fail to r1_pending with
+ * retry_count++ — halving rule kicks in once retry_count ≥ 3 (Nudge parity).
  *
  * Request body (JSON):
  *   {
  *     product_slug:      string,
  *     source_session_id: string,
- *     outcomes: [{ stage_id: string, card_id: string, verdict: 'known' | 'unknown' }, ...]
+ *     outcomes: [{ stage_id: string, card_id: string, passed: boolean }, ...]
  *   }
  *
- * SRS rules (see spec §6.6 v2.2):
- *   - none + known        → r2_pending (+3d)
- *   - none + unknown      → r1_pending (+1d), retry_count=1
- *   - pending + known     → no-op
- *   - pending + unknown   → refresh: cancel old, r1_pending (+1d), retry_count++
- *   - mastered + known    → no-op
- *   - mastered + unknown  → r1_pending (+1d), retry_count++
- *
- * Auth: requires a logged-in Supabase user. timezone read from nv2_profiles.
+ * Auth: requires a logged-in Supabase user (review page already redirects
+ * anonymous to /login, so this is a defensive check).
  */
 import { data as routeData } from "react-router";
-import type { Route } from "./+types/enqueue-review";
+import type { Route } from "./+types/record-review-outcome";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "database.types";
 import makeServerClient from "~/core/lib/supa-client.server";
 import {
-  applyHyperSyncSessionOutcomes,
-  type SessionStageOutcome,
+  applyHyperSyncReviewOutcomes,
+  type ReviewStageOutcome,
 } from "../lib/queries.server";
 
 interface RawOutcome {
   stage_id?: string;
   card_id?: string;
-  verdict?: string;
+  passed?: boolean;
 }
-interface EnqueueBody {
+interface RecordBody {
   product_slug?: string;
   source_session_id?: string;
   outcomes?: RawOutcome[];
@@ -54,15 +51,12 @@ export async function action({ request }: Route.ActionArgs) {
   } = await client.auth.getUser();
 
   if (!user) {
-    return routeData(
-      { skipped: true, reason: "anonymous" },
-      { status: 200 }
-    );
+    return routeData({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: EnqueueBody;
+  let body: RecordBody;
   try {
-    body = (await request.json()) as EnqueueBody;
+    body = (await request.json()) as RecordBody;
   } catch {
     return routeData({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -75,18 +69,17 @@ export async function action({ request }: Route.ActionArgs) {
     );
   }
 
-  // Validate each outcome shape and reject invalid rows up-front.
-  const cleaned: SessionStageOutcome[] = [];
+  const cleaned: ReviewStageOutcome[] = [];
   for (const o of outcomes) {
     if (
       typeof o.stage_id === "string" &&
       typeof o.card_id === "string" &&
-      (o.verdict === "known" || o.verdict === "unknown")
+      typeof o.passed === "boolean"
     ) {
       cleaned.push({
         stageId: o.stage_id,
         cardId: o.card_id,
-        verdict: o.verdict,
+        passed: o.passed,
       });
     }
   }
@@ -113,7 +106,7 @@ export async function action({ request }: Route.ActionArgs) {
   const origin = new URL(request.url).origin;
 
   try {
-    const summary = await applyHyperSyncSessionOutcomes(
+    const summary = await applyHyperSyncReviewOutcomes(
       admin as any,
       {
         authUserId: user.id,
@@ -128,7 +121,7 @@ export async function action({ request }: Route.ActionArgs) {
     return routeData({ ok: true, summary });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown error";
-    console.error("[hyper-sync/enqueue-review] failed:", msg);
+    console.error("[hyper-sync/record-review-outcome] failed:", msg);
     return routeData({ error: msg }, { status: 500 });
   }
 }

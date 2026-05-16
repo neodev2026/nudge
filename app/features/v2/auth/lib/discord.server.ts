@@ -201,24 +201,38 @@ export async function sendSessionDm(
  *
  * Sent by dispatch cron when a hyper_sync_review schedule row becomes due.
  * Card list lives in nv2_schedules.message_body; this function only needs
- * the user's discord id, the deep link, and the count to render the embed.
+ * the user's discord id, the deep link, the count, and the SRS round.
  *
- * @param sns_id       - Discord user ID
- * @param review_url   - Full URL to /hyper-sync/review/{scheduleId}
+ * @param sns_id        - Discord user ID
+ * @param review_url    - Full URL to /hyper-sync/review/{scheduleId}
  * @param total_unknown - Number of cards to review (shown in embed)
+ * @param review_round  - SRS round 1..4, or null for legacy (pre-SRS) rows
  */
 export async function sendHyperSyncReviewDm(
   sns_id: string,
   review_url: string,
-  total_unknown: number
+  total_unknown: number,
+  review_round: number | null = null
 ): Promise<void> {
   const channel_id = await openDmChannel(sns_id);
 
+  const round_label = review_round ? `${review_round}회차 ` : "";
+  const interval_hint =
+    review_round === 1
+      ? "어제 표시한 표현이에요."
+      : review_round === 2
+      ? "3일 전 표현이 잊혀지기 전에."
+      : review_round === 3
+      ? "1주 전 표현, 한 번 더 굳혀봐요."
+      : review_round === 4
+      ? "2주 전 표현 — 마지막 점검입니다."
+      : "복습할 시간이에요.";
+
   await postEmbedWithButton(channel_id, {
-    content: "⚡ 어제 놓친 표현을 복습할 시간이에요!",
+    content: `⚡ 복습 ${round_label}시간이에요!`,
     embed: {
-      title: "🔁 Hyper-Sync 복습",
-      description: `어제 '기억못함' 표시한 표현 ${total_unknown}개를 다시 점검해봐요.\n3분이면 충분합니다.`,
+      title: `🔁 Hyper-Sync 복습${review_round ? ` ${review_round}회차` : ""}`,
+      description: `${interval_hint}\n${total_unknown}개 표현, 3분이면 충분합니다.`,
       color: 0xc8f564,
     },
     button_label: "복습 시작 →",

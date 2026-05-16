@@ -274,18 +274,31 @@ export async function sendSessionEmail(
 export async function sendHyperSyncReviewEmail(
   email: string,
   review_url: string,
-  total_unknown: number
+  total_unknown: number,
+  review_round: number | null = null
 ): Promise<void> {
-  const subject = `🔁 어제 놓친 표현 ${total_unknown}개, 다시 점검해봐요`;
+  const round_label = review_round ? `${review_round}회차 ` : "";
+  const interval_hint =
+    review_round === 1
+      ? "어제 표시한 표현입니다."
+      : review_round === 2
+      ? "3일 전 표현이 잊혀지기 전에 한 번 더."
+      : review_round === 3
+      ? "1주 전 표현, 한 번 더 굳혀봐요."
+      : review_round === 4
+      ? "2주 전 표현 — 마지막 점검입니다."
+      : "복습할 시간이에요.";
+
+  const subject = `🔁 복습 ${round_label}— ${total_unknown}개 표현 점검`;
   const preheader = `Hyper-Sync 복습 — 3분이면 충분합니다.`;
 
   const body_html = `
     <p style="margin:0 0 8px;font-size:20px;font-weight:900;color:#1a2744;letter-spacing:-0.5px;">
-      🔁 Hyper-Sync 복습
+      🔁 Hyper-Sync 복습${review_round ? ` ${review_round}회차` : ""}
     </p>
     <p style="margin:0;font-size:14px;color:#6b7a99;line-height:1.7;">
-      어제 '기억못함' 표시한 표현 <strong>${total_unknown}개</strong>를 다시 점검해봐요.<br />
-      3분이면 충분합니다.
+      ${interval_hint}<br />
+      <strong>${total_unknown}개 표현</strong>, 3분이면 충분합니다.
     </p>
     ${ctaButton("복습 시작 →", review_url, "#4caf72")}
     <p style="margin:20px 0 0;font-size:12px;color:#b0b8cc;line-height:1.6;">

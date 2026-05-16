@@ -291,17 +291,22 @@ export default function HyperSyncSessionPage() {
   // ─── Result phase — fire enqueue-review once ──────────────────────────────
   useEffect(() => {
     if (!isDone || enqueueAttempted || !data.isAuthenticated) return;
-    const unknown = results.filter((r) => !r.known);
-    if (unknown.length === 0) {
+    if (results.length === 0) {
       setEnqueueAttempted(true);
       return;
     }
     setEnqueueAttempted(true);
+    // Send ALL verdicts (known + unknown) so the server can apply SRS state
+    // transitions: known → r2_pending (+3d), unknown → r1_pending (+1d), etc.
     enqueueFetcher.submit(
       {
         product_slug: data.productSlug,
         source_session_id: data.sessionId,
-        unknown_card_ids: unknown.map((r) => r.stage.titleCard.id),
+        outcomes: results.map((r) => ({
+          stage_id: r.stage.stageId,
+          card_id: r.stage.titleCard.id,
+          verdict: r.known ? "known" : "unknown",
+        })),
       } as Record<string, any>,
       {
         method: "post",

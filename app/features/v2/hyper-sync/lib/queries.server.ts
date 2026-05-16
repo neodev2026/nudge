@@ -10,12 +10,58 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "database.types";
 import type { V2CardData } from "~/features/v2/shared/types";
+import { REVIEW_INTERVALS_DAYS } from "~/features/v2/shared/constants";
 import {
   parseHyperSyncMessageBody,
   serializeHyperSyncMessageBody,
 } from "./message-body";
-import { nextMorningAt } from "./session-logic";
+import { nextMorningAt, nextMorningInDays } from "./session-logic";
 import type { CardEntry, FrontBackCard } from "./session-logic";
+
+// ---------------------------------------------------------------------------
+// SRS interval calculation
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the interval in days for a given review round, applying the
+ * Nudge "halve if retry_count >= 3" rule. Floor of 1 day so a halved box 1
+ * doesn't collapse to same-day delivery (which conflicts with the "next
+ * morning at 09:00" delivery model).
+ */
+export function intervalDaysForRound(
+  round: number,
+  retryCount: number
+): number {
+  const baseDays = REVIEW_INTERVALS_DAYS[round] ?? 1;
+  if (retryCount >= 3) {
+    return Math.max(1, Math.round(baseDays / 2));
+  }
+  return baseDays;
+}
+
+// review_status enum values (kept in sync with REVIEW_STATUSES constant).
+const STATUS_NONE = "none" as const;
+const STATUS_R1 = "r1_pending" as const;
+const STATUS_R2 = "r2_pending" as const;
+const STATUS_R3 = "r3_pending" as const;
+const STATUS_R4 = "r4_pending" as const;
+const STATUS_MASTERED = "mastered" as const;
+
+type ReviewStatus =
+  | typeof STATUS_NONE
+  | typeof STATUS_R1
+  | typeof STATUS_R2
+  | typeof STATUS_R3
+  | typeof STATUS_R4
+  | typeof STATUS_MASTERED;
+
+function statusForRound(round: 1 | 2 | 3 | 4): ReviewStatus {
+  return ({ 1: STATUS_R1, 2: STATUS_R2, 3: STATUS_R3, 4: STATUS_R4 } as const)[round];
+}
+
+function nextRoundOnPass(round: 1 | 2 | 3 | 4): 2 | 3 | 4 | "mastered" {
+  return round === 4 ? "mastered" : ((round + 1) as 2 | 3 | 4);
+}
 
 // ---------------------------------------------------------------------------
 // Product + missions
@@ -182,7 +228,7 @@ export async function getHyperSyncCards(
     if (!titleCard) continue;
 
     const exampleCard = example ? frontBack(example) : null;
-    entries.push({ titleCard, exampleCard });
+    entries.push({ stageId: stage.id, titleCard, exampleCard });
   }
 
   return entries;
@@ -243,10 +289,545 @@ export async function getHyperSyncCardsByIds(
       .sort((a, b) => a.display_order - b.display_order)[0];
     const exampleCard = example ? frontBack(example) : null;
 
-    result.push({ titleCard, exampleCard });
+    result.push({ stageId: titleRow.stage_id, titleCard, exampleCard });
   }
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// SRS progress (nv2_stage_progress)
+//
+// Hyper-Sync reuses the existing per-stage progress table to track
+// box level + retry_count + next review time. Same columns Nudge uses,
+// just driven by hyper-sync's session/review flows instead of Nudge
+// session completion.
+// ---------------------------------------------------------------------------
+
+export interface StageProgressRow {
+  stage_id: string;
+  review_status: ReviewStatus;
+  review_round: number | null;
+  retry_count: number;
+  last_review_completed_at: string | null;
+  completed_at: string | null;
+}
+
+/** Bulk-reads progress rows for a set of (user, stage_id) pairs. */
+export async function getStageProgressByStageIds(
+  adminClient: SupabaseClient<Database>,
+  authUserId: string,
+  stageIds: string[]
+): Promise<Map<string, StageProgressRow>> {
+  const result = new Map<string, StageProgressRow>();
+  if (stageIds.length === 0) return result;
+
+  const { data, error } = await adminClient
+    .from("nv2_stage_progress")
+    .select(
+      "stage_id, review_status, review_round, retry_count, last_review_completed_at, completed_at"
+    )
+    .eq("auth_user_id", authUserId)
+    .in("stage_id", stageIds);
+
+  if (error) throw new Error(error.message);
+
+  for (const row of (data ?? []) as StageProgressRow[]) {
+    result.set(row.stage_id, row);
+  }
+  return result;
+}
+
+/** Resolves title card_ids to their parent stage_ids. */
+export async function cardIdsToStageIds(
+  adminClient: SupabaseClient<Database>,
+  cardIds: string[]
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (cardIds.length === 0) return result;
+
+  const { data, error } = await adminClient
+    .from("nv2_cards")
+    .select("id, stage_id")
+    .in("id", cardIds);
+
+  if (error) throw new Error(error.message);
+
+  for (const row of data ?? []) {
+    if (row.stage_id) result.set(row.id, row.stage_id);
+  }
+  return result;
+}
+
+/**
+ * Cancels all pending hyper_sync_review schedules whose message_body refers
+ * to any of the given title card_ids. Used by the SRS "refresh on re-failure"
+ * rule (SRS-2): when a stage that's already in pending SRS review is failed
+ * again, the old schedule is voided so the new shorter-interval schedule
+ * doesn't collide.
+ *
+ * Implementation note: we mark cancelled rows as status='failed' with a
+ * marker error_message rather than deleting, so the history stays auditable.
+ */
+export async function cancelPendingSchedulesForCards(
+  adminClient: SupabaseClient<Database>,
+  authUserId: string,
+  cardIdsToCancel: string[]
+): Promise<number> {
+  if (cardIdsToCancel.length === 0) return 0;
+
+  // Read pending hyper_sync_review schedules for this user.
+  const { data: pending, error } = await adminClient
+    .from("nv2_schedules")
+    .select("schedule_id, message_body")
+    .eq("auth_user_id", authUserId)
+    .eq("schedule_type", "hyper_sync_review")
+    .eq("status", "pending");
+
+  if (error) throw new Error(error.message);
+
+  const cancelSet = new Set(cardIdsToCancel);
+  const toCancel: bigint[] = [];
+
+  for (const row of pending ?? []) {
+    const parsed = parseHyperSyncMessageBody(row.message_body);
+    if (!parsed) continue;
+    if (parsed.cardIds.some((id) => cancelSet.has(id))) {
+      toCancel.push(row.schedule_id as unknown as bigint);
+    }
+  }
+
+  if (toCancel.length === 0) return 0;
+
+  const { error: updateErr } = await adminClient
+    .from("nv2_schedules")
+    .update({
+      status: "failed",
+      error_message: "superseded_by_srs_refresh",
+    })
+    .in(
+      "schedule_id",
+      toCancel.map((id) => id as unknown as number)
+    );
+
+  if (updateErr) throw new Error(updateErr.message);
+  return toCancel.length;
+}
+
+// ---------------------------------------------------------------------------
+// SRS state machine — applied at session / review completion
+// ---------------------------------------------------------------------------
+
+/**
+ * Verdict from a single session card encounter (one row per stage shown in
+ * a mission).
+ *
+ * known: user clicked [기억함] at step 1 (strict pass per SRS-1)
+ * unknown: user clicked [기억못함] OR exhausted the 5-step retry
+ */
+export interface SessionStageOutcome {
+  stageId: string;
+  cardId: string; // title card id, kept for results table key
+  verdict: "known" | "unknown";
+}
+
+/**
+ * Verdict from a single review card encounter on /hyper-sync/review.
+ *
+ * passed: user clicked [기억함] at step 1 (strict pass per SRS-1)
+ * failed: anything else (later-step pass OR exhausted)
+ */
+export interface ReviewStageOutcome {
+  stageId: string;
+  cardId: string;
+  passed: boolean;
+}
+
+interface ApplyOutcomesContext {
+  authUserId: string;
+  productSlug: string;
+  sourceSessionId: string;
+  timezone: string;
+  origin: string;
+}
+
+interface ScheduleInsertPlan {
+  cardId: string;
+  round: 1 | 2 | 3 | 4;
+  scheduledAt: string;
+}
+
+/**
+ * Builds the delivery_url after insert (PK-dependent). Used by INSERT helpers
+ * below.
+ */
+function deliveryUrlFor(origin: string, scheduleId: bigint | string): string {
+  return `${origin}/hyper-sync/review/${scheduleId}`;
+}
+
+async function insertReviewSchedule(
+  adminClient: SupabaseClient<Database>,
+  ctx: ApplyOutcomesContext,
+  plan: ScheduleInsertPlan
+): Promise<bigint> {
+  const messageBody = serializeHyperSyncMessageBody({
+    productSlug: ctx.productSlug,
+    sourceSessionId: ctx.sourceSessionId,
+    cardIds: [plan.cardId],
+    totalUnknown: 1,
+  });
+
+  const { data, error } = await adminClient
+    .from("nv2_schedules")
+    .insert({
+      auth_user_id: ctx.authUserId,
+      schedule_type: "hyper_sync_review",
+      delivery_url: "pending",
+      message_body: messageBody,
+      scheduled_at: plan.scheduledAt,
+      review_round: plan.round,
+      status: "pending",
+    })
+    .select("schedule_id")
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  const scheduleId = data.schedule_id as unknown as bigint;
+  const { error: updErr } = await adminClient
+    .from("nv2_schedules")
+    .update({ delivery_url: deliveryUrlFor(ctx.origin, scheduleId.toString()) })
+    .eq("schedule_id", scheduleId as unknown as number);
+  if (updErr) throw new Error(updErr.message);
+
+  return scheduleId;
+}
+
+async function upsertProgress(
+  adminClient: SupabaseClient<Database>,
+  authUserId: string,
+  stageId: string,
+  patch: {
+    review_status: ReviewStatus;
+    review_round: number | null;
+    retry_count: number;
+    last_review_completed_at?: string | null;
+    completed_at?: string | null;
+    next_review_at?: string | null;
+  }
+) {
+  const existing = await adminClient
+    .from("nv2_stage_progress")
+    .select("progress_id, completed_at")
+    .eq("auth_user_id", authUserId)
+    .eq("stage_id", stageId)
+    .maybeSingle();
+
+  if (existing.error) throw new Error(existing.error.message);
+
+  if (existing.data) {
+    const { error } = await adminClient
+      .from("nv2_stage_progress")
+      .update({
+        review_status: patch.review_status,
+        review_round: patch.review_round,
+        retry_count: patch.retry_count,
+        next_review_at: patch.next_review_at ?? null,
+        last_review_completed_at:
+          patch.last_review_completed_at ?? undefined,
+        // completed_at is immutable once set (first encounter timestamp).
+        completed_at: existing.data.completed_at ?? patch.completed_at ?? null,
+      })
+      .eq("progress_id", existing.data.progress_id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await adminClient.from("nv2_stage_progress").insert({
+      auth_user_id: authUserId,
+      stage_id: stageId,
+      review_status: patch.review_status,
+      review_round: patch.review_round,
+      retry_count: patch.retry_count,
+      next_review_at: patch.next_review_at ?? null,
+      last_review_completed_at: patch.last_review_completed_at ?? null,
+      completed_at: patch.completed_at ?? new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+  }
+}
+
+export interface ApplyOutcomesSummary {
+  newR1: number;        // first encounter unknown
+  newR2: number;        // first encounter known
+  refreshed: number;    // pending stage forgotten again → demoted r1
+  demotedFromMastered: number;
+  promoted: number;     // review pass → next round
+  mastered: number;     // review pass on r4
+  unchanged: number;    // known on pending stage (no SRS state change)
+  scheduleIds: string[];
+}
+
+/**
+ * Applies session verdicts to SRS state for a logged-in user.
+ *
+ * For each stage outcome:
+ *   - none + known        → r2_pending, schedule +3d
+ *   - none + unknown      → r1_pending, schedule +1d, retry_count=1
+ *   - r{1..4} + known     → no-op (existing schedule stands)
+ *   - r{1..4} + unknown   → refresh: cancel old, r1_pending, schedule +1d, retry_count++
+ *   - mastered + known    → no-op (verdict only logged elsewhere)
+ *   - mastered + unknown  → r1_pending, schedule +1d, retry_count++ (re-enters SRS)
+ *
+ * Anonymous users should not call this function — skip at the action layer.
+ */
+export async function applyHyperSyncSessionOutcomes(
+  adminClient: SupabaseClient<Database>,
+  ctx: ApplyOutcomesContext,
+  outcomes: SessionStageOutcome[]
+): Promise<ApplyOutcomesSummary> {
+  const summary: ApplyOutcomesSummary = {
+    newR1: 0,
+    newR2: 0,
+    refreshed: 0,
+    demotedFromMastered: 0,
+    promoted: 0,
+    mastered: 0,
+    unchanged: 0,
+    scheduleIds: [],
+  };
+  if (outcomes.length === 0) return summary;
+
+  const stageIds = outcomes.map((o) => o.stageId);
+  const progressMap = await getStageProgressByStageIds(
+    adminClient,
+    ctx.authUserId,
+    stageIds
+  );
+
+  // Cards needing schedule cancellation (refresh / mastered re-entry).
+  const cardsToCancel: string[] = [];
+  for (const o of outcomes) {
+    if (o.verdict !== "unknown") continue;
+    const prev = progressMap.get(o.stageId);
+    if (!prev) continue;
+    if (
+      prev.review_status === STATUS_R1 ||
+      prev.review_status === STATUS_R2 ||
+      prev.review_status === STATUS_R3 ||
+      prev.review_status === STATUS_R4
+    ) {
+      cardsToCancel.push(o.cardId);
+    }
+    // mastered: no pending schedule to cancel.
+  }
+
+  if (cardsToCancel.length > 0) {
+    await cancelPendingSchedulesForCards(
+      adminClient,
+      ctx.authUserId,
+      cardsToCancel
+    );
+  }
+
+  // Apply each outcome.
+  for (const o of outcomes) {
+    const prev = progressMap.get(o.stageId);
+    const prevStatus = prev?.review_status ?? STATUS_NONE;
+    const prevRetry = prev?.retry_count ?? 0;
+
+    if (o.verdict === "known") {
+      if (prevStatus === STATUS_NONE) {
+        // First encounter, known → start at r2_pending (+3 days).
+        const days = intervalDaysForRound(2, prevRetry);
+        const scheduledAt = nextMorningInDays(ctx.timezone, 9, days);
+        const sid = await insertReviewSchedule(adminClient, ctx, {
+          cardId: o.cardId,
+          round: 2,
+          scheduledAt,
+        });
+        await upsertProgress(adminClient, ctx.authUserId, o.stageId, {
+          review_status: STATUS_R2,
+          review_round: 2,
+          retry_count: prevRetry,
+          next_review_at: scheduledAt,
+        });
+        summary.newR2++;
+        summary.scheduleIds.push(sid.toString());
+      } else {
+        // Already pending or mastered — known is a no-op for SRS state.
+        summary.unchanged++;
+      }
+      continue;
+    }
+
+    // o.verdict === "unknown"
+    if (prevStatus === STATUS_NONE) {
+      const newRetry = 1;
+      const days = intervalDaysForRound(1, newRetry);
+      const scheduledAt = nextMorningInDays(ctx.timezone, 9, days);
+      const sid = await insertReviewSchedule(adminClient, ctx, {
+        cardId: o.cardId,
+        round: 1,
+        scheduledAt,
+      });
+      await upsertProgress(adminClient, ctx.authUserId, o.stageId, {
+        review_status: STATUS_R1,
+        review_round: 1,
+        retry_count: newRetry,
+        next_review_at: scheduledAt,
+      });
+      summary.newR1++;
+      summary.scheduleIds.push(sid.toString());
+    } else if (prevStatus === STATUS_MASTERED) {
+      const newRetry = prevRetry + 1;
+      const days = intervalDaysForRound(1, newRetry);
+      const scheduledAt = nextMorningInDays(ctx.timezone, 9, days);
+      const sid = await insertReviewSchedule(adminClient, ctx, {
+        cardId: o.cardId,
+        round: 1,
+        scheduledAt,
+      });
+      await upsertProgress(adminClient, ctx.authUserId, o.stageId, {
+        review_status: STATUS_R1,
+        review_round: 1,
+        retry_count: newRetry,
+        next_review_at: scheduledAt,
+      });
+      summary.demotedFromMastered++;
+      summary.scheduleIds.push(sid.toString());
+    } else {
+      // r1~r4 pending — refresh.
+      const newRetry = prevRetry + 1;
+      const days = intervalDaysForRound(1, newRetry);
+      const scheduledAt = nextMorningInDays(ctx.timezone, 9, days);
+      const sid = await insertReviewSchedule(adminClient, ctx, {
+        cardId: o.cardId,
+        round: 1,
+        scheduledAt,
+      });
+      await upsertProgress(adminClient, ctx.authUserId, o.stageId, {
+        review_status: STATUS_R1,
+        review_round: 1,
+        retry_count: newRetry,
+        next_review_at: scheduledAt,
+      });
+      summary.refreshed++;
+      summary.scheduleIds.push(sid.toString());
+    }
+  }
+
+  return summary;
+}
+
+/**
+ * Applies review verdicts (from /hyper-sync/review completion) to SRS state.
+ *
+ *   r{N} + passed (step 1 only) → r{N+1}_pending, schedule +interval(N+1)
+ *                                  N=4 → mastered (no schedule)
+ *   r{N} + failed                → r1_pending, retry_count++, schedule +1d
+ *
+ * The current pending schedule's row that hosted this review has already
+ * been marked sent by dispatch; we don't need to cancel anything.
+ */
+export async function applyHyperSyncReviewOutcomes(
+  adminClient: SupabaseClient<Database>,
+  ctx: ApplyOutcomesContext,
+  outcomes: ReviewStageOutcome[]
+): Promise<ApplyOutcomesSummary> {
+  const summary: ApplyOutcomesSummary = {
+    newR1: 0,
+    newR2: 0,
+    refreshed: 0,
+    demotedFromMastered: 0,
+    promoted: 0,
+    mastered: 0,
+    unchanged: 0,
+    scheduleIds: [],
+  };
+  if (outcomes.length === 0) return summary;
+
+  const stageIds = outcomes.map((o) => o.stageId);
+  const progressMap = await getStageProgressByStageIds(
+    adminClient,
+    ctx.authUserId,
+    stageIds
+  );
+
+  const now = new Date().toISOString();
+
+  for (const o of outcomes) {
+    const prev = progressMap.get(o.stageId);
+    const prevStatus = prev?.review_status ?? STATUS_R1;
+    const prevRetry = prev?.retry_count ?? 0;
+    const prevRound =
+      prevStatus === STATUS_R1
+        ? 1
+        : prevStatus === STATUS_R2
+        ? 2
+        : prevStatus === STATUS_R3
+        ? 3
+        : prevStatus === STATUS_R4
+        ? 4
+        : null;
+
+    if (prevRound === null) {
+      // mastered or none — review outcome arriving for non-pending stage is
+      // unusual; ignore silently to avoid corrupting state.
+      summary.unchanged++;
+      continue;
+    }
+
+    if (o.passed) {
+      const nextRound = nextRoundOnPass(prevRound as 1 | 2 | 3 | 4);
+      if (nextRound === "mastered") {
+        await upsertProgress(adminClient, ctx.authUserId, o.stageId, {
+          review_status: STATUS_MASTERED,
+          review_round: null,
+          retry_count: prevRetry,
+          last_review_completed_at: now,
+          next_review_at: null,
+        });
+        summary.mastered++;
+      } else {
+        const days = intervalDaysForRound(nextRound, prevRetry);
+        const scheduledAt = nextMorningInDays(ctx.timezone, 9, days);
+        const sid = await insertReviewSchedule(adminClient, ctx, {
+          cardId: o.cardId,
+          round: nextRound,
+          scheduledAt,
+        });
+        await upsertProgress(adminClient, ctx.authUserId, o.stageId, {
+          review_status: statusForRound(nextRound),
+          review_round: nextRound,
+          retry_count: prevRetry,
+          last_review_completed_at: now,
+          next_review_at: scheduledAt,
+        });
+        summary.promoted++;
+        summary.scheduleIds.push(sid.toString());
+      }
+    } else {
+      // Failed → reset to r1.
+      const newRetry = prevRetry + 1;
+      const days = intervalDaysForRound(1, newRetry);
+      const scheduledAt = nextMorningInDays(ctx.timezone, 9, days);
+      const sid = await insertReviewSchedule(adminClient, ctx, {
+        cardId: o.cardId,
+        round: 1,
+        scheduledAt,
+      });
+      await upsertProgress(adminClient, ctx.authUserId, o.stageId, {
+        review_status: STATUS_R1,
+        review_round: 1,
+        retry_count: newRetry,
+        last_review_completed_at: now,
+        next_review_at: scheduledAt,
+      });
+      summary.refreshed++;
+      summary.scheduleIds.push(sid.toString());
+    }
+  }
+
+  return summary;
 }
 
 // ---------------------------------------------------------------------------

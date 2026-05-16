@@ -12,7 +12,7 @@
  * reviews. SRS box_level is a future enhancement (spec §6.6).
  */
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { redirect, useLoaderData, useNavigate } from "react-router";
+import { redirect, useFetcher, useLoaderData, useNavigate } from "react-router";
 import type { LoaderFunctionArgs, ShouldRevalidateFunction } from "react-router";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "database.types";
@@ -77,6 +77,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     cards,
     scheduleId: scheduleIdRaw,
     totalUnknown: parsed.totalUnknown,
+    productSlug: parsed.productSlug,
+    sourceSessionId: parsed.sourceSessionId,
   };
 }
 
@@ -134,8 +136,10 @@ interface RetryEntry {
 }
 
 export default function HyperSyncReviewPage() {
-  const { cards } = useLoaderData<typeof loader>();
+  const data = useLoaderData<typeof loader>();
+  const cards = data.cards;
   const navigate = useNavigate();
+  const outcomeFetcher = useFetcher();
 
   const initialQueue = useMemo<RetryEntry[]>(
     () => cards.map((c) => ({ stage: c, step: 1 as RetryStep })),
@@ -147,6 +151,9 @@ export default function HyperSyncReviewPage() {
   const [flashKind, setFlashKind] = useState<"known" | "unknown" | null>(null);
   const [timerTenths, setTimerTenths] = useState(BACK_TIMER_SEC * 10);
   const [completed, setCompleted] = useState(0);
+  // Per-stage verdict — true = passed (step 1 [기억함] only, per SRS-1).
+  const [verdicts, setVerdicts] = useState<Map<string, boolean>>(new Map());
+  const [outcomePosted, setOutcomePosted] = useState(false);
   const total = cards.length;
 
   const current = queue[0] ?? null;
@@ -190,6 +197,47 @@ export default function HyperSyncReviewPage() {
     }
   }, [queue.length, phase]);
 
+  // ─── post review outcomes to SRS engine once on completion ────────────────
+  useEffect(() => {
+    if (phase !== "result" || outcomePosted) return;
+    if (verdicts.size === 0) {
+      setOutcomePosted(true);
+      return;
+    }
+    const outcomes: { stage_id: string; card_id: string; passed: boolean }[] = [];
+    for (const c of cards) {
+      const passed = verdicts.get(c.stageId);
+      if (passed === undefined) continue;
+      outcomes.push({
+        stage_id: c.stageId,
+        card_id: c.titleCard.id,
+        passed,
+      });
+    }
+    setOutcomePosted(true);
+    if (outcomes.length === 0) return;
+    outcomeFetcher.submit(
+      {
+        product_slug: data.productSlug,
+        source_session_id: data.sourceSessionId,
+        outcomes,
+      } as Record<string, any>,
+      {
+        method: "post",
+        action: "/api/v2/hyper-sync/record-review-outcome",
+        encType: "application/json",
+      }
+    );
+  }, [
+    phase,
+    outcomePosted,
+    verdicts,
+    cards,
+    data.productSlug,
+    data.sourceSessionId,
+    outcomeFetcher,
+  ]);
+
   const handleVerdict = useCallback(
     (known: boolean) => {
       if (phase !== "back" || !current) return;
@@ -202,18 +250,28 @@ export default function HyperSyncReviewPage() {
         setQueue((q) => {
           const head = q[0];
           if (!head) return q;
-          if (known) {
-            // mastered this card — drop from queue, count completion.
+          const stageId = head.stage.stageId;
+
+          // Decide drop vs advance, and the SRS verdict on drop.
+          // SRS-1 strict: pass = first-attempt [기억함] only.
+          const isKnownAtStep1 = known && head.step === 1;
+          const exhausted = !known && head.step === 5;
+          const willDrop = known || exhausted;
+
+          if (willDrop) {
+            const passed = isKnownAtStep1;
+            setVerdicts((prev) => {
+              const next = new Map(prev);
+              next.set(stageId, passed);
+              return next;
+            });
             setCompleted((c) => c + 1);
             return q.slice(1);
           }
-          const nextStep = (head.step + 1) as RetryStep | 6;
-          if (nextStep > 5) {
-            setCompleted((c) => c + 1);
-            return q.slice(1);
-          }
+
+          // [기억못함] at step 1~4 → advance step.
           return [
-            { stage: head.stage, step: nextStep as RetryStep },
+            { stage: head.stage, step: (head.step + 1) as RetryStep },
             ...q.slice(1),
           ];
         });
@@ -224,15 +282,62 @@ export default function HyperSyncReviewPage() {
   );
 
   if (phase === "result") {
+    const summary = outcomeFetcher.data?.summary as
+      | {
+          promoted: number;
+          mastered: number;
+          refreshed: number;
+        }
+      | undefined;
+    const inFlight = outcomeFetcher.state !== "idle";
+    const passedCount = Array.from(verdicts.values()).filter((v) => v).length;
+    const failedCount = total - passedCount;
+
     return (
       <div className="min-h-screen bg-[#0a0a0a] text-[#f0f0f0]">
         <HyperSyncHeader subtitle="hyper-sync / review" isAuthenticated={true} />
         <main className="mx-auto w-full max-w-[680px] px-7 py-16 text-center">
           <div className="mb-3 text-4xl">🔁</div>
           <h2 className="mb-2 font-mono text-2xl">복습 완료!</h2>
-          <p className="mb-10 text-sm text-white/60">
+          <p className="mb-8 text-sm text-white/60">
             {total}개 표현을 다시 점검했습니다
           </p>
+
+          <div className="mb-8 grid grid-cols-2 gap-3 text-left">
+            <div className="rounded-lg border border-white/10 bg-[#111111] px-4 py-3">
+              <div className="mb-1 font-mono text-[11px] tracking-wider text-white/40">
+                떠올린 표현
+              </div>
+              <div className="font-mono text-2xl font-bold text-[#c8f564]">
+                {passedCount}
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-[#111111] px-4 py-3">
+              <div className="mb-1 font-mono text-[11px] tracking-wider text-white/40">
+                다시 학습 필요
+              </div>
+              <div className="font-mono text-2xl font-bold text-[#ff5f5f]">
+                {failedCount}
+              </div>
+            </div>
+          </div>
+
+          {inFlight ? (
+            <p className="mb-8 text-xs text-white/40">복습 일정 갱신 중…</p>
+          ) : summary ? (
+            <div className="mb-8 rounded-xl border border-[#c8f564]/25 bg-[#c8f564]/10 px-5 py-4 text-left text-xs leading-relaxed text-[#c8f564]">
+              {summary.mastered > 0 && (
+                <div>✓ {summary.mastered}개 표현이 마스터됐어요!</div>
+              )}
+              {summary.promoted > 0 && (
+                <div>↑ {summary.promoted}개 표현이 다음 단계로 이동</div>
+              )}
+              {summary.refreshed > 0 && (
+                <div>↻ {summary.refreshed}개 표현은 내일 다시 보내드릴게요</div>
+              )}
+            </div>
+          ) : null}
+
           <button
             type="button"
             onClick={() => navigate("/hyper-sync")}

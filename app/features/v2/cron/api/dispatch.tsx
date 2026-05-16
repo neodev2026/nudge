@@ -224,18 +224,21 @@ export async function action({ request }: Route.ActionArgs) {
           // (or unsubscribed). Skip only when neither channel is available.
           const parsed = parseHyperSyncMessageBody(schedule.message_body);
           const total_unknown = parsed?.totalUnknown ?? parsed?.cardIds.length ?? 0;
+          const review_round = (schedule as any).review_round ?? null;
 
           if (use_discord) {
             await sendHyperSyncReviewDm(
               discord_id!,
               schedule.delivery_url,
-              total_unknown
+              total_unknown,
+              review_round
             );
           } else if (use_email) {
             await sendHyperSyncReviewEmail(
               email!,
               schedule.delivery_url,
-              total_unknown
+              total_unknown,
+              review_round
             );
           } else {
             await markCronScheduleSent(client as any, schedule_id);

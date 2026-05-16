@@ -40,6 +40,7 @@ v2.0에서 결정·교정된 항목입니다.
 | FB-2 | 헤더 UX | Nudge 로고만 | 비로그인 시 **로그인/회원가입 버튼** 추가 ([HyperSyncHeader](../../app/features/v2/hyper-sync/components/hyper-sync-header.tsx)) | 익명 사용자가 결과 화면 CTA 외에도 헤더에서 회원가입 진입 가능 |
 | FB-3 | `shouldRevalidate` 범위 | 무조건 false (sessionId 변경에도 loader 차단) | **URL 변경 시 default, 동일 URL에서만 false**. sessionId 변경 시 state 리셋 effect 추가 | 결과 화면 [다음 미션] 클릭 시 페이지가 갱신되지 않던 버그 ([session-page](../../app/features/v2/hyper-sync/screens/hyper-sync-session-page.tsx)) |
 | FB-4 | 중복 enqueue 정책 | (미정) | **per-session schedule + card 단위 dedup**. 통합 알림은 보류 (§3.4) | 알림이 N건 분리되어 도착하는 부담은 인지. 베타 단계 수용 가능, 필요 시 향후 append 기반 단일 알림으로 전환 |
+| FB-5 | SRS box_level | Phase 1 보류 → **Phase 2 정식 구현** | 슬로건 "복습으로 기억 유지"의 필수 메커니즘. nv2_stage_progress 재사용 (신규 테이블 없음). §6.6 참조 | 단발 복습으로는 슬로건 약속 불충분. 사용자 멘탈모델 ("기억함 stage도 망각곡선 기반 복습")과 정렬 |
 
 ---
 
@@ -629,12 +630,71 @@ function nextCard() {
 
 복습이 남아 있으면 일반 카드 진행 대신 복습 카드로 이동. 일반 카드 인덱스는 일반 카드 완료 시점에만 증가.
 
-### 6.6 SRS box_level — Phase 1 보류
+### 6.6 SRS (Spaced Repetition) — Phase 2 정식 설계
 
-Phase 1에서는 단발 복습 1회만 수행한다. 미래 도입 시:
-- `nv2_schedules.review_round` 컬럼을 box_level로 재사용 (1~4)
-- 복습 결과(맞춤/틀림)에 따라 box++ 또는 box=1 강등
-- `REVIEW_INTERVALS_DAYS = { 1: 1, 2: 3, 3: 7, 4: 14 }` 사용 (기존 Nudge와 정렬)
+슬로건 "고속 암기 + 복습으로 기억 유지"의 후반부를 구성하는 핵심 메커니즘. Phase 1의 단발 복습을 Leitner box SRS로 확장한다.
+
+#### 상태 머신
+
+기존 [nv2_stage_progress](../../app/features/v2/progress/schema.ts) 테이블 재사용 (신규 테이블 없음). Nudge와 동일한 vocabulary 사용 — `review_status` enum (`none / r1~r4_pending / mastered`), `review_round` (1~4), `retry_count`.
+
+```
+첫 미션에서 stage 노출
+├─ 기억함 (step 1 [기억함])   → r2_pending, schedule +3일,  retry_count=0
+└─ 기억못함 (step 5 소진)      → r1_pending, schedule +1일,  retry_count=1
+
+복습 DM/이메일 → /hyper-sync/review
+├─ step 1 [기억함] (pass)      → next round: r1→r2→r3→r4→mastered
+│                                  스케줄 인터벌: 3 / 7 / 14 일 (mastered는 schedule 없음)
+└─ step 2+ [기억함] OR step 5 소진 (fail)
+                                → r1_pending, schedule +1일, retry_count++
+
+세션 재실패 (이미 pending인 stage)
+                                → 기존 schedule 취소 + r1_pending 강등 + 새 schedule +1일, retry_count++
+
+mastered + 기억못함 (세션)     → r1_pending 강등 + 새 schedule +1일, retry_count++ (SRS 재진입)
+mastered + 기억함 (세션)       → no-op (verdict만 로그)
+
+retry_count ≥ 3                → calcNextReviewAt halving 적용 (Nudge 정렬). box 1은 floor 1일 유지.
+```
+
+#### Pass/Fail 기준 (SRS-1 엄격 — 결정 사항)
+
+- **Pass**: step 1에서 즉시 [기억함] 클릭. 진정한 회상력만 인정.
+- **Fail**: 그 외 모두 (step 2~5에서 [기억함] OR step 5 [기억못함]으로 소진).
+
+기존 review 페이지의 5-step retry 로직은 그대로 유지하되, **step 1 외 통과는 SRS pass가 아님**.
+
+#### 인터벌 계산
+
+[intervalDaysForRound(round, retryCount)](../../app/features/v2/hyper-sync/lib/queries.server.ts) — `REVIEW_INTERVALS_DAYS = { 1:1, 2:3, 3:7, 4:14 }` 를 기반으로 retry_count≥3이면 절반 (box 1은 floor 1).
+
+scheduled_at은 [nextMorningInDays(tz, 9, intervalDays)](../../app/features/v2/hyper-sync/lib/session-logic.ts) — 사용자 timezone의 N일 후 09:00 UTC ISO.
+
+#### 결정 사항 요약 (SRS-1 ~ SRS-8)
+
+| ID | 결정 |
+|---|---|
+| SRS-1 | Pass = step 1 [기억함]만 (엄격) |
+| SRS-2 | 재실패 시 refresh — 기존 schedule 취소 + r1 강등 |
+| SRS-3 | 익명 사용자 progress 없음 (발송 채널 부재) |
+| SRS-4 | Phase 1 데이터 backfill 없음, 새 enqueue부터 SRS |
+| SRS-5 | mastered = SRS 알림 종료, 미션 노출 유지. mastered + 기억못함 → r1 강등 |
+| SRS-6 | retry_count≥3 halving 적용 (Nudge 정렬) |
+| SRS-7 | 첫 세션 [기억함] → r2_pending (+3일) |
+| SRS-8 | 표준 1/3/7/14 인터벌, 시작 box 차이로만 차등 |
+
+#### 구현 산출물 (Phase 2)
+
+- [queries.server.ts](../../app/features/v2/hyper-sync/lib/queries.server.ts): `intervalDaysForRound`, `getStageProgressByStageIds`, `cardIdsToStageIds`, `cancelPendingSchedulesForCards`, `applyHyperSyncSessionOutcomes`, `applyHyperSyncReviewOutcomes`
+- [session-logic.ts](../../app/features/v2/hyper-sync/lib/session-logic.ts): `nextMorningInDays` 추가
+- [api/enqueue-review.tsx](../../app/features/v2/hyper-sync/api/enqueue-review.tsx): 모든 verdict (known + unknown) 수신, applyHyperSyncSessionOutcomes 호출
+- [api/record-review-outcome.tsx](../../app/features/v2/hyper-sync/api/record-review-outcome.tsx) (신규): 복습 결과 수신, applyHyperSyncReviewOutcomes 호출
+- [review-page](../../app/features/v2/hyper-sync/screens/hyper-sync-review-page.tsx): per-stage verdict 추적, 완료 시 POST, summary 표시
+- [session-page](../../app/features/v2/hyper-sync/screens/hyper-sync-session-page.tsx): outcomes payload (known + unknown 모두 포함)
+- [discord.server.ts](../../app/features/v2/auth/lib/discord.server.ts) / [email.server.ts](../../app/features/v2/auth/lib/email.server.ts): `review_round` 파라미터 추가 → "복습 N회차" 표시
+- [dispatch.tsx](../../app/features/v2/cron/api/dispatch.tsx): `schedule.review_round` 를 senders에 전달
+- 단위 테스트: `tests/hyper-sync-srs.test.ts` (intervalDaysForRound, nextMorningInDays)
 
 ---
 

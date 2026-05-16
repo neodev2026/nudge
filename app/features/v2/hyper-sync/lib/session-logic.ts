@@ -10,6 +10,7 @@ export interface FrontBackCard {
 }
 
 export interface CardEntry {
+  stageId: string;
   titleCard: FrontBackCard;
   exampleCard: FrontBackCard | null;
 }
@@ -66,21 +67,30 @@ export function getRetryCard(stage: CardEntry, step: RetryStep): RetryCardView {
 }
 
 /**
- * Returns the UTC ISO string for the next calendar day at `hour` (0-23) in the
- * user's timezone. Always pushes to the next day regardless of when called —
- * never returns a past timestamp. See spec §3.4 for the gap distribution.
+ * Returns the UTC ISO string for the morning at `hour` (0-23) `daysAhead`
+ * calendar days from today in the user's timezone. daysAhead must be >= 1
+ * to guarantee a future timestamp (no same-day dispatch).
+ *
+ * Used by SRS to compute scheduled_at for r1/r2/r3/r4 reviews using the
+ * forgetting-curve intervals (1/3/7/14 days, optionally halved).
  */
-export function nextMorningAt(timezone: string, hour: number): string {
+export function nextMorningInDays(
+  timezone: string,
+  hour: number,
+  daysAhead: number
+): string {
+  const safe_days = Math.max(1, Math.floor(daysAhead));
+
   // 1. Today's local date in user's tz, as 'YYYY-MM-DD'.
   const today_str = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
 
-  // 2. + 1 day.
-  const tomorrow = new Date(today_str + "T00:00:00Z");
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  const tomorrow_str = tomorrow.toISOString().slice(0, 10);
+  // 2. + daysAhead days.
+  const target = new Date(today_str + "T00:00:00Z");
+  target.setUTCDate(target.getUTCDate() + safe_days);
+  const target_str = target.toISOString().slice(0, 10);
 
   // 3. Assemble local datetime then convert to UTC via offset arithmetic.
-  const local_str = `${tomorrow_str}T${String(hour).padStart(2, "0")}:00:00`;
+  const local_str = `${target_str}T${String(hour).padStart(2, "0")}:00:00`;
   const local_as_utc_ms = new Date(local_str).getTime();
   const local_in_tz_ms = new Date(
     new Date(local_str).toLocaleString("en-US", { timeZone: timezone })
@@ -88,6 +98,14 @@ export function nextMorningAt(timezone: string, hour: number): string {
   const tz_offset_ms = local_as_utc_ms - local_in_tz_ms;
 
   return new Date(local_as_utc_ms + tz_offset_ms).toISOString();
+}
+
+/**
+ * Backwards-compatible wrapper for Phase 1 callers — equivalent to
+ * nextMorningInDays(tz, hour, 1).
+ */
+export function nextMorningAt(timezone: string, hour: number): string {
+  return nextMorningInDays(timezone, hour, 1);
 }
 
 /**

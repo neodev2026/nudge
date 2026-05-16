@@ -7,6 +7,7 @@ import {
 } from "../app/features/v2/hyper-sync/lib/session-logic";
 
 const stage: CardEntry = {
+  stageId: "s1",
   titleCard: { id: "t1", front: "reduce latency", back: "지연 시간을 줄이다" },
   exampleCard: {
     id: "e1",
@@ -16,6 +17,7 @@ const stage: CardEntry = {
 };
 
 const stageNoExample: CardEntry = {
+  stageId: "s2",
   titleCard: { id: "t2", front: "bottleneck", back: "병목 지점" },
   exampleCard: null,
 };

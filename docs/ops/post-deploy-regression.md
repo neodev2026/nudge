@@ -2,7 +2,7 @@
 
 **문서 위치**: `docs/ops/post-deploy-regression.md`  
 **실행 시점**: Production 배포 완료 직후 매회 실시  
-**예상 시간**: 약 25분 (A~G 15분 + H Hyper-Sync 10분)  
+**예상 시간**: 약 30분 (A~G 15분 + H Hyper-Sync 15분 — SRS 항목 H-15~17 포함)  
 **환경**: nudge.neowithai.com (Production)  
 **결과 저장**: `docs/ops/test-results/YYYY-MM-DD-HH-deploy.md`
 
@@ -125,6 +125,9 @@
 | H-12 | 다음 미션 이동 | 결과 화면 [다음 미션] 클릭 | 다음 `session_number` 미션의 진행 화면으로 이동. 상태가 깨끗하게 초기화되어 1번 카드부터 시작 | |
 | H-13 | 중복 enqueue 방지 | (A,B,C)가 pending인 상태에서 다른 미션에서 (B,C,D) 기억못함 → enqueue 호출 | 새 schedule row 1건 추가 (cardIds=[D]), 기존 row와 별도 존재 | |
 | H-14 | 비로그인 헤더 CTA | localStorage 초기화 후 `/hyper-sync` 접속 | 헤더 우측에 [로그인], [회원가입] 버튼 표시. 로그인 후 사라짐 | |
+| H-15 | SRS — 첫 세션 [기억함] → r2_pending | 로그인 + 새 stage에서 step 1 [기억함] 후 DB 확인 | `nv2_stage_progress` row: `review_status='r2_pending'`, `review_round=2`. `nv2_schedules` row 1건: `review_round=2`, `scheduled_at` ≈ 사용자 tz 기준 3일 후 09:00 | |
+| H-16 | SRS — 복습 step 1 pass → 다음 round 진입 | r1 schedule 강제 dispatch → DM/이메일 → 클릭 → review에서 step 1 [기억함] | progress: `r1→r2_pending`, `review_round=2`. 새 schedule: `review_round=2`, scheduled +3일. 결과 화면에 "↑ 1개 표현이 다음 단계로 이동" 표시 | |
+| H-17 | SRS — mastered + 기억못함 → r1 강등 | r4_pending 통과해 mastered인 stage가 미션에 노출됐을 때 [기억못함] 처리 (수동: DB로 stage를 mastered 상태로 만든 뒤 시작) | progress: `mastered → r1_pending`, retry_count++. 새 schedule: `review_round=1`, scheduled +1일 | |
 
 > **H 섹션 주의사항**
 > - H-10a/b 발송 검증은 반드시 **테스트 전용 Discord 계정 + 테스트 이메일** 사용 (C-03 정책과 동일)
