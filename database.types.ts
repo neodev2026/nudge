@@ -547,6 +547,45 @@ export type Database = {
         }
         Relationships: []
       }
+      nv2_hyper_sync_results: {
+        Row: {
+          auth_user_id: string
+          card_id: string
+          created_at: string
+          id: string
+          known_count: number
+          product_id: string
+          result: Database["public"]["Enums"]["hyper_sync_result"]
+          session_date: string
+          session_id: string
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id: string
+          card_id: string
+          created_at?: string
+          id?: string
+          known_count?: number
+          product_id: string
+          result: Database["public"]["Enums"]["hyper_sync_result"]
+          session_date: string
+          session_id: string
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string
+          card_id?: string
+          created_at?: string
+          id?: string
+          known_count?: number
+          product_id?: string
+          result?: Database["public"]["Enums"]["hyper_sync_result"]
+          session_date?: string
+          session_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       nv2_learning_products: {
         Row: {
           category: Database["public"]["Enums"]["nv2_product_category"]
@@ -1478,6 +1517,7 @@ export type Database = {
         | "failed"
         | "opened"
         | "feedback_received"
+      hyper_sync_result: "known" | "unknown"
       nv2_card_type:
         | "title"
         | "description"
@@ -1518,6 +1558,7 @@ export type Database = {
         | "cheer"
         | "welcome"
         | "marathon_nudge"
+        | "hyper_sync_review"
       nv2_session_kind: "new" | "review"
       nv2_session_status: "pending" | "in_progress" | "completed"
       nv2_stage_type:
@@ -1695,6 +1736,7 @@ export const Constants = {
         "opened",
         "feedback_received",
       ],
+      hyper_sync_result: ["known", "unknown"],
       nv2_card_type: [
         "title",
         "description",
@@ -1739,6 +1781,7 @@ export const Constants = {
         "cheer",
         "welcome",
         "marathon_nudge",
+        "hyper_sync_review",
       ],
       nv2_session_kind: ["new", "review"],
       nv2_session_status: ["pending", "in_progress", "completed"],
