@@ -20,10 +20,13 @@ import makeServerClient from "~/core/lib/supa-client.server";
 import {
   getHyperSyncCardsByIds,
   getHyperSyncReviewSchedule,
+  getHyperSyncReviewSchedules,
   markHyperSyncReviewOpened,
+  markHyperSyncReviewsOpened,
 } from "../lib/queries.server";
 import { parseHyperSyncMessageBody } from "../lib/message-body";
 import {
+  chunkArray,
   getRetryCard,
   type CardEntry,
   type RetryStep,
@@ -33,12 +36,28 @@ import { HyperSyncHeader } from "../components/hyper-sync-header";
 const FRONT_DWELL_MS = 2000;
 const BACK_TIMER_SEC = 3;
 const FLASH_MS = 400;
+const CHUNK_SIZE = 10;
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const scheduleIdRaw = params.scheduleId;
-  if (!scheduleIdRaw) throw redirect("/hyper-sync");
-  // Reject non-numeric — schedule_id is bigserial.
-  if (!/^\d+$/.test(scheduleIdRaw)) throw redirect("/hyper-sync");
+  // Support both URL shapes:
+  //   - /hyper-sync/review/:scheduleId            (legacy single-schedule DMs)
+  //   - /hyper-sync/review?ids=1,2,3              (new aggregated multi DMs)
+  const url = new URL(request.url);
+  const idsQuery = url.searchParams.get("ids");
+  const scheduleIdParam = params.scheduleId;
+
+  let scheduleIdsRaw: string[] = [];
+  if (idsQuery) {
+    scheduleIdsRaw = idsQuery.split(",").map((s) => s.trim()).filter(Boolean);
+  } else if (scheduleIdParam) {
+    scheduleIdsRaw = [scheduleIdParam];
+  }
+
+  if (scheduleIdsRaw.length === 0) throw redirect("/hyper-sync");
+  // Reject any non-numeric id — schedule_id is bigserial.
+  if (!scheduleIdsRaw.every((id) => /^\d+$/.test(id))) {
+    throw redirect("/hyper-sync");
+  }
 
   const [client] = makeServerClient(request);
   const {
@@ -47,7 +66,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   if (!user) {
     throw redirect(
-      `/login?next=${encodeURIComponent(`/hyper-sync/review/${scheduleIdRaw}`)}`
+      `/login?next=${encodeURIComponent(url.pathname + url.search)}`
     );
   }
 
@@ -56,29 +75,66 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const schedule = await getHyperSyncReviewSchedule(
-    admin as any,
-    scheduleIdRaw,
-    user.id
-  );
+  let schedules: Array<{
+    schedule_id: number | bigint | string;
+    message_body: string | null;
+  }>;
 
-  if (!schedule) throw redirect("/hyper-sync");
+  if (scheduleIdsRaw.length === 1) {
+    const single = await getHyperSyncReviewSchedule(
+      admin as any,
+      scheduleIdsRaw[0],
+      user.id
+    );
+    if (!single) throw redirect("/hyper-sync");
+    schedules = [single];
+  } else {
+    const multi = await getHyperSyncReviewSchedules(
+      admin as any,
+      scheduleIdsRaw,
+      user.id
+    );
+    if (multi.length === 0) throw redirect("/hyper-sync");
+    schedules = multi;
+  }
 
-  const parsed = parseHyperSyncMessageBody(schedule.message_body);
-  if (!parsed || parsed.cardIds.length === 0) throw redirect("/hyper-sync");
+  // Aggregate cardIds across all schedules, preserving order + dedup.
+  const seenIds = new Set<string>();
+  const aggregatedCardIds: string[] = [];
+  let productSlug = "";
+  let sourceSessionId = "";
+  for (const s of schedules) {
+    const parsed = parseHyperSyncMessageBody(s.message_body);
+    if (!parsed) continue;
+    if (!productSlug) productSlug = parsed.productSlug;
+    if (!sourceSessionId) sourceSessionId = parsed.sourceSessionId;
+    for (const id of parsed.cardIds) {
+      if (!seenIds.has(id)) {
+        seenIds.add(id);
+        aggregatedCardIds.push(id);
+      }
+    }
+  }
 
-  const cards = await getHyperSyncCardsByIds(admin as any, parsed.cardIds);
+  if (aggregatedCardIds.length === 0) throw redirect("/hyper-sync");
+
+  const cards = await getHyperSyncCardsByIds(admin as any, aggregatedCardIds);
   if (cards.length === 0) throw redirect("/hyper-sync");
 
-  // Stamp opened_at (idempotent).
-  await markHyperSyncReviewOpened(admin as any, scheduleIdRaw).catch(() => {});
+  // Stamp opened_at on all aggregated schedules (idempotent).
+  const allIds = schedules.map((s) => s.schedule_id as unknown as string | bigint);
+  if (allIds.length === 1) {
+    await markHyperSyncReviewOpened(admin as any, allIds[0]).catch(() => {});
+  } else {
+    await markHyperSyncReviewsOpened(admin as any, allIds).catch(() => {});
+  }
 
   return {
     cards,
-    scheduleId: scheduleIdRaw,
-    totalUnknown: parsed.totalUnknown,
-    productSlug: parsed.productSlug,
-    sourceSessionId: parsed.sourceSessionId,
+    scheduleIds: allIds.map((id) => id.toString()),
+    totalUnknown: aggregatedCardIds.length,
+    productSlug,
+    sourceSessionId,
   };
 }
 
@@ -128,7 +184,7 @@ function playTtsOnce(text: string, lang: string) {
 // Component
 // ---------------------------------------------------------------------------
 
-type Phase = "front" | "back" | "flash" | "result";
+type Phase = "front" | "back" | "flash" | "chunk_done" | "result";
 
 interface RetryEntry {
   stage: CardEntry;
@@ -141,12 +197,19 @@ export default function HyperSyncReviewPage() {
   const navigate = useNavigate();
   const outcomeFetcher = useFetcher();
 
-  const initialQueue = useMemo<RetryEntry[]>(
-    () => cards.map((c) => ({ stage: c, step: 1 as RetryStep })),
+  // Split into ≤10-card chunks. When current chunk's queue empties, show
+  // the "다음 묶음" handoff screen unless this is the last chunk.
+  const chunks = useMemo<CardEntry[][]>(
+    () => chunkArray(cards, CHUNK_SIZE),
     [cards]
   );
 
-  const [queue, setQueue] = useState<RetryEntry[]>(initialQueue);
+  const [chunkIdx, setChunkIdx] = useState(0);
+  const currentChunk = chunks[chunkIdx] ?? [];
+
+  const [queue, setQueue] = useState<RetryEntry[]>(
+    () => currentChunk.map((c) => ({ stage: c, step: 1 as RetryStep }))
+  );
   const [phase, setPhase] = useState<Phase>("front");
   const [flashKind, setFlashKind] = useState<"known" | "unknown" | null>(null);
   const [timerTenths, setTimerTenths] = useState(BACK_TIMER_SEC * 10);
@@ -158,6 +221,20 @@ export default function HyperSyncReviewPage() {
 
   const current = queue[0] ?? null;
   const view = current ? getRetryCard(current.stage, current.step) : null;
+  const isLastChunk = chunkIdx >= chunks.length - 1;
+
+  // Reset per-chunk play state when moving to a new chunk.
+  const startChunk = useCallback(
+    (idx: number) => {
+      const next = chunks[idx] ?? [];
+      setChunkIdx(idx);
+      setQueue(next.map((c) => ({ stage: c, step: 1 as RetryStep })));
+      setPhase("front");
+      setFlashKind(null);
+      setTimerTenths(BACK_TIMER_SEC * 10);
+    },
+    [chunks]
+  );
 
   // ─── TTS on front entry ───────────────────────────────────────────────────
   useEffect(() => {
@@ -190,12 +267,17 @@ export default function HyperSyncReviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, current]);
 
-  // ─── result transition ────────────────────────────────────────────────────
+  // ─── chunk-done / result transition ───────────────────────────────────────
   useEffect(() => {
-    if (queue.length === 0 && phase !== "result") {
+    if (queue.length !== 0) return;
+    if (phase === "result" || phase === "chunk_done") return;
+    // Just finished current chunk.
+    if (isLastChunk) {
       setPhase("result");
+    } else {
+      setPhase("chunk_done");
     }
-  }, [queue.length, phase]);
+  }, [queue.length, phase, isLastChunk]);
 
   // ─── post review outcomes to SRS engine once on completion ────────────────
   useEffect(() => {
@@ -281,6 +363,45 @@ export default function HyperSyncReviewPage() {
     [current, phase]
   );
 
+  if (phase === "chunk_done") {
+    const nextIdx = chunkIdx + 1;
+    const nextChunkSize = chunks[nextIdx]?.length ?? 0;
+    const cardsRemaining = chunks
+      .slice(nextIdx)
+      .reduce((sum, c) => sum + c.length, 0);
+
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-[#f0f0f0]">
+        <HyperSyncHeader subtitle="hyper-sync / review" isAuthenticated={true} />
+        <main className="mx-auto w-full max-w-[680px] px-7 py-16 text-center">
+          <div className="mb-3 text-4xl">⚡</div>
+          <h2 className="mb-2 font-mono text-2xl">
+            묶음 {chunkIdx + 1} / {chunks.length} 완료
+          </h2>
+          <p className="mb-10 text-sm text-white/60">
+            {cardsRemaining}개 표현이 남았어요 · 다음 묶음은 {nextChunkSize}개
+          </p>
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={() => startChunk(nextIdx)}
+              className="rounded-lg bg-[#c8f564] px-6 py-3 font-mono text-xs font-bold text-[#0a0a0a] transition hover:opacity-90"
+            >
+              다음 묶음 시작 →
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/hyper-sync")}
+              className="rounded-lg border border-white/15 px-6 py-3 font-mono text-xs text-white/60 transition hover:border-white/40 hover:text-white"
+            >
+              나중에 이어하기
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (phase === "result") {
     const summary = outcomeFetcher.data?.summary as
       | {
@@ -359,7 +480,9 @@ export default function HyperSyncReviewPage() {
   }
 
   const progressPct = (completed / total) * 100;
-  const progressText = `복습 ${current.step}/5 · ${
+  const chunkPrefix =
+    chunks.length > 1 ? `묶음 ${chunkIdx + 1}/${chunks.length} · ` : "";
+  const progressText = `${chunkPrefix}복습 ${current.step}/5 · ${
     view.isExample ? "예문" : view.isFlipped ? "역방향" : "단어"
   }`;
 

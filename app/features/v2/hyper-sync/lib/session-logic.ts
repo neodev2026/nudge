@@ -116,3 +116,19 @@ export function nextMorningAt(timezone: string, hour: number): string {
 export function localSessionDate(timezone: string): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: timezone });
 }
+
+/**
+ * Splits an array into chunks of `size` (last chunk may be smaller).
+ * Used by the multi-schedule review page to paginate reviews into manageable
+ * batches (default 10 cards per chunk so each chunk stays in the "3분컷"
+ * promise even when total review volume is large).
+ */
+export function chunkArray<T>(items: T[], size: number): T[][] {
+  if (size <= 0) return [items.slice()];
+  if (items.length === 0) return [[]];
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
+  chunkArray,
   getRetryCard,
   nextMorningAt,
   localSessionDate,
@@ -142,5 +143,46 @@ describe("localSessionDate", () => {
   it("UTC user near midnight returns UTC date", () => {
     vi.setSystemTime(new Date("2026-05-18T23:55:00Z"));
     expect(localSessionDate("UTC")).toBe("2026-05-18");
+  });
+});
+
+describe("chunkArray — multi-schedule review pagination", () => {
+  it("splits exact multiple into equal chunks", () => {
+    const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    expect(chunkArray(items, 10)).toEqual([items]);
+    expect(chunkArray(items, 5)).toEqual([
+      [1, 2, 3, 4, 5],
+      [6, 7, 8, 9, 10],
+    ]);
+  });
+
+  it("last chunk is smaller when length not multiple of size", () => {
+    expect(chunkArray([1, 2, 3, 4, 5, 6, 7], 3)).toEqual([
+      [1, 2, 3],
+      [4, 5, 6],
+      [7],
+    ]);
+  });
+
+  it("size > length puts everything in one chunk", () => {
+    expect(chunkArray([1, 2, 3], 10)).toEqual([[1, 2, 3]]);
+  });
+
+  it("empty input returns a single empty chunk (caller's contract)", () => {
+    expect(chunkArray<number>([], 10)).toEqual([[]]);
+  });
+
+  it("size <= 0 returns single chunk with all items (defensive)", () => {
+    expect(chunkArray([1, 2, 3], 0)).toEqual([[1, 2, 3]]);
+    expect(chunkArray([1, 2, 3], -5)).toEqual([[1, 2, 3]]);
+  });
+
+  it("preserves order across chunks", () => {
+    const items = Array.from({ length: 25 }, (_, i) => i);
+    const chunks = chunkArray(items, 10);
+    expect(chunks.length).toBe(3);
+    expect(chunks[0]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(chunks[1]).toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+    expect(chunks[2]).toEqual([20, 21, 22, 23, 24]);
   });
 });

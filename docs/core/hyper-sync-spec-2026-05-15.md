@@ -41,6 +41,7 @@ v2.0에서 결정·교정된 항목입니다.
 | FB-3 | `shouldRevalidate` 범위 | 무조건 false (sessionId 변경에도 loader 차단) | **URL 변경 시 default, 동일 URL에서만 false**. sessionId 변경 시 state 리셋 effect 추가 | 결과 화면 [다음 미션] 클릭 시 페이지가 갱신되지 않던 버그 ([session-page](../../app/features/v2/hyper-sync/screens/hyper-sync-session-page.tsx)) |
 | FB-4 | 중복 enqueue 정책 | (미정) | **per-session schedule + card 단위 dedup**. 통합 알림은 보류 (§3.4) | 알림이 N건 분리되어 도착하는 부담은 인지. 베타 단계 수용 가능, 필요 시 향후 append 기반 단일 알림으로 전환 |
 | FB-5 | SRS box_level | Phase 1 보류 → **Phase 2 정식 구현** | 슬로건 "복습으로 기억 유지"의 필수 메커니즘. nv2_stage_progress 재사용 (신규 테이블 없음). §6.6 참조 | 단발 복습으로는 슬로건 약속 불충분. 사용자 멘탈모델 ("기억함 stage도 망각곡선 기반 복습")과 정렬 |
+| FB-6 | DM 묶음 전략 | per-card schedule = N개 DM | **Dispatch-time aggregation**: 같은 사용자의 due schedule들을 1개 DM에 합산 + 멀티 schedule URL (`/hyper-sync/review?ids=1,2,3`). Review 페이지에서 **10개씩 청크 페이지네이션** | "10개 미션 = 10개 DM" 문제 해결. 신규 테이블/cron 불필요 (Phase 2 Option B). 베타 단계에서 비용 최소 |
 
 ---
 
@@ -686,15 +687,16 @@ scheduled_at은 [nextMorningInDays(tz, 9, intervalDays)](../../app/features/v2/h
 
 #### 구현 산출물 (Phase 2)
 
-- [queries.server.ts](../../app/features/v2/hyper-sync/lib/queries.server.ts): `intervalDaysForRound`, `getStageProgressByStageIds`, `cardIdsToStageIds`, `cancelPendingSchedulesForCards`, `applyHyperSyncSessionOutcomes`, `applyHyperSyncReviewOutcomes`
-- [session-logic.ts](../../app/features/v2/hyper-sync/lib/session-logic.ts): `nextMorningInDays` 추가
+- [queries.server.ts](../../app/features/v2/hyper-sync/lib/queries.server.ts): `intervalDaysForRound`, `getStageProgressByStageIds`, `cardIdsToStageIds`, `cancelPendingSchedulesForCards`, `applyHyperSyncSessionOutcomes`, `applyHyperSyncReviewOutcomes`, `getHyperSyncReviewSchedules`, `markHyperSyncReviewsOpened`
+- [session-logic.ts](../../app/features/v2/hyper-sync/lib/session-logic.ts): `nextMorningInDays`, `chunkArray` 추가
 - [api/enqueue-review.tsx](../../app/features/v2/hyper-sync/api/enqueue-review.tsx): 모든 verdict (known + unknown) 수신, applyHyperSyncSessionOutcomes 호출
 - [api/record-review-outcome.tsx](../../app/features/v2/hyper-sync/api/record-review-outcome.tsx) (신규): 복습 결과 수신, applyHyperSyncReviewOutcomes 호출
-- [review-page](../../app/features/v2/hyper-sync/screens/hyper-sync-review-page.tsx): per-stage verdict 추적, 완료 시 POST, summary 표시
+- [review-page](../../app/features/v2/hyper-sync/screens/hyper-sync-review-page.tsx): 멀티 schedule URL 지원 (?ids=...), per-stage verdict 추적, **10개씩 청크 페이지네이션**, 완료 시 POST
 - [session-page](../../app/features/v2/hyper-sync/screens/hyper-sync-session-page.tsx): outcomes payload (known + unknown 모두 포함)
 - [discord.server.ts](../../app/features/v2/auth/lib/discord.server.ts) / [email.server.ts](../../app/features/v2/auth/lib/email.server.ts): `review_round` 파라미터 추가 → "복습 N회차" 표시
-- [dispatch.tsx](../../app/features/v2/cron/api/dispatch.tsx): `schedule.review_round` 를 senders에 전달
-- 단위 테스트: `tests/hyper-sync-srs.test.ts` (intervalDaysForRound, nextMorningInDays)
+- [dispatch.tsx](../../app/features/v2/cron/api/dispatch.tsx): **사용자별 hyper_sync_review 묶음 발송** + `schedule.review_round` 를 senders에 전달. `?schedule_id=N` force 모드는 단건 발송 유지 (회귀 테스트용)
+- [routes.ts](../../app/routes.ts): `/hyper-sync/review` (multi-id query) 추가, 기존 `/hyper-sync/review/:scheduleId` 유지 (legacy DM backward compat)
+- 단위 테스트: `tests/hyper-sync-srs.test.ts` (intervalDaysForRound, nextMorningInDays), `tests/hyper-sync-session-logic.test.ts` (chunkArray)
 
 ---
 

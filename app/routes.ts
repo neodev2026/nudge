@@ -164,6 +164,10 @@ export default [
     // Hyper-Sync screens (own minimal header — no v2-nav)
     route("/hyper-sync",                     "features/v2/hyper-sync/screens/hyper-sync-landing-page.tsx"),
     route("/hyper-sync/session",             "features/v2/hyper-sync/screens/hyper-sync-session-page.tsx"),
+    // Multi-schedule aggregated review (?ids=1,2,3). Used by new dispatch
+    // aggregation. The single-schedule route below stays for legacy DMs
+    // whose delivery_url was baked at INSERT time.
+    route("/hyper-sync/review",              "features/v2/hyper-sync/screens/hyper-sync-review-page.tsx", { id: "hyper-sync-review-multi" }),
     route("/hyper-sync/review/:scheduleId",  "features/v2/hyper-sync/screens/hyper-sync-review-page.tsx"),
 
     ...prefix("/legal", [

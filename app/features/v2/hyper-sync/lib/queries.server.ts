@@ -992,6 +992,32 @@ export async function getHyperSyncReviewSchedule(
 }
 
 /**
+ * Multi-id variant for aggregated review delivery (Option B).
+ * Returns only schedules the calling user owns. Filters out any unowned
+ * or non-hyper_sync_review rows defensively.
+ */
+export async function getHyperSyncReviewSchedules(
+  adminClient: SupabaseClient<Database>,
+  schedule_ids: (string | bigint)[],
+  auth_user_id: string
+) {
+  if (schedule_ids.length === 0) return [];
+  const numericIds = schedule_ids.map((id) => id as unknown as number);
+
+  const { data, error } = await adminClient
+    .from("nv2_schedules")
+    .select(
+      "schedule_id, auth_user_id, message_body, scheduled_at, sent_at, opened_at, status, review_round"
+    )
+    .in("schedule_id", numericIds)
+    .eq("schedule_type", "hyper_sync_review");
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).filter((row) => row.auth_user_id === auth_user_id);
+}
+
+/**
  * Stamps opened_at on a review schedule the first time the user lands on
  * the review page. No-op if already set.
  */
@@ -1003,6 +1029,22 @@ export async function markHyperSyncReviewOpened(
     .from("nv2_schedules")
     .update({ opened_at: new Date().toISOString() })
     .eq("schedule_id", schedule_id as unknown as number)
+    .is("opened_at", null);
+
+  if (error) throw new Error(error.message);
+}
+
+/** Bulk version — used by the multi-schedule review page. */
+export async function markHyperSyncReviewsOpened(
+  adminClient: SupabaseClient<Database>,
+  schedule_ids: (string | bigint)[]
+) {
+  if (schedule_ids.length === 0) return;
+  const numericIds = schedule_ids.map((id) => id as unknown as number);
+  const { error } = await adminClient
+    .from("nv2_schedules")
+    .update({ opened_at: new Date().toISOString() })
+    .in("schedule_id", numericIds)
     .is("opened_at", null);
 
   if (error) throw new Error(error.message);
