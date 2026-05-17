@@ -476,22 +476,38 @@ type CardEntry = { titleCard: TitleCard; exampleCard: ExampleCard | null };
   [처음으로]   → /hyper-sync
 ```
 
-### 5.4 복습 페이지 (`/hyper-sync/review/:scheduleId`)
+### 5.4 복습 페이지
 
-**Loader**:
-- `scheduleId` 파라미터로 `nv2_schedules` 조회
-- 로그인 사용자 본인 또는 service_role만 접근 (RLS)
-- `message_body`에서 `card_ids` 파싱
-- 해당 카드들의 데이터를 로드 (title 기준, example 동반)
-- 진입 시 schedule의 `opened_at` 업데이트
+v2.2부터 **두 URL 형태**를 모두 지원합니다 (FB-6).
 
-**진행 로직**:
-- §6의 5-step 복습 로직과 동일하나, 모든 카드가 처음부터 step 1로 시작
-- 일반 진행과 retry 진행의 구분 없음 — 전부 복습 모드
-- 완료 시 결과 화면 (인라인)
-- "내일 다시" 또는 "처음으로" 버튼
+| URL | 용도 |
+|---|---|
+| `/hyper-sync/review?ids=1,2,3,...` | **신규 — 묶음 발송용**. 여러 schedule을 합쳐서 진입 |
+| `/hyper-sync/review/:scheduleId` | **legacy** — Phase 1/2 초기에 발송된 단일 schedule DM의 backward compat |
 
-> 같은 카드를 다시 틀려도 Phase 1에서는 추가 복습 schedule을 enqueue하지 않음 (SRS 미적용 — §6.6).
+**Loader 동작**:
+- 두 URL 형태에서 schedule ID 목록 수집 (path param 또는 query)
+- 로그인 검증 (비로그인이면 `/login?next=...` 리다이렉트)
+- 모든 ID에 대해 소유 검증 (다른 사용자의 schedule은 조용히 제외)
+- 각 schedule의 `message_body`에서 cardIds 추출 후 **dedup하여 합산**
+- 카드 데이터 로드 (title + example pair)
+- 모든 schedule의 `opened_at` 업데이트 (idempotent)
+
+**진행 로직 — 10개씩 청크 페이지네이션**:
+- 합산된 카드를 [chunkArray(cards, 10)](../../app/features/v2/hyper-sync/lib/session-logic.ts) 으로 10개씩 분할
+- 청크 1개씩 진행 (5-step 복습 로직)
+- 청크 완료 시 → "묶음 N/M 완료 · K개 남음" 핸드오프 화면
+  - [다음 묶음 시작] / [나중에 이어하기] 버튼
+- 마지막 청크 완료 시 → 최종 결과 화면 (promoted/mastered/refreshed 요약)
+- 청크 1개일 때 (카드 ≤ 10) → 핸드오프 화면 없이 바로 결과
+- 진행 텍스트: 청크 ≥ 2일 때 `묶음 N/M · 복습 X/5 · 단어` 형식
+
+**카드 verdict (SRS-1 엄격)**:
+- step 1에서 [기억함] → pass
+- 그 외 모든 경로 → fail
+- 완료 시 모든 verdict을 한번에 [/api/v2/hyper-sync/record-review-outcome](../../app/features/v2/hyper-sync/api/record-review-outcome.tsx) 으로 POST
+
+> **현재 상태**: 청크 단위 중도 저장은 미지원 (사용자가 청크 중간에 닫으면 그 청크의 진행 손실). 베타 단계에서 수용 가능 — 사용자 피드백 누적 후 검토.
 
 ---
 
@@ -805,19 +821,30 @@ export async function enqueueHyperSyncReview(
 - **AC-4-6** [다음 미션] 클릭 시 `display_order` 기준 다음 `session_id` 진행 화면으로 이동. 마지막 미션이면 `/hyper-sync`로 이동.
 - **AC-4-7** [처음으로] 클릭 시 `/hyper-sync`로 이동.
 
-### Task 5: Discord 복습 발송
+### Task 5: Discord/이메일 복습 발송 (묶음 발송 — v2.2)
 
-- **AC-5-1** dispatch cron이 `hyper_sync_review` 타입 schedule을 픽업하여 Discord DM 또는 이메일로 발송.
+- **AC-5-1** dispatch cron이 같은 사용자의 **due hyper_sync_review schedule들을 묶어서 1개 DM/이메일로 발송**. 발송 URL은 `/hyper-sync/review?ids=N1,N2,N3,...` 형태.
 - **AC-5-2** `scheduled_at`은 사용자 `nv2_profiles.timezone` 기준 **다음 캘린더일 09:00** (UTC ISO). 완료 시각이 오후/저녁이어도 같은 날 발송되지 않음.
 - **AC-5-3** 채널 우선순위: Discord 연동 시 DM, 미연동/구독해제 시 이메일 폴백. 양쪽 모두 사용 불가일 때만 skip 처리 (`status='sent'`).
 - **AC-5-4** 같은 사용자에게 같은 카드가 중복 pending되지 않음 (enqueue dedup).
+- **AC-5-5** DM/이메일의 표시 round는 묶음 내 가장 시급한(가장 낮은) `review_round` 기준. "복습 N회차".
+- **AC-5-6** 묶음 발송 성공 시 그룹 내 **모든** schedule이 `status='sent'`로 마킹. 발송 실패 시 그룹 전체가 retry 큐로 (각각의 retry_count++).
+- **AC-5-7** `POST /api/v2/cron/dispatch?schedule_id=N` 강제 호출은 **묶음 발송을 우회**하고 단건 발송 (회귀 테스트용).
 
-### Task 6: 복습 페이지 (`/hyper-sync/review/:scheduleId`)
+### Task 6: 복습 페이지
 
-- **AC-6-1** Discord DM의 버튼 클릭 시 `/hyper-sync/review/:scheduleId`로 진입.
-- **AC-6-2** schedule 소유자(로그인 사용자) 외에는 접근 불가 (RLS).
-- **AC-6-3** message_body의 카드들을 5-step 복습 로직으로 진행.
-- **AC-6-4** 진입 시 `nv2_schedules.opened_at` 업데이트.
+URL 패턴 두 가지 모두 지원:
+- `/hyper-sync/review?ids=1,2,3` (신규, 묶음 발송용)
+- `/hyper-sync/review/:scheduleId` (legacy DM backward compat)
+
+- **AC-6-1** DM/이메일의 버튼 클릭 시 위 두 URL 중 하나로 진입. 모두 정상 동작.
+- **AC-6-2** schedule 소유자(로그인 사용자) 외에는 접근 불가 (RLS + loader 필터).
+- **AC-6-3** 모든 referenced schedule의 message_body에서 cardIds 합산 (dedup) → 5-step 복습 로직으로 진행.
+- **AC-6-4** 진입 시 모든 referenced schedule의 `opened_at` 일괄 업데이트.
+- **AC-6-5** 카드를 **10개씩 청크**로 분할. 청크 1개 (≤10) 일 때는 바로 결과 화면, 2개+ 일 때는 "묶음 N/M 완료" 핸드오프 화면을 거침.
+- **AC-6-6** 청크 진행 중 진행 텍스트는 `묶음 N/M · 복습 X/5 · 단어` 형식 (청크 1개일 때는 `묶음` prefix 생략).
+- **AC-6-7** [다음 묶음 시작] 클릭 시 다음 10개로 진행. [나중에 이어하기] 클릭 시 `/hyper-sync`로 이동.
+- **AC-6-8** 최종 결과 화면: 떠올린 표현 카운트, 다시 학습 필요 카운트, SRS 결과 요약 (promoted/mastered/refreshed).
 
 ### Task 7: 익명 세션
 
