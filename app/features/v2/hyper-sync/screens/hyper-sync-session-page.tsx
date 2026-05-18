@@ -40,7 +40,7 @@ import {
   type RetryStep,
 } from "../lib/session-logic";
 import { HyperSyncHeader } from "../components/hyper-sync-header";
-import { HYPER_SYNC_PRODUCT_SLUGS } from "./hyper-sync-landing-page";
+import { HYPER_SYNC_PRODUCT_SLUGS } from "../lib/products";
 
 const FRONT_DWELL_MS = 2000;
 const BACK_TIMER_SEC = 3;
