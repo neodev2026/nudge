@@ -73,8 +73,24 @@ export async function getHyperSyncProduct(
 ) {
   const { data, error } = await client
     .from("nv2_learning_products")
-    .select("id, name, slug, is_active")
+    .select("id, name, slug, is_active, category, meta")
     .eq("slug", slug)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Variant keyed by product id — used when validating a session URL. */
+export async function getHyperSyncProductById(
+  client: SupabaseClient<Database>,
+  product_id: string
+) {
+  const { data, error } = await client
+    .from("nv2_learning_products")
+    .select("id, name, slug, is_active, category, meta")
+    .eq("id", product_id)
     .eq("is_active", true)
     .maybeSingle();
 
@@ -179,6 +195,11 @@ function frontBack(row: RawCardRow): FrontBackCard | null {
   return { id: row.id, front, back };
 }
 
+/** Reads target_locale from the title card's meta with a safe fallback. */
+function targetLocaleOf(row: RawCardRow): string {
+  return row.card_data?.meta?.target_locale ?? "en";
+}
+
 /**
  * Returns CardEntry[] for a session, pairing each title card with its
  * matching example card (by parent stage). Order follows the session's
@@ -225,10 +246,15 @@ export async function getHyperSyncCards(
       .sort((a, b) => a.display_order - b.display_order)[0];
 
     const titleCard = title ? frontBack(title) : null;
-    if (!titleCard) continue;
+    if (!titleCard || !title) continue;
 
     const exampleCard = example ? frontBack(example) : null;
-    entries.push({ stageId: stage.id, titleCard, exampleCard });
+    entries.push({
+      stageId: stage.id,
+      targetLocale: targetLocaleOf(title),
+      titleCard,
+      exampleCard,
+    });
   }
 
   return entries;
@@ -289,7 +315,12 @@ export async function getHyperSyncCardsByIds(
       .sort((a, b) => a.display_order - b.display_order)[0];
     const exampleCard = example ? frontBack(example) : null;
 
-    result.push({ stageId: titleRow.stage_id, titleCard, exampleCard });
+    result.push({
+      stageId: titleRow.stage_id,
+      targetLocale: targetLocaleOf(titleRow as unknown as RawCardRow),
+      titleCard,
+      exampleCard,
+    });
   }
 
   return result;

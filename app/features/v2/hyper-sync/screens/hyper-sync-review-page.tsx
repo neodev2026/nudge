@@ -28,6 +28,7 @@ import { parseHyperSyncMessageBody } from "../lib/message-body";
 import {
   chunkArray,
   getRetryCard,
+  getTtsLang,
   type CardEntry,
   type RetryStep,
 } from "../lib/session-logic";
@@ -238,10 +239,10 @@ export default function HyperSyncReviewPage() {
 
   // ─── TTS on front entry ───────────────────────────────────────────────────
   useEffect(() => {
-    if (phase !== "front" || !view) return;
-    const lang = view.isFlipped ? "ko-KR" : "en-US";
+    if (phase !== "front" || !view || !current) return;
+    const lang = getTtsLang(current.stage.targetLocale, view.isFlipped);
     playTtsOnce(view.card.front, lang);
-  }, [phase, view]);
+  }, [phase, view, current]);
 
   // ─── front → back auto-advance ────────────────────────────────────────────
   useEffect(() => {

@@ -29,22 +29,22 @@ import type { LoaderFunctionArgs, ShouldRevalidateFunction } from "react-router"
 import makeServerClient from "~/core/lib/supa-client.server";
 import {
   getHyperSyncCards,
-  getHyperSyncProduct,
+  getHyperSyncProductById,
   getNextHyperSyncMission,
 } from "../lib/queries.server";
 import {
   getRetryCard,
+  getTtsLang,
   localSessionDate,
   type CardEntry,
   type RetryStep,
 } from "../lib/session-logic";
 import { HyperSyncHeader } from "../components/hyper-sync-header";
+import { HYPER_SYNC_PRODUCT_SLUGS } from "./hyper-sync-landing-page";
 
 const FRONT_DWELL_MS = 2000;
 const BACK_TIMER_SEC = 3;
 const FLASH_MS = 400;
-
-const PRODUCT_SLUG = "developer-english";
 
 // ---------------------------------------------------------------------------
 // Loader — fetch cards, shuffle on server, detect login
@@ -70,8 +70,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     data: { user },
   } = await client.auth.getUser();
 
-  const product = await getHyperSyncProduct(client as any, PRODUCT_SLUG);
-  if (!product || product.id !== productId) throw redirect("/hyper-sync");
+  // Validate productId resolves to one of the hyper-sync products.
+  const product = await getHyperSyncProductById(client as any, productId);
+  if (!product) throw redirect("/hyper-sync");
+  if (!HYPER_SYNC_PRODUCT_SLUGS.includes(product.slug as any)) {
+    throw redirect("/hyper-sync");
+  }
 
   const cardsRaw = await getHyperSyncCards(client as any, sessionId);
   if (cardsRaw.length === 0) throw redirect("/hyper-sync");
@@ -256,9 +260,10 @@ export default function HyperSyncSessionPage() {
   // ─── TTS auto-play on front entry ─────────────────────────────────────────
   useEffect(() => {
     if (phase !== "front" || !currentView) return;
-    const lang = currentView.view.isFlipped
-      ? "ko-KR"
-      : "en-US"; // developer-english only — target_locale is always 'en'
+    const lang = getTtsLang(
+      currentView.stage.targetLocale,
+      currentView.view.isFlipped
+    );
     playTtsOnce(currentView.view.card.front, lang);
   }, [phase, currentView]);
 

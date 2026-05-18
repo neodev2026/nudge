@@ -11,8 +11,39 @@ export interface FrontBackCard {
 
 export interface CardEntry {
   stageId: string;
+  /** card_data.meta.target_locale of the title card (e.g. "en", "de"). */
+  targetLocale: string;
   titleCard: FrontBackCard;
   exampleCard: FrontBackCard | null;
+}
+
+// ---------------------------------------------------------------------------
+// TTS — language resolution (shared by session + review pages)
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps card_data.meta.target_locale (ISO-639-1) to Web Speech API lang tags.
+ * Kept in sync with the marathon-page TTS_LANG_MAP for consistency.
+ */
+export const TTS_LANG_MAP: Record<string, string> = {
+  de: "de-DE",
+  en: "en-US",
+  ja: "ja-JP",
+  ko: "ko-KR",
+  fr: "fr-FR",
+  es: "es-ES",
+};
+
+/**
+ * Resolves the BCP-47 lang tag for a given card view.
+ *
+ * For reversed cards (step 2/4 of the 5-step retry) the front face shows the
+ * Korean meaning, so TTS reads it as ko-KR regardless of the stage's target
+ * locale. Otherwise the stage's target locale drives the lang.
+ */
+export function getTtsLang(targetLocale: string, isFlipped: boolean): string {
+  if (isFlipped) return "ko-KR";
+  return TTS_LANG_MAP[targetLocale] ?? "en-US";
 }
 
 export type RetryStep = 1 | 2 | 3 | 4 | 5;

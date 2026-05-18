@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   chunkArray,
   getRetryCard,
+  getTtsLang,
   nextMorningAt,
   localSessionDate,
   type CardEntry,
@@ -9,6 +10,7 @@ import {
 
 const stage: CardEntry = {
   stageId: "s1",
+  targetLocale: "en",
   titleCard: { id: "t1", front: "reduce latency", back: "지연 시간을 줄이다" },
   exampleCard: {
     id: "e1",
@@ -19,6 +21,7 @@ const stage: CardEntry = {
 
 const stageNoExample: CardEntry = {
   stageId: "s2",
+  targetLocale: "en",
   titleCard: { id: "t2", front: "bottleneck", back: "병목 지점" },
   exampleCard: null,
 };
@@ -184,5 +187,27 @@ describe("chunkArray — multi-schedule review pagination", () => {
     expect(chunks[0]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(chunks[1]).toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
     expect(chunks[2]).toEqual([20, 21, 22, 23, 24]);
+  });
+});
+
+describe("getTtsLang — locale resolution", () => {
+  it("returns target-locale BCP-47 tag when not flipped", () => {
+    expect(getTtsLang("en", false)).toBe("en-US");
+    expect(getTtsLang("de", false)).toBe("de-DE");
+    expect(getTtsLang("ja", false)).toBe("ja-JP");
+    expect(getTtsLang("es", false)).toBe("es-ES");
+    expect(getTtsLang("fr", false)).toBe("fr-FR");
+  });
+
+  it("falls back to en-US for unknown locale", () => {
+    expect(getTtsLang("zz", false)).toBe("en-US");
+    expect(getTtsLang("", false)).toBe("en-US");
+  });
+
+  it("returns ko-KR for any flipped card (front shows Korean meaning)", () => {
+    expect(getTtsLang("en", true)).toBe("ko-KR");
+    expect(getTtsLang("de", true)).toBe("ko-KR");
+    expect(getTtsLang("ja", true)).toBe("ko-KR");
+    expect(getTtsLang("zz", true)).toBe("ko-KR");
   });
 });
