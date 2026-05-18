@@ -13,7 +13,6 @@
     "app/features/home",
     "app/features/learning-card",
     "app/features/learning-product",
-    "app/features/lite",
     "app/features/payments",
     "app/features/user-sns-connection",
     "app/features/users",

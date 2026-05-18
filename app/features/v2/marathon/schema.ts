@@ -182,6 +182,33 @@ export const nv2_marathon_seasons = pgTable(
   (t) => [
     check("starts_before_ends", sql`${t.starts_at} < ${t.ends_at}`),
     index("nv2_marathon_seasons_starts_at_idx").on(t.starts_at),
+
+    pgPolicy("nv2_marathon_seasons_select_public", {
+      for: "select",
+      to: "public",
+      using: sql`true`,
+    }),
+    pgPolicy("nv2_marathon_seasons_insert_admin", {
+      for: "insert",
+      to: authenticatedRole,
+      withCheck: isAdmin,
+    }),
+    pgPolicy("nv2_marathon_seasons_update_admin", {
+      for: "update",
+      to: authenticatedRole,
+      using: isAdmin,
+      withCheck: isAdmin,
+    }),
+    pgPolicy("nv2_marathon_seasons_delete_admin", {
+      for: "delete",
+      to: authenticatedRole,
+      using: isAdmin,
+    }),
+    pgPolicy("nv2_marathon_seasons_service_all", {
+      for: "all",
+      to: "service_role",
+      using: sql`true`,
+    }),
   ]
 );
 

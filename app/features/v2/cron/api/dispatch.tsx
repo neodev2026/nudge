@@ -41,11 +41,16 @@ export async function action({ request }: Route.ActionArgs) {
     markCronScheduleSent,
     markCronScheduleFailedOrRetry,
   } = await import("../lib/queries.server");
-  const { sendSessionDm, sendCheerDm, sendMarathonNudgeDm } = await import(
+  const { sendSessionDm, sendCheerDm, sendMarathonNudgeDm, sendHyperSyncReviewDm } = await import(
     "~/features/v2/auth/lib/discord.server"
   );
-  const { sendSessionEmail, sendMarathonNudgeEmail } = await import(
-    "~/features/v2/auth/lib/email.server"
+  const {
+    sendSessionEmail,
+    sendMarathonNudgeEmail,
+    sendHyperSyncReviewEmail,
+  } = await import("~/features/v2/auth/lib/email.server");
+  const { parseHyperSyncMessageBody } = await import(
+    "~/features/v2/hyper-sync/lib/message-body"
   );
 
   const client = createClient(
@@ -97,7 +102,113 @@ export async function action({ request }: Route.ActionArgs) {
       profile_map[p.auth_user_id] = p;
     }
 
+    // ── Hyper-Sync review aggregation (Option B) ─────────────────────────
+    // For normal dispatch, group all due hyper_sync_review schedules by
+    // auth_user_id and send a single DM/email per user with a multi-id
+    // review URL. For force-test mode (?schedule_id=N), skip aggregation
+    // so the single-schedule path can be exercised.
+    const hsr_skip_ids = new Set<string>();
+    const is_force_mode = force_schedule_id !== null;
+
+    if (!is_force_mode) {
+      const hsr_groups = new Map<string, typeof pending>();
+      for (const s of pending) {
+        if (s.schedule_type === ("hyper_sync_review" as any)) {
+          const arr = hsr_groups.get(s.auth_user_id) ?? [];
+          arr.push(s);
+          hsr_groups.set(s.auth_user_id, arr);
+        }
+      }
+
+      for (const [user_id, group] of hsr_groups) {
+        // Mark for skip in main loop regardless of outcome.
+        for (const s of group) hsr_skip_ids.add(String(s.schedule_id));
+
+        const profile = profile_map[user_id] ?? null;
+        const discord_id = profile?.discord_id ?? null;
+        const discord_unsubscribed = profile?.discord_dm_unsubscribed ?? false;
+        const email = profile?.email ?? null;
+        const email_unsubscribed = profile?.email_unsubscribed ?? false;
+        const use_discord = discord_id !== null && !discord_unsubscribed;
+        const use_email = !use_discord && email !== null && !email_unsubscribed;
+
+        // Aggregate metrics across the group.
+        let total_cards = 0;
+        let dominant_round: number | null = null;
+        for (const s of group) {
+          const parsed = parseHyperSyncMessageBody(s.message_body);
+          total_cards +=
+            parsed?.totalUnknown ?? parsed?.cardIds.length ?? 0;
+          const r = (s as any).review_round;
+          if (r && (dominant_round === null || r < dominant_round)) {
+            dominant_round = r;
+          }
+        }
+
+        const origin = new URL(request.url).origin;
+        const aggregated_url = `${origin}/hyper-sync/review?ids=${group
+          .map((s) => s.schedule_id)
+          .join(",")}`;
+
+        try {
+          if (use_discord) {
+            await sendHyperSyncReviewDm(
+              discord_id!,
+              aggregated_url,
+              total_cards,
+              dominant_round
+            );
+          } else if (use_email) {
+            await sendHyperSyncReviewEmail(
+              email!,
+              aggregated_url,
+              total_cards,
+              dominant_round
+            );
+          } else {
+            // No channel — mark all in group as sent (skipped).
+            for (const s of group) {
+              await markCronScheduleSent(
+                client as any,
+                s.schedule_id as unknown as bigint
+              );
+              results.skipped++;
+            }
+            continue;
+          }
+
+          // Mark every peer schedule as sent (one logical delivery).
+          for (const s of group) {
+            await markCronScheduleSent(
+              client as any,
+              s.schedule_id as unknown as bigint
+            );
+          }
+          results.sent++;
+        } catch (err: any) {
+          const msg = err?.message ?? "unknown error";
+          results.errors.push(`hsr group user=${user_id}: ${msg}`);
+          for (const s of group) {
+            const retry = (s as any).retry_count ?? 0;
+            const max = (s as any).max_retries ?? 3;
+            await markCronScheduleFailedOrRetry(
+              client as any,
+              s.schedule_id as unknown as bigint,
+              msg,
+              retry,
+              max
+            ).catch(() => {});
+            if (retry + 1 >= max) results.failed++;
+            else results.retrying++;
+          }
+        }
+      }
+    }
+
     for (const schedule of pending) {
+      // Skip schedules already handled by HSR aggregation above.
+      if (hsr_skip_ids.has(String(schedule.schedule_id))) continue;
+
       const schedule_id = schedule.schedule_id as unknown as bigint;
       const profile = profile_map[schedule.auth_user_id] ?? null;
 
@@ -212,6 +323,33 @@ export async function action({ request }: Route.ActionArgs) {
             throw new Error(
               `No delivery channel for auth_user_id=${schedule.auth_user_id}`
             );
+          }
+        } else if (schedule.schedule_type === ("hyper_sync_review" as any)) {
+          // message_body format: "hyper_sync|{slug}|{session_id}|{card_ids}|{total}"
+          // Prefer Discord DM; fall back to email when Discord isn't connected
+          // (or unsubscribed). Skip only when neither channel is available.
+          const parsed = parseHyperSyncMessageBody(schedule.message_body);
+          const total_unknown = parsed?.totalUnknown ?? parsed?.cardIds.length ?? 0;
+          const review_round = (schedule as any).review_round ?? null;
+
+          if (use_discord) {
+            await sendHyperSyncReviewDm(
+              discord_id!,
+              schedule.delivery_url,
+              total_unknown,
+              review_round
+            );
+          } else if (use_email) {
+            await sendHyperSyncReviewEmail(
+              email!,
+              schedule.delivery_url,
+              total_unknown,
+              review_round
+            );
+          } else {
+            await markCronScheduleSent(client as any, schedule_id);
+            results.skipped++;
+            continue;
           }
         } else {
           // new / review / welcome

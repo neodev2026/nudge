@@ -61,6 +61,11 @@ export default [
 
       // Feedback
       route("/feedback/submit", "features/v2/feedback/api/submit.tsx"),
+
+      // Hyper-Sync API
+      route("/hyper-sync/save-result",           "features/v2/hyper-sync/api/save-result.tsx"),
+      route("/hyper-sync/enqueue-review",        "features/v2/hyper-sync/api/enqueue-review.tsx"),
+      route("/hyper-sync/record-review-outcome", "features/v2/hyper-sync/api/record-review-outcome.tsx"),
     ]),
   ]),
 
@@ -109,6 +114,29 @@ export default [
     route("/products/:slug",          "features/v2/products/screens/product-detail-page.tsx"),
     route("/my-learning",             "features/v2/products/screens/my-learning-page.tsx"),
 
+    // Language roadmap pages
+    route("/languages/de",       "features/v2/languages/screens/de-roadmap-page.tsx"),
+    route("/languages/de/abc",   "features/v2/languages/screens/de-abc-page.tsx"),
+    route("/languages/de/a1",    "features/v2/languages/screens/de-a1-page.tsx"),
+    route("/languages/de/a2",    "features/v2/languages/screens/de-a2-page.tsx"),
+    route("/languages/de/b1",    "features/v2/languages/screens/de-b1-page.tsx"),
+    route("/languages/de/b2",    "features/v2/languages/screens/de-b2-page.tsx"),
+
+    // Spanish language roadmap pages
+    route("/languages/es",       "features/v2/languages/screens/es-roadmap-page.tsx"),
+    route("/languages/es/abc",   "features/v2/languages/screens/es-abc-page.tsx"),
+    route("/languages/es/a1",    "features/v2/languages/screens/es-a1-page.tsx"),
+    route("/languages/es/a2",    "features/v2/languages/screens/es-a2-page.tsx"),
+    route("/languages/es/b1",    "features/v2/languages/screens/es-b1-page.tsx"),
+    route("/languages/es/b2",    "features/v2/languages/screens/es-b2-page.tsx"),
+
+    // English language roadmap pages
+    route("/languages/en",       "features/v2/languages/screens/en-roadmap-page.tsx"),
+    route("/languages/en/a1",    "features/v2/languages/screens/en-a1-page.tsx"),
+    route("/languages/en/a2",    "features/v2/languages/screens/en-a2-page.tsx"),
+    route("/languages/en/b1",    "features/v2/languages/screens/en-b1-page.tsx"),
+    route("/languages/en/b2",    "features/v2/languages/screens/en-b2-page.tsx"),
+
     // v2 auth pages
     route("/login",   "features/v2/auth/screens/login.tsx"),
     route("/join",    "features/v2/auth/screens/join.tsx"),
@@ -132,6 +160,15 @@ export default [
     route("/products/:slug/marathon",                         "features/v2/marathon/screens/marathon-page.tsx"),
     route("/products/:slug/marathon/:runId/resume",           "features/v2/marathon/screens/marathon-resume-page.tsx"),
     route("/products/:slug/marathon/result/:runId",           "features/v2/marathon/screens/marathon-result-page.tsx"),
+
+    // Hyper-Sync screens (own minimal header — no v2-nav)
+    route("/hyper-sync",                     "features/v2/hyper-sync/screens/hyper-sync-landing-page.tsx"),
+    route("/hyper-sync/session",             "features/v2/hyper-sync/screens/hyper-sync-session-page.tsx"),
+    // Multi-schedule aggregated review (?ids=1,2,3). Used by new dispatch
+    // aggregation. The single-schedule route below stays for legacy DMs
+    // whose delivery_url was baked at INSERT time.
+    route("/hyper-sync/review",              "features/v2/hyper-sync/screens/hyper-sync-review-page.tsx", { id: "hyper-sync-review-multi" }),
+    route("/hyper-sync/review/:scheduleId",  "features/v2/hyper-sync/screens/hyper-sync-review-page.tsx"),
 
     ...prefix("/legal", [
       route("/:slug", "features/legal/screens/policy.tsx"),
