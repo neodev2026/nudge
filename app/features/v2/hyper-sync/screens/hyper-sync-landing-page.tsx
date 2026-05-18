@@ -23,6 +23,7 @@ import { HyperSyncHeader } from "../components/hyper-sync-header";
 export const HYPER_SYNC_PRODUCT_SLUGS = [
   "developer-english",
   "deutsch-alltag-und-beruf-a2",
+  "deutsch-alltag-und-beruf-b1",
 ] as const;
 
 interface ProductBoxData {
