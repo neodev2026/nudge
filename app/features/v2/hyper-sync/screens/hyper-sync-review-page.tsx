@@ -339,36 +339,44 @@ export default function HyperSyncReviewPage() {
       setFlashKind(known ? "known" : "unknown");
       setPhase("flash");
 
+      // Snapshot the decision NOW (outside any state updater) so the
+      // side-effect setState calls below don't end up nested inside a
+      // setQueue updater. Nested setState inside a state updater fires
+      // twice under React 19 StrictMode because the updater is invoked
+      // twice in dev — which double-incremented `completed` (and so the
+      // chunk-local progress bar maxed out before all cards dropped).
+      const head = current;
+      const stageId = head.stage.stageId;
+      const isKnownAtStep1 = known && head.step === 1;
+      const exhausted = !known && head.step === 5;
+      const willDrop = known || exhausted;
+
       setTimeout(() => {
         setFlashKind(null);
-        setQueue((q) => {
-          const head = q[0];
-          if (!head) return q;
-          const stageId = head.stage.stageId;
 
-          // Decide drop vs advance, and the SRS verdict on drop.
-          // SRS-1 strict: pass = first-attempt [기억함] only.
-          const isKnownAtStep1 = known && head.step === 1;
-          const exhausted = !known && head.step === 5;
-          const willDrop = known || exhausted;
+        if (willDrop) {
+          // Three independent state updates, no nesting. Each is its own
+          // pure updater so StrictMode's double-invocation is harmless.
+          setVerdicts((prev) => {
+            const next = new Map(prev);
+            next.set(stageId, isKnownAtStep1);
+            return next;
+          });
+          setCompleted((c) => c + 1);
+          setQueue((q) => (q.length > 0 ? q.slice(1) : q));
+        } else {
+          // [기억못함] at step 1~4 → advance step. Functional updater is
+          // pure (no side effects), so double-invocation is fine.
+          setQueue((q) => {
+            if (q.length === 0) return q;
+            const h = q[0];
+            return [
+              { stage: h.stage, step: (h.step + 1) as RetryStep },
+              ...q.slice(1),
+            ];
+          });
+        }
 
-          if (willDrop) {
-            const passed = isKnownAtStep1;
-            setVerdicts((prev) => {
-              const next = new Map(prev);
-              next.set(stageId, passed);
-              return next;
-            });
-            setCompleted((c) => c + 1);
-            return q.slice(1);
-          }
-
-          // [기억못함] at step 1~4 → advance step.
-          return [
-            { stage: head.stage, step: (head.step + 1) as RetryStep },
-            ...q.slice(1),
-          ];
-        });
         setPhase("front");
       }, FLASH_MS);
     },
