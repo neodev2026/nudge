@@ -185,7 +185,10 @@ function playTtsOnce(text: string, lang: string) {
 // Component
 // ---------------------------------------------------------------------------
 
-type Phase = "front" | "back" | "flash" | "chunk_done" | "result";
+type Phase = "ready" | "front" | "back" | "flash" | "chunk_done" | "result";
+
+/** Rough per-chunk duration estimate (matches the "3분 컷" slogan). */
+const CHUNK_MINUTES_ESTIMATE = 3;
 
 interface RetryEntry {
   stage: CardEntry;
@@ -211,7 +214,12 @@ export default function HyperSyncReviewPage() {
   const [queue, setQueue] = useState<RetryEntry[]>(
     () => currentChunk.map((c) => ({ stage: c, step: 1 as RetryStep }))
   );
-  const [phase, setPhase] = useState<Phase>("front");
+  // Start in "ready" so the user gets a prep screen with a Start button.
+  // The button click serves two purposes: (1) user-controlled pace, and
+  // (2) on-page user gesture that unlocks speechSynthesis (which is
+  // otherwise blocked on first speech after cross-origin navigation,
+  // e.g. arriving via Discord/email DM).
+  const [phase, setPhase] = useState<Phase>("ready");
   const [flashKind, setFlashKind] = useState<"known" | "unknown" | null>(null);
   const [timerTenths, setTimerTenths] = useState(BACK_TIMER_SEC * 10);
   const [completed, setCompleted] = useState(0);
@@ -363,6 +371,77 @@ export default function HyperSyncReviewPage() {
     },
     [current, phase]
   );
+
+  if (phase === "ready") {
+    const handleStart = () => {
+      // TTS unlock — speech APIs require user-initiated speech on first
+      // use after cross-origin navigation. Speaking an empty utterance
+      // synchronously inside the click handler is enough to "unlock"
+      // subsequent automatic speak() calls (the empty utterance plays
+      // inaudibly thanks to volume=0).
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        const unlock = new SpeechSynthesisUtterance("");
+        unlock.volume = 0;
+        try {
+          window.speechSynthesis.speak(unlock);
+        } catch {
+          /* some browsers throw on empty utterance — non-fatal */
+        }
+      }
+      setPhase("front");
+    };
+
+    const estimatedMin = chunks.length * CHUNK_MINUTES_ESTIMATE;
+    const isMultiChunk = chunks.length > 1;
+
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-[#f0f0f0]">
+        <HyperSyncHeader subtitle="hyper-sync / review" isAuthenticated={true} />
+        <main className="mx-auto flex w-full max-w-[680px] flex-col items-center px-7 py-16 text-center">
+          <div className="mb-4 text-5xl">🔁</div>
+          <h2 className="mb-2 font-mono text-2xl">복습 준비</h2>
+          <p className="mb-10 text-sm leading-relaxed text-white/60">
+            어제 표시한 표현을 다시 떠올려봐요.<br />
+            준비되면 시작 버튼을 눌러주세요.
+          </p>
+
+          <div className="mb-10 grid w-full grid-cols-2 gap-3">
+            <div className="rounded-lg border border-white/10 bg-[#111111] px-4 py-4">
+              <div className="mb-1 font-mono text-[11px] tracking-wider text-white/40">
+                복습할 표현
+              </div>
+              <div className="font-mono text-2xl font-bold">
+                {total}
+                <span className="ml-1 text-sm font-normal text-white/60">개</span>
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-[#111111] px-4 py-4">
+              <div className="mb-1 font-mono text-[11px] tracking-wider text-white/40">
+                예상 소요 시간
+              </div>
+              <div className="font-mono text-2xl font-bold">
+                약 {estimatedMin}
+                <span className="ml-1 text-sm font-normal text-white/60">분</span>
+              </div>
+              {isMultiChunk && (
+                <div className="mt-1 font-mono text-[10px] text-white/40">
+                  {chunks.length}개 묶음
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleStart}
+            className="w-full max-w-[280px] rounded-lg bg-[#c8f564] px-6 py-3.5 font-mono text-sm font-bold tracking-wider text-[#0a0a0a] transition hover:opacity-90"
+          >
+            복습 시작 →
+          </button>
+        </main>
+      </div>
+    );
+  }
 
   if (phase === "chunk_done") {
     const nextIdx = chunkIdx + 1;
