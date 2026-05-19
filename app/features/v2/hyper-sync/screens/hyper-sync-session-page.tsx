@@ -770,9 +770,28 @@ function DiscordCta({
   const ok = enqueueData?.ok === true;
   const skipped = enqueueData?.skipped === true;
 
+  // While the enqueue is in flight, render a prominent pulsing notice so
+  // the user stays on the page until the schedule actually lands. Leaving
+  // mid-flight means the daily DM may not get enqueued.
+  if (inFlight) {
+    return (
+      <div
+        className="mb-7 flex animate-pulse items-center justify-center gap-3 rounded-xl border border-[#c8f564]/40 bg-[#c8f564]/10 px-6 py-5 text-[#c8f564]"
+        role="status"
+        aria-live="polite"
+      >
+        <span className="text-2xl">⏳</span>
+        <p className="text-sm font-semibold leading-relaxed">
+          복습 예약 중입니다.
+          <br />
+          잠시만 기다려주세요.
+        </p>
+      </div>
+    );
+  }
+
   let body: string;
-  if (inFlight) body = "복습 예약 중…";
-  else if (ok) body = `✓ ${unknownCount}개 표현이 내일 아침 Discord로 예약됐어요.`;
+  if (ok) body = `✓ ${unknownCount}개 표현이 내일 아침 Discord로 예약됐어요.`;
   else if (skipped) body = "이미 예약된 표현입니다. 내일 아침 Discord를 확인하세요.";
   else body = `${unknownCount}개 표현을 내일 아침 Discord로 받을 수 있어요.`;
 

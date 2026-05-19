@@ -524,7 +524,18 @@ export default function HyperSyncReviewPage() {
           </div>
 
           {inFlight ? (
-            <p className="mb-8 text-xs text-white/40">복습 일정 갱신 중…</p>
+            <div
+              className="mb-8 flex animate-pulse items-center justify-center gap-3 rounded-xl border border-[#c8f564]/40 bg-[#c8f564]/10 px-6 py-5 text-[#c8f564]"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="text-2xl">⏳</span>
+              <p className="text-sm font-semibold leading-relaxed">
+                복습 일정 갱신 중입니다.
+                <br />
+                잠시만 기다려주세요.
+              </p>
+            </div>
           ) : summary ? (
             <div className="mb-8 rounded-xl border border-[#c8f564]/25 bg-[#c8f564]/10 px-5 py-4 text-left text-xs leading-relaxed text-[#c8f564]">
               {summary.mastered > 0 && (
