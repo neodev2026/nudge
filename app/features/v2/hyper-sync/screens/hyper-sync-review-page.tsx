@@ -233,6 +233,8 @@ export default function HyperSyncReviewPage() {
   const isLastChunk = chunkIdx >= chunks.length - 1;
 
   // Reset per-chunk play state when moving to a new chunk.
+  // Note: `completed` is scoped to the current chunk so the progress bar
+  // restarts at 0% each chunk (matches the "묶음 N/M" text label).
   const startChunk = useCallback(
     (idx: number) => {
       const next = chunks[idx] ?? [];
@@ -241,6 +243,7 @@ export default function HyperSyncReviewPage() {
       setPhase("front");
       setFlashKind(null);
       setTimerTenths(BACK_TIMER_SEC * 10);
+      setCompleted(0);
     },
     [chunks]
   );
@@ -570,7 +573,12 @@ export default function HyperSyncReviewPage() {
     );
   }
 
-  const progressPct = (completed / total) * 100;
+  // Progress bar is chunk-local — resets at every new chunk so the bar
+  // doesn't appear nearly-full when stepping into the next chunk's first
+  // card. The "묶음 N/M" prefix in progressText already conveys overall
+  // position across chunks.
+  const chunkSize = currentChunk.length;
+  const progressPct = chunkSize > 0 ? (completed / chunkSize) * 100 : 0;
   const chunkPrefix =
     chunks.length > 1 ? `묶음 ${chunkIdx + 1}/${chunks.length} · ` : "";
   const progressText = `${chunkPrefix}복습 ${current.step}/5 · ${
