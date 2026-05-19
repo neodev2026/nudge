@@ -123,11 +123,11 @@
 | H-10b | 이메일 폴백 — Discord 미연동 | 이메일만 있는 테스트 계정 schedule을 같은 방식으로 dispatch | 테스트 이메일로 복습 메일 수신, `status='sent'` | |
 | H-11 | 복습 페이지 진입 | DM/이메일의 [복습 시작] 버튼 클릭 | `/hyper-sync/review/:scheduleId` 진입, 5-step 복습 시작. DB `opened_at` 업데이트 | |
 | H-12 | 다음 미션 이동 | 결과 화면 [다음 미션] 클릭 | 다음 `session_number` 미션의 진행 화면으로 이동. 상태가 깨끗하게 초기화되어 1번 카드부터 시작 | |
-| H-13 | 중복 enqueue 방지 | (A,B,C)가 pending인 상태에서 다른 미션에서 (B,C,D) 기억못함 → enqueue 호출 | 새 schedule row 1건 추가 (cardIds=[D]), 기존 row와 별도 존재 | |
+| H-13 | SRS refresh — pending stage 재실패 | stage S가 r2_pending(또는 r3/r4) 상태에서 그 stage를 포함하는 미션을 재실행하고 S에 [기억못함] | 기존 schedule row → `status='failed'`, `error_message='superseded_by_srs_refresh'`. 신규 row → `review_round=1`, scheduled +1일, retry_count++ | |
 | H-14 | 비로그인 헤더 CTA | localStorage 초기화 후 `/hyper-sync` 접속 | 헤더 우측에 [로그인], [회원가입] 버튼 표시. 로그인 후 사라짐 | |
 | H-15 | SRS — 첫 세션 [기억함] → r2_pending | 로그인 + 새 stage에서 step 1 [기억함] 후 DB 확인 | `nv2_stage_progress` row: `review_status='r2_pending'`, `review_round=2`. `nv2_schedules` row 1건: `review_round=2`, `scheduled_at` ≈ 사용자 tz 기준 3일 후 09:00 | |
 | H-16 | SRS — 복습 step 1 pass → 다음 round 진입 | r1 schedule 강제 dispatch → DM/이메일 → 클릭 → review에서 step 1 [기억함] | progress: `r1→r2_pending`, `review_round=2`. 새 schedule: `review_round=2`, scheduled +3일. 결과 화면에 "↑ 1개 표현이 다음 단계로 이동" 표시 | |
-| H-17 | SRS — mastered + 기억못함 → r1 강등 | r4_pending 통과해 mastered인 stage가 미션에 노출됐을 때 [기억못함] 처리 (수동: DB로 stage를 mastered 상태로 만든 뒤 시작) | progress: `mastered → r1_pending`, retry_count++. 새 schedule: `review_round=1`, scheduled +1일 | |
+| H-17 | SRS — mastered + 기억못함 → r1 강등 | DB로 임의 stage를 mastered 상태로 강제 설정 → **그 stage를 포함하는 미션을 재실행**하여 카드 노출 → [기억못함] 처리 | progress: `mastered → r1_pending`, retry_count++. 새 schedule: `review_round=1`, scheduled +1일 | |
 | H-18 | Dispatch 묶음 발송 | 같은 사용자에게 hyper_sync_review pending 2건 이상 만든 후 `POST /api/v2/cron/dispatch` (force 없이) 호출 | DM 1통만 도착. 본문에 합산된 카드 수. 모든 pending row → `status='sent'`. 발송 URL은 `/hyper-sync/review?ids=...` 형태 | |
 | H-19 | Review 페이지 10개 청크 페이지네이션 | H-18에서 받은 DM 클릭 (15개 이상의 카드 누적된 상태) | 첫 묶음 10개 진행 → "묶음 1/2 완료 · N개 남음" 화면 → [다음 묶음 시작] → 나머지 카드 진행 → 최종 결과 화면. 진행 텍스트에 "묶음 1/2 · 복습 N/5" 표시 | |
 | H-20 | Force-test 단건 발송 (회귀용) | `POST /api/v2/cron/dispatch?schedule_id=N` 으로 hyper_sync_review 단건 강제 호출 | 단건 DM 발송, `/hyper-sync/review/:scheduleId` 형태 URL (legacy 호환). 묶음 발송 동작에 영향 없음 | |

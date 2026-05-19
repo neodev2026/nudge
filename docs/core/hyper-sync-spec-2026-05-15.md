@@ -932,10 +932,15 @@ URL 패턴 두 가지 모두 지원:
 - **절차**: [다음 미션] 클릭
 - **기대**: `display_order` 기준 다음 session의 진행 화면으로 이동. 마지막 미션이면 `/hyper-sync`로 이동.
 
-### TC-HS-15: 중복 enqueue 방지
-- **선행**: TC-HS-11로 카드 A,B,C가 이미 pending
-- **절차**: 같은 사용자가 다른 미션에서 카드 B,C,D를 '기억못함'
-- **기대**: 신규 schedule은 카드 D만 포함하거나, 새 row INSERT가 skip됨 (구현 선택).
+### TC-HS-15: SRS refresh — pending stage 재실패
+- **선행**: stage S에 대해 r2_pending(또는 r3/r4) schedule이 이미 존재
+  - 예: TC-HS-11로 unknown 처리 후 r1 schedule pending → DM dispatch 후 review에서 step 1 [기억함] → r2_pending으로 promote
+- **절차**: 같은 사용자가 S를 포함하는 미션을 재실행하여 S에서 [기억못함]
+- **기대**:
+  - 기존 r2(혹은 그 외 round) schedule row → `status='failed'`, `error_message='superseded_by_srs_refresh'`
+  - 새 schedule INSERT → `review_round=1`, scheduled +1일, retry_count++
+  - `nv2_stage_progress`: review_status `r1_pending`, retry_count 증가
+- **참고**: 현재 상품 구조상 1 stage = 1 미션 슬롯이므로 보통 동일 미션 재실행이 자연 시나리오. 향후 같은 stage가 여러 미션에 등록되어도 SRS 로직(stage_id 기반)은 동일하게 작동.
 
 ---
 
@@ -1160,7 +1165,7 @@ AI에게 창작시키지 않는다.
 | H-10b | 이메일 폴백 (Discord 미연동 계정, 수동 트리거) | 이메일만 있는 테스트 계정 schedule을 `?schedule_id=N`으로 dispatch | 이메일 수신, status='sent' |
 | H-11 | 복습 페이지 진입 | DM 버튼 클릭 | `/hyper-sync/review/:scheduleId` 진입, opened_at 업데이트 |
 | H-12 | 다음 미션 이동 | 결과 화면 [다음 미션] | display_order 다음 session으로 이동 |
-| H-13 | 중복 enqueue 방지 | 같은 카드를 다른 미션에서 '기억못함' | 중복 schedule row 생성 안 됨 |
+| H-13 | SRS refresh — pending stage 재실패 | pending stage를 그 stage 포함 미션 재실행에서 '기억못함' | 기존 schedule failed(superseded_by_srs_refresh) + 신규 r1 schedule INSERT, retry_count++ |
 
 ### 회귀 운영 정책
 
