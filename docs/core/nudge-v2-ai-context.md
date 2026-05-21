@@ -12,6 +12,97 @@
 
 ---
 
+## 기술 스택 (전체)
+
+### 언어 / 런타임
+- **TypeScript 5.7** (strict 모드)
+- **Node.js 20** (Vercel 서버리스 함수 + CI)
+- **React 19**
+
+### 프레임워크 / 빌드
+- **React Router v7** (Remix 모드, SSR + 파일 기반 라우팅)
+- **Vite 5** + `@react-router/dev` + `vite-tsconfig-paths`
+- **@tailwindcss/vite** (Tailwind v4 Vite 플러그인)
+
+### UI / 스타일
+- **Tailwind CSS v4** + `tailwindcss-animate` + `tailwind-merge`
+- **Shadcn/ui** 컴포넌트 (Radix UI primitives: dialog, dropdown, select, tooltip, slider, avatar, checkbox, collapsible, label, separator, slot 등)
+- **Lucide React** 아이콘
+- **next-themes** + **remix-themes** (다크/라이트 테마)
+- **class-variance-authority**, **clsx** (variant/조건부 클래스)
+- **Sonner** (토스트), **nprogress** (페이지 로딩 바), **input-otp**
+
+### 데이터베이스 / ORM
+- **Supabase PostgreSQL** (운영 DB)
+- **Drizzle ORM 0.40** + **Drizzle Kit** (스키마/마이그레이션)
+- **postgres** (Drizzle 드라이버), **@types/pg**
+- **@supabase/supabase-js**, **@supabase/ssr** (브라우저/서버 클라이언트)
+- 마이그레이션 파이프라인: `db:generate` → `db:migrate` → `db:typegen`
+
+### 인증
+- **Supabase Auth** — 이메일+비밀번호 / Google OAuth / Discord OAuth
+- 익명 세션(`auth_user_id = 'anon:<uuid>'`)으로 로그인 없이 무료 체험 지원
+- **hCaptcha** (`@hcaptcha/react-hcaptcha`), **Cloudflare Turnstile** (`react-turnstile`) — 봇 차단
+
+### AI / LLM
+- **OpenAI GPT-4** (Leni AI 튜터, 대화형 학습 + 글쓰기 평가)
+- 카드 콘텐츠 생성 파이프라인: n8n + OpenAI → Supabase Postgres 직접 INSERT
+- n8n leni-cheer-dm-v2 워크플로우: 미완료 세션 사용자에게 GPT 개인화 응원 DM 발송
+
+### 음성 / TTS
+- **Web Speech API** (`SpeechSynthesisUtterance`) — 브라우저 네이티브 TTS, 타겟 언어/한국어 다국어 큐 재생
+- 모듈 레벨 generation counter로 카드 전환 시 중복 재생 방지
+
+### 알림 / 메시징
+- **Discord Bot API** — OAuth로 연결된 사용자에게 DM 발송 + guild 자동 참여
+- **Resend SMTP** (`mail.neowithai.com` 도메인 인증) — 학습 알림/welcome/marathon nudge 이메일
+- **React Email** + `@react-email/components` — 트랜잭셔널 이메일 템플릿
+
+### 자동화 / 스케줄링
+- **Supabase Cron** — `enqueue-daily` / `dispatch` / `daily-reset` 등 서비스 API 호출
+- **n8n** — Postgres 트리거 워크플로우 (Leni Cheer DM v2 등)
+
+### 결제 (준비 단계)
+- **@tosspayments/tosspayments-sdk** (Toss Payments 연동 예정)
+
+### 국제화
+- **i18next** + **react-i18next** + **remix-i18next** + `i18next-browser-languagedetector` + `i18next-fs-backend` / `i18next-fetch-backend` / `i18next-http-backend` (한국어/영어/스페인어 리소스)
+
+### 검증 / 폼
+- **Zod 3** (서버 측 요청/스키마 검증)
+- **type-fest** (유틸리티 타입)
+
+### Open Graph / 미디어
+- **@vercel/og** + **Satori** — 동적 OG 이미지 생성
+- **mdx-bundler** — 블로그/문서 MDX 번들링
+
+### 관측 / 모니터링
+- **Sentry** (`@sentry/react-router`, `@sentry/browser`, `@sentry/profiling-node`) — 에러 + 퍼포먼스 추적
+
+### 테스트
+- **Vitest 4** (단위/통합 테스트, `--pool=forks`)
+- **Playwright 1.51** (E2E)
+- **GitHub Actions** — main 브랜치 push/PR 시 Vitest CI
+
+### 배포 / 인프라
+- **Vercel** (main 브랜치 자동 배포, `@vercel/react-router` 어댑터)
+- **Cloudflare DNS** (`nudge.neowithai.com`, `mail.neowithai.com`)
+- **Supabase** (DB + Auth + Cron + Storage)
+
+### 개발 도구
+- **Prettier** + `@trivago/prettier-plugin-sort-imports` + `prettier-plugin-tailwindcss`
+- **react-router-devtools**
+- **cross-env**, **dotenv**
+
+### 아키텍처 / 운영 노하우
+- Feature-sliced 디렉터리 구조 (`app/features/v2/<feature>/{api,screens,components,lib,schema}`)
+- RLS 우회용 `adminClient` (service role) 분리
+- 대량 `.in()` 쿼리는 nested select로 우회 (PostgREST URL 길이 한계)
+- 모듈 레벨 변수로 TTS/타이머 상태 관리 (useRef로는 재렌더 간 동기화 실패)
+- routes.ts 등록 전 라우트 파일을 먼저 만들어 React Router 7 ENOENT 크래시 방지
+
+---
+
 ## 전체 URL/라우트 구조
 
 ```
