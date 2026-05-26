@@ -336,12 +336,18 @@ npm run db:migrate
 ### 4.1 URI 구조 (Phase 1)
 
 ```
-/hyper-sync                       → 미션 선택 페이지
+/hyper-sync                       → 진입 페이지 (서비스 설명 + 상품 선택)
+/hyper-sync/products/:slug        → 상품별 미션 목록 (+ 로그인 시 진행 여부)
 /hyper-sync/session               → 미션 진행 (query: productId, sessionId)
 /hyper-sync/review/:scheduleId    → Discord DM에서 진입하는 복습 페이지
 ```
 
 루트(`/`), `/nudge` 등 기존 URI는 변경 없음.
+
+> **2026-05-21 구조 개편**: 콘텐츠(상품·미션) 증가로 `/hyper-sync` 단일 페이지가
+> 과도하게 길어지는 문제를 해결하기 위해 화면을 3단으로 분리했다. `/hyper-sync`는
+> 서비스 설명 + 상품 선택만 담당하고, 미션 목록은 신규 `/hyper-sync/products/:slug`
+> 페이지로 이동했다. 상세는 §5.1 참조.
 
 ### 4.2 신규 파일
 
@@ -349,7 +355,8 @@ npm run db:migrate
 app/features/v2/hyper-sync/
 ├── schema.ts                      → nv2_hyper_sync_results
 ├── screens/
-│   ├── hyper-sync-landing-page.tsx     → /hyper-sync
+│   ├── hyper-sync-landing-page.tsx     → /hyper-sync (설명 + 상품 선택)
+│   ├── hyper-sync-product-page.tsx     → /hyper-sync/products/:slug (미션 목록)
 │   ├── hyper-sync-session-page.tsx     → /hyper-sync/session
 │   └── hyper-sync-review-page.tsx      → /hyper-sync/review/:scheduleId
 ├── lib/
@@ -396,32 +403,84 @@ route("/hyper-sync/enqueue-review","features/v2/hyper-sync/api/enqueue-review.ts
 
 ## 5. 화면 구성
 
-### 5.1 미션 선택 페이지 (`/hyper-sync`)
+> **2026-05-21 개편**: 미션 선택 화면을 2개 페이지로 분리했다. `/hyper-sync`는
+> 서비스 설명 + 상품 선택, `/hyper-sync/products/:slug`는 미션 목록을 담당한다.
+> 단일 페이지에 모든 상품의 모든 미션을 나열하던 기존 구조는 콘텐츠 증가에
+> 따라 사용 불가능한 스크롤이 되었다.
+
+### 5.1 진입 페이지 (`/hyper-sync`)
+
+서비스가 무엇인지 설명하고, 참여 상품을 한눈에 보여주는 화면. 미션 목록은
+여기서 전시하지 않는다.
 
 **Loader**:
 - 익명/로그인 모두 접근 가능 — 차단 없음
-- `nv2_learning_products.slug = 'developer-english'` 조회
-- `nv2_product_sessions` (is_active=true, display_order ASC) 목록 조회
-- 각 session의 stage 수 포함
-- 반환: `{ missions: [{ id, name, stageCount }] }`
+- `HYPER_SYNC_PRODUCT_SLUGS`의 각 상품을 `getHyperSyncProductSummary`로 조회
+  (병렬). 상품 표시 필드 + 활성 미션 **개수만** 집계 — 미션 목록 자체는 fetch
+  하지 않는다 (가벼운 loader 유지)
+- 반환: `{ products: HyperSyncProductSummary[], isAuthenticated }`
 
 **UI 구성**:
 ```
 [헤더] NUDGE / hyper-sync
 
-[타이틀] 미션을 선택하세요
-[서브]   각 미션은 3분 안에 완료됩니다
+[서비스 설명]
+  Hyper-Sync — 한 줄 정의
+  [01 3분 점검] [02 다음 날 복습 알림] [03 망각 곡선 복습]   ← 학습 방법 3스텝
 
-[미션 카드 목록]
+[타이틀] 학습 상품을 선택하세요
+[서브]   상품을 고르면 미션 목록으로 이동합니다
+
+[상품 카드 목록]
   ┌────────────────────────────────────────┐
-  │ 개발자 실무 영어 3분컷 — 1               │
-  │ [10개] [~3분]                          [시작하기 →]│
+  │ 🇩🇪 Deutsch für Alltag und Beruf - A2   DE · A2 │
+  │ (description — 없으면 영역 자체를 숨김)          │
+  │ 미션 22개                                  →    │
   └────────────────────────────────────────┘
-  ...
+  → 카드 클릭 시 /hyper-sync/products/:slug 로 이동
 
 [하단 힌트]
   로그인하면 틀린 표현을 다음날 Discord DM으로 받을 수 있어요.
 ```
+
+- `nv2_learning_products.description`이 비어 있으면(null/공백) 설명 영역을
+  렌더하지 않는다.
+
+### 5.1b 상품별 미션 목록 페이지 (`/hyper-sync/products/:slug`)
+
+선택한 상품의 미션 목록 화면. 진입 페이지의 상품 카드에서 이동한다.
+
+**Loader**:
+- 익명/로그인 모두 접근 가능
+- `params.slug`가 `HYPER_SYNC_PRODUCT_SLUGS`에 없으면 `/hyper-sync`로 redirect
+- `getHyperSyncProduct(slug)` → 없으면 `/hyper-sync`로 redirect
+- `getHyperSyncMissions(product.id)` — 미션 목록 (id, title, stageCount)
+- **로그인 시**: `getPlayedMissionIds(authUserId, product.id)` — 결과 행이 1건
+  이상 존재하는 미션 id 집합. 익명 사용자는 빈 집합 (익명 결과는 localStorage
+  `anon:` id라 서버 loader가 읽을 수 없음)
+- 반환: `{ product, missions, playedMissionIds, isAuthenticated }`
+
+**UI 구성**:
+```
+[헤더] NUDGE / hyper-sync
+[← 미션 상품]                                  ← /hyper-sync 로 복귀
+
+[상품명] Deutsch für Alltag und Beruf - A2     DE · A2
+[description — 없으면 영역 숨김]
+[서브]   각 미션은 3분 안에 완료됩니다
+
+[미션 카드 목록]
+  ┌────────────────────────────────────────┐
+  │ 1. Sind Sie neu hier? - 1   [✓ 진행함]          │
+  │ [11개] [~3분]                       [시작하기 →]│
+  └────────────────────────────────────────┘
+  ...
+```
+
+- `✓ 진행함` 배지: 로그인 사용자 + 해당 미션의 결과 행이 존재할 때만 표시.
+  진행 "여부"만 표시하며 진행 횟수는 표시하지 않는다 — 같은 날 재플레이가
+  `nv2_hyper_sync_results`의 `(user, card, date)` upsert로 합쳐져 정확한
+  횟수 집계가 불가능하기 때문 (스키마 변경 없이 표현 가능한 범위).
 
 ### 5.2 미션 진행 페이지 (`/hyper-sync/session`)
 
@@ -628,6 +687,14 @@ function getOrCreateAnonId(): string {
 - 결과 저장 시 `auth_user_id` 필드에 그대로 입력
 - daily-reset cron이 7일 후 자동 정리 (CLAUDE.md "익명 세션" 규칙)
 - 익명 사용자는 복습 schedule INSERT **스킵** (§3.4)
+
+> **2026-05-21 교정 — 식별자 서버 결정**: 클라이언트는 항상 localStorage
+> `anon:` id를 보내지만, `save-result`·`enqueue-review` action은 식별자를
+> **서버에서 결정**한다. 로그인 세션이 있으면 `auth.users.id`로 저장하고
+> 클라이언트가 보낸 `anon:` id는 무시한다. 세션이 없을 때만 `anon:` id를
+> 사용한다. 이 교정 전에는 `save-result`가 클라이언트 body의 `anon:` id를
+> 그대로 INSERT해, 로그인 사용자의 결과가 익명 id로 저장되어
+> `/hyper-sync/products/:slug`의 진행 여부가 표시되지 않았다.
 
 ### 6.5 카드 판정 후 흐름
 
