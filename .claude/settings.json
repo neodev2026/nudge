@@ -42,5 +42,39 @@
       "e:\\dev\\nudge\\docs",
       "e:\\dev\\nudge\\app\\features\\v2\\languages"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [".claude/hooks/schema-reminder.mjs"],
+            "statusMessage": "Checking schema change"
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": [".claude/hooks/format.mjs"],
+            "statusMessage": "Formatting with Prettier"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [".claude/hooks/run-tests.mjs"],
+            "timeout": 180,
+            "statusMessage": "Running tests if code changed"
+          }
+        ]
+      }
+    ]
   }
 }
