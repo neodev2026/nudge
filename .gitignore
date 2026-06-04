@@ -1,5 +1,9 @@
 .DS_Store
 **/node_modules/
+
+# Claude Code — local-only settings may contain secrets / machine-specific paths
+.claude/settings.local.json
+
 # React Router
 /.react-router/
 /build/
