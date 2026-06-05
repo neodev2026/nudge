@@ -17,3 +17,31 @@ export const HYPER_SYNC_PRODUCT_SLUGS = [
 ] as const;
 
 export type HyperSyncProductSlug = (typeof HYPER_SYNC_PRODUCT_SLUGS)[number];
+
+/** True when slug is one of the products enrolled in Hyper-Sync. */
+export function isHyperSyncProductSlug(
+  slug: string | undefined
+): slug is HyperSyncProductSlug {
+  return (
+    !!slug && (HYPER_SYNC_PRODUCT_SLUGS as readonly string[]).includes(slug)
+  );
+}
+
+/**
+ * Builds the small subtitle shown next to a product name (e.g. "DE · A2").
+ * Returns "" when the product has no language meta. Shared by the landing
+ * page (product cards) and the per-product mission list page.
+ */
+export function getProductSubtitle(
+  category: string | null | undefined,
+  meta: unknown
+): string {
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return "";
+  const m = meta as Record<string, unknown>;
+  if (category === "language") {
+    const lang = typeof m.language === "string" ? m.language.toUpperCase() : "";
+    const level = typeof m.level === "string" ? m.level : "";
+    return [lang, level].filter(Boolean).join(" · ");
+  }
+  return "";
+}

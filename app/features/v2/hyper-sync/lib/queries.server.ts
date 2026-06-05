@@ -73,7 +73,7 @@ export async function getHyperSyncProduct(
 ) {
   const { data, error } = await client
     .from("nv2_learning_products")
-    .select("id, name, slug, is_active, category, meta")
+    .select("id, name, slug, is_active, category, meta, description, icon")
     .eq("slug", slug)
     .eq("is_active", true)
     .maybeSingle();
@@ -89,7 +89,7 @@ export async function getHyperSyncProductById(
 ) {
   const { data, error } = await client
     .from("nv2_learning_products")
-    .select("id, name, slug, is_active, category, meta")
+    .select("id, name, slug, is_active, category, meta, description, icon")
     .eq("id", product_id)
     .eq("is_active", true)
     .maybeSingle();
@@ -173,6 +173,87 @@ export async function getNextHyperSyncMission(
 
   if (error) throw new Error(error.message);
   return data;
+}
+
+/**
+ * Lightweight per-product summary for the Hyper-Sync landing page.
+ *
+ * The landing page only lists products (one card each) — it must NOT fetch
+ * every mission of every product, which is what made the old single-page
+ * layout an unusable scroll. So this returns product display fields plus a
+ * cheap COUNT of active missions; the per-product page loads the mission
+ * list itself.
+ */
+export interface HyperSyncProductSummary {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  category: string | null;
+  meta: unknown;
+  missionCount: number;
+}
+
+export async function getHyperSyncProductSummary(
+  client: SupabaseClient<Database>,
+  slug: string
+): Promise<HyperSyncProductSummary | null> {
+  const product = await getHyperSyncProduct(client, slug);
+  if (!product) return null;
+
+  const { count, error } = await client
+    .from("nv2_product_sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("product_id", product.id)
+    .eq("is_active", true);
+
+  if (error) throw new Error(error.message);
+
+  return {
+    id: product.id,
+    slug: product.slug,
+    name: product.name,
+    description: product.description ?? null,
+    icon: product.icon ?? null,
+    category: product.category ?? null,
+    meta: product.meta ?? null,
+    missionCount: count ?? 0,
+  };
+}
+
+/**
+ * Returns the set of mission (nv2_product_sessions) ids the user has already
+ * played for a product. "Played" = at least one nv2_hyper_sync_results row
+ * exists; results are written per card, so the first answered card already
+ * marks the mission as started. Used by the per-product page to show a
+ * "진행함" badge.
+ *
+ * Logged-in users only — anonymous results live under a localStorage
+ * 'anon:' id the server loader cannot read, so this returns an empty set for
+ * anonymous ids. RLS select_own lets the server client read the user's own
+ * rows; no admin client needed.
+ */
+export async function getPlayedMissionIds(
+  client: SupabaseClient<Database>,
+  authUserId: string,
+  productId: string
+): Promise<Set<string>> {
+  const result = new Set<string>();
+  if (authUserId.startsWith("anon:")) return result;
+
+  const { data, error } = await client
+    .from("nv2_hyper_sync_results")
+    .select("session_id")
+    .eq("auth_user_id", authUserId)
+    .eq("product_id", productId);
+
+  if (error) throw new Error(error.message);
+
+  for (const row of data ?? []) {
+    if (row.session_id) result.add(row.session_id);
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------

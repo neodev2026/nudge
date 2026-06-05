@@ -43,9 +43,9 @@ docs/
 ### DB 스키마 변경
 순서를 절대 건너뛰지 않는다:
 ```
-1. db/schema.ts 수정
-2. npm run db:generate
-3. npm run db:migrate
+1. app/features/<feature>/schema.ts 수정  (스키마는 피처별로 분산: app/features/**/schema.ts)
+2. npm run db:generate                    (마이그레이션은 sql/migrations/ 에 생성)
+3. npm run db:migrate                      (postdb:migrate 가 db:typegen → database.types.ts 자동 재생성)
 ```
 - Supabase SQL Editor를 통한 직접 SQL 실행은 **금지**
 - SQL 함수·트리거는 `sql/functions/`에서 관리, Supabase SQL Editor로만 적용

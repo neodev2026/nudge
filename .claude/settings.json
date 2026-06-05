@@ -2,7 +2,6 @@
   "permissions": {
     "allow": [
       "Bash(npm test *)",
-      "Bash(psql postgresql://postgres.mqdgyqkjhnpjhgwgfzth:***REMOVED***@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres -c ' *)",
       "Bash(node -e ' *)",
       "Bash(Get-ChildItem -Path \"e:\\\\dev\\\\nudge\" -Recurse -Directory)",
       "Bash(Select-Object -ExpandProperty FullName)",
@@ -26,11 +25,56 @@
       "Bash(git rm *)",
       "Bash(git reset *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(npm --version)",
+      "Bash(npm install *)",
+      "Bash(npm ci *)",
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('e:/dev/nudge/node_modules/react-router/package.json'\\).exports, null, 2\\).slice\\(0, 800\\)\\)\")",
+      "WebSearch",
+      "Bash(cat C:/Users/user/AppData/Local/npm-cache/_logs/2026-05-18T22_09_32_934Z-eresolve-report.txt 2>/dev/null | head -40)",
+      "Read(//c/Users/user/AppData/Local/npm-cache/_logs/**)",
+      "Bash(node -e \"const p=require\\('e:/dev/nudge/node_modules/react-router/package.json'\\); console.log\\('react-router:', p.version\\); console.log\\('exports[.]:', JSON.stringify\\(p.exports['.'], null, 2\\)\\);\")",
+      "Bash(npm ls *)",
+      "Bash(node -e \"const p=require\\('e:/dev/nudge/node_modules/mdx-bundler/package.json'\\); console.log\\('peerDeps:', JSON.stringify\\(p.peerDependencies\\)\\); console.log\\('deps:', JSON.stringify\\(p.dependencies\\)\\);\")",
+      "Bash(node -e \"const p=require\\('e:/dev/nudge/node_modules/react-router/package.json'\\); console.log\\('react-router:', p.version\\);\")"
     ],
     "additionalDirectories": [
       "e:\\dev\\nudge\\docs",
       "e:\\dev\\nudge\\app\\features\\v2\\languages"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [".claude/hooks/schema-reminder.mjs"],
+            "statusMessage": "Checking schema change"
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": [".claude/hooks/format.mjs"],
+            "statusMessage": "Formatting with Prettier"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [".claude/hooks/run-tests.mjs"],
+            "timeout": 180,
+            "statusMessage": "Running tests if code changed"
+          }
+        ]
+      }
     ]
   }
 }
