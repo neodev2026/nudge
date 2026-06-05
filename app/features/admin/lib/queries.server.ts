@@ -12,7 +12,9 @@ import type { Database } from "database.types";
 export async function adminGetAllProducts(client: SupabaseClient<Database>) {
   const { data, error } = await client
     .from("nv2_learning_products")
-    .select("id, category, name, slug, icon, is_active, total_stages, display_order, meta")
+    .select(
+      "id, category, name, slug, icon, is_active, total_stages, display_order, meta",
+    )
     .order("display_order", { ascending: true });
 
   if (error) throw error;
@@ -21,7 +23,7 @@ export async function adminGetAllProducts(client: SupabaseClient<Database>) {
 
 export async function adminGetProductById(
   client: SupabaseClient<Database>,
-  id: string
+  id: string,
 ) {
   const { data, error } = await client
     .from("nv2_learning_products")
@@ -45,7 +47,7 @@ export async function adminUpsertProduct(
     meta?: Record<string, unknown>;
     display_order?: number;
     is_active?: boolean;
-  }
+  },
 ) {
   const { data, error } = await client
     .from("nv2_learning_products")
@@ -63,7 +65,7 @@ export async function adminUpsertProduct(
 
 export async function adminGetStagesByProduct(
   client: SupabaseClient<Database>,
-  product_id: string
+  product_id: string,
 ) {
   const { data, error } = await client
     .from("nv2_stages")
@@ -77,16 +79,18 @@ export async function adminGetStagesByProduct(
 
 export async function adminGetStageWithCards(
   client: SupabaseClient<Database>,
-  stage_id: string
+  stage_id: string,
 ) {
   const { data, error } = await client
     .from("nv2_stages")
-    .select(`
+    .select(
+      `
       id, learning_product_id, stage_number, stage_type, title, is_active,
       nv2_cards (
         id, card_type, display_order, card_data, is_active
       )
-    `)
+    `,
+    )
     .eq("id", stage_id)
     .order("display_order", { referencedTable: "nv2_cards", ascending: true })
     .single();
@@ -104,7 +108,7 @@ export async function adminUpsertStage(
     stage_type: string;
     title: string;
     is_active?: boolean;
-  }
+  },
 ) {
   const { data, error } = await client
     .from("nv2_stages")
@@ -118,19 +122,16 @@ export async function adminUpsertStage(
 
 export async function adminDeleteStage(
   client: SupabaseClient<Database>,
-  stage_id: string
+  stage_id: string,
 ) {
-  const { error } = await client
-    .from("nv2_stages")
-    .delete()
-    .eq("id", stage_id);
+  const { error } = await client.from("nv2_stages").delete().eq("id", stage_id);
 
   if (error) throw error;
 }
 
 export async function adminGetMaxStageNumber(
   client: SupabaseClient<Database>,
-  product_id: string
+  product_id: string,
 ) {
   const { data, error } = await client
     .from("nv2_stages")
@@ -157,7 +158,7 @@ export async function adminUpsertCard(
     display_order: number;
     card_data: Record<string, unknown>;
     is_active?: boolean;
-  }
+  },
 ) {
   const { data, error } = await client
     .from("nv2_cards")
@@ -171,12 +172,9 @@ export async function adminUpsertCard(
 
 export async function adminDeleteCard(
   client: SupabaseClient<Database>,
-  card_id: string
+  card_id: string,
 ) {
-  const { error } = await client
-    .from("nv2_cards")
-    .delete()
-    .eq("id", card_id);
+  const { error } = await client.from("nv2_cards").delete().eq("id", card_id);
 
   if (error) throw error;
 }
@@ -187,20 +185,25 @@ export async function adminDeleteCard(
 
 export async function adminGetSessionsByProduct(
   client: SupabaseClient<Database>,
-  product_id: string
+  product_id: string,
 ) {
   const { data, error } = await client
     .from("nv2_product_sessions")
-    .select(`
+    .select(
+      `
       id, session_number, title, is_active,
       nv2_product_session_stages (
         id, stage_id, display_order,
         nv2_stages ( id, title, stage_type, stage_number )
       )
-    `)
+    `,
+    )
     .eq("product_id", product_id)
     .order("session_number", { ascending: true })
-    .order("display_order", { referencedTable: "nv2_product_session_stages", ascending: true });
+    .order("display_order", {
+      referencedTable: "nv2_product_session_stages",
+      ascending: true,
+    });
 
   if (error) throw error;
   return data ?? [];
@@ -214,7 +217,7 @@ export async function adminUpsertProductSession(
     session_number: number;
     title?: string | null;
     is_active?: boolean;
-  }
+  },
 ) {
   const { data, error } = await client
     .from("nv2_product_sessions")
@@ -228,7 +231,7 @@ export async function adminUpsertProductSession(
 
 export async function adminDeleteProductSession(
   client: SupabaseClient<Database>,
-  session_id: string
+  session_id: string,
 ) {
   const { error } = await client
     .from("nv2_product_sessions")
@@ -245,7 +248,7 @@ export async function adminDeleteProductSession(
 export async function adminSetSessionStages(
   client: SupabaseClient<Database>,
   product_session_id: string,
-  stage_ids: string[] // ordered list
+  stage_ids: string[], // ordered list
 ) {
   // Delete existing assignments
   const { error: del_error } = await client
@@ -265,7 +268,7 @@ export async function adminSetSessionStages(
         product_session_id,
         stage_id,
         display_order: i + 1,
-      }))
+      })),
     );
 
   if (ins_error) throw ins_error;
@@ -283,11 +286,12 @@ export async function adminSetSessionStages(
  * via the regular authenticated client.
  */
 export async function adminGetUsersWithTurnBalance(
-  client: SupabaseClient<Database>
+  client: SupabaseClient<Database>,
 ) {
   // auth.users — requires service_role
-  const { data: auth_users_data, error: auth_error } =
-    await (client as any).auth.admin.listUsers({ perPage: 1000 });
+  const { data: auth_users_data, error: auth_error } = await (
+    client as any
+  ).auth.admin.listUsers({ perPage: 1000 });
 
   if (auth_error) throw auth_error;
 
@@ -300,21 +304,25 @@ export async function adminGetUsersWithTurnBalance(
   // nv2_profiles — display_name, channel ids, timezone settings
   const { data: profiles } = await client
     .from("nv2_profiles")
-    .select("auth_user_id, discord_id, email, display_name, avatar_url, timezone, send_hour, is_active");
+    .select(
+      "auth_user_id, discord_id, email, display_name, avatar_url, timezone, send_hour, is_active",
+    );
 
   const profile_map = Object.fromEntries(
     (profiles ?? [])
       .filter((p) => !!p.auth_user_id)
-      .map((p) => [p.auth_user_id as string, p])
+      .map((p) => [p.auth_user_id as string, p]),
   );
 
   // nv2_turn_balance
   const { data: balances } = await client
     .from("nv2_turn_balance")
-    .select("auth_user_id, subscription_turns, charged_turns, subscription_reset_at");
+    .select(
+      "auth_user_id, subscription_turns, charged_turns, subscription_reset_at",
+    );
 
   const balance_map = Object.fromEntries(
-    (balances ?? []).map((b) => [b.auth_user_id, b])
+    (balances ?? []).map((b) => [b.auth_user_id, b]),
   );
 
   return auth_users.map((u) => {
@@ -347,7 +355,7 @@ export async function adminGrantTurns(
   client: SupabaseClient<Database>,
   auth_user_id: string,
   amount: number,
-  grant_type: "subscription" | "charged"
+  grant_type: "subscription" | "charged",
 ) {
   // Get existing balance
   const { data: existing } = await client
@@ -363,7 +371,7 @@ export async function adminGrantTurns(
         ? {
             subscription_turns: amount,
             subscription_reset_at: new Date(
-              Date.now() + 30 * 24 * 60 * 60 * 1000
+              Date.now() + 30 * 24 * 60 * 60 * 1000,
             ).toISOString(),
           }
         : { charged_turns: (existing.charged_turns ?? 0) + amount };
@@ -376,14 +384,14 @@ export async function adminGrantTurns(
     if (error) throw error;
   } else {
     // Insert new row
-    const insert =
+    const insert: Database["public"]["Tables"]["nv2_turn_balance"]["Insert"] =
       grant_type === "subscription"
         ? {
             auth_user_id,
             subscription_turns: amount,
             charged_turns: 0,
             subscription_reset_at: new Date(
-              Date.now() + 30 * 24 * 60 * 60 * 1000
+              Date.now() + 30 * 24 * 60 * 60 * 1000,
             ).toISOString(),
           }
         : {
@@ -392,9 +400,7 @@ export async function adminGrantTurns(
             charged_turns: amount,
           };
 
-    const { error } = await client
-      .from("nv2_turn_balance")
-      .insert(insert);
+    const { error } = await client.from("nv2_turn_balance").insert(insert);
 
     if (error) throw error;
   }
@@ -408,11 +414,12 @@ export async function adminGrantTurns(
  */
 export async function adminGetUserDetail(
   client: SupabaseClient<Database>,
-  auth_user_id: string
+  auth_user_id: string,
 ) {
   // auth.users info
-  const { data: auth_user_data, error: auth_error } =
-    await (client as any).auth.admin.getUserById(auth_user_id);
+  const { data: auth_user_data, error: auth_error } = await (
+    client as any
+  ).auth.admin.getUserById(auth_user_id);
   if (auth_error) throw auth_error;
 
   const auth_user = auth_user_data?.user as {
@@ -425,7 +432,9 @@ export async function adminGetUserDetail(
 
   const { data: profile } = await client
     .from("nv2_profiles")
-    .select("auth_user_id, discord_id, email, display_name, avatar_url, timezone, send_hour, is_active, created_at")
+    .select(
+      "auth_user_id, discord_id, email, display_name, avatar_url, timezone, send_hour, is_active, created_at",
+    )
     .eq("auth_user_id", auth_user_id)
     .maybeSingle();
 
@@ -461,7 +470,7 @@ export async function adminUpdateUserProfile(
     timezone?: string;
     send_hour?: number;
     is_active?: boolean;
-  }
+  },
 ) {
   const { error } = await client
     .from("nv2_profiles")

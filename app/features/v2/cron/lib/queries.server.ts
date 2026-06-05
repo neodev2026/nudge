@@ -6,6 +6,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "database.types";
+
 import { REVIEW_INTERVALS_DAYS } from "~/features/v2/shared/constants";
 
 // ---------------------------------------------------------------------------
@@ -22,14 +23,16 @@ import { REVIEW_INTERVALS_DAYS } from "~/features/v2/shared/constants";
  */
 export async function getProfilesInLocalTimeWindow(
   client: SupabaseClient<Database>,
-  target_hour: number
+  target_hour: number,
 ) {
   // Supabase JS does not support AT TIME ZONE in .filter() — use RPC or raw SQL via
   // the postgres client. Here we fetch all active profiles and filter in JS,
   // which is acceptable for the current user volume (beta stage).
   const { data, error } = await client
     .from("nv2_profiles")
-    .select("auth_user_id, timezone, send_hour, daily_goal_new, daily_goal_review")
+    .select(
+      "auth_user_id, timezone, send_hour, daily_goal_new, daily_goal_review",
+    )
     .eq("is_active", true);
 
   if (error) throw error;
@@ -60,9 +63,7 @@ export async function getProfilesInLocalTimeWindow(
  * whose local midnight falls in the current 30-minute window.
  * Called by cron daily-reset (runs every 30 minutes).
  */
-export async function resetCronDailyCounters(
-  client: SupabaseClient<Database>
-) {
+export async function resetCronDailyCounters(client: SupabaseClient<Database>) {
   const profiles = await getProfilesInLocalTimeWindow(client, 0); // hour 0 = midnight
 
   if (profiles.length === 0) return { reset_count: 0 };
@@ -91,7 +92,7 @@ export async function resetCronDailyCounters(
  */
 export async function getCronActiveSessionsForUser(
   client: SupabaseClient<Database>,
-  auth_user_id: string
+  auth_user_id: string,
 ) {
   const { data, error } = await client
     .from("nv2_sessions")
@@ -102,7 +103,7 @@ export async function getCronActiveSessionsForUser(
       status,
       session_kind,
       nv2_product_sessions!inner ( id, product_id, session_number, title )
-    `
+    `,
     )
     .eq("auth_user_id", auth_user_id)
     .in("status", ["pending", "in_progress"]);
@@ -117,7 +118,7 @@ export async function getCronActiveSessionsForUser(
  */
 export async function getCronUserSubscriptions(
   client: SupabaseClient<Database>,
-  auth_user_id: string
+  auth_user_id: string,
 ) {
   const { data, error } = await client
     .from("nv2_subscriptions")
@@ -136,7 +137,7 @@ export async function getCronUserSubscriptions(
 export async function getCronNextUnstartedProductSession(
   client: SupabaseClient<Database>,
   auth_user_id: string,
-  product_id: string
+  product_id: string,
 ) {
   const { data: completed, error: completed_error } = await client
     .from("nv2_sessions")
@@ -160,7 +161,7 @@ export async function getCronNextUnstartedProductSession(
     query = query.not(
       "id",
       "in",
-      `(${completed_ids.map((id) => `"${id}"`).join(",")})`
+      `(${completed_ids.map((id) => `"${id}"`).join(",")})`,
     );
   }
 
@@ -176,7 +177,7 @@ export async function createCronNewSession(
   client: SupabaseClient<Database>,
   auth_user_id: string,
   product_session_id: string,
-  dm_sent_at: string
+  dm_sent_at: string,
 ) {
   const { data, error } = await client
     .from("nv2_sessions")
@@ -218,7 +219,7 @@ export async function createCronReviewSession(
   auth_user_id: string,
   product_session_id: string,
   review_round: number,
-  dm_sent_at: string
+  dm_sent_at: string,
 ) {
   const { data, error } = await client
     .from("nv2_sessions")
@@ -264,7 +265,7 @@ export async function getCronScheduleExistsToday(
   client: SupabaseClient<Database>,
   auth_user_id: string,
   schedule_type: "new" | "review" | "cheer" | "welcome",
-  date_prefix: string
+  date_prefix: string,
 ) {
   const { data, error } = await client
     .from("nv2_schedules")
@@ -287,7 +288,7 @@ export async function getCronCheerExistsTodayForHour(
   client: SupabaseClient<Database>,
   auth_user_id: string,
   local_hour: number,
-  date_prefix: string
+  date_prefix: string,
 ) {
   // We store local_hour in message_body prefix as "cheer:HH" for dedup
   const hour_tag = `cheer:${String(local_hour).padStart(2, "0")}`;
@@ -319,7 +320,7 @@ export async function insertCronSchedule(
     message_body?: string;
     scheduled_at: string;
     review_round?: number;
-  }
+  },
 ) {
   const { error } = await client.from("nv2_schedules").insert({
     auth_user_id: row.auth_user_id,
@@ -343,14 +344,14 @@ export async function insertCronSchedule(
  * This is the main dispatch query — Cron runs every 5 minutes.
  */
 export async function getCronPendingSchedules(
-  client: SupabaseClient<Database>
+  client: SupabaseClient<Database>,
 ) {
   const now = new Date().toISOString();
 
   const { data, error } = await client
     .from("nv2_schedules")
     .select(
-      "schedule_id, auth_user_id, schedule_type, delivery_url, message_body, review_round, retry_count, max_retries"
+      "schedule_id, auth_user_id, schedule_type, delivery_url, message_body, review_round, retry_count, max_retries",
     )
     .eq("status", "pending")
     .lte("scheduled_at", now)
@@ -366,7 +367,7 @@ export async function getCronPendingSchedules(
  */
 export async function markCronScheduleSent(
   client: SupabaseClient<Database>,
-  schedule_id: bigint
+  schedule_id: bigint,
 ) {
   const { error } = await client
     .from("nv2_schedules")
@@ -386,7 +387,7 @@ export async function markCronScheduleFailedOrRetry(
   schedule_id: bigint,
   error_message: string,
   current_retry_count: number,
-  max_retries: number
+  max_retries: number,
 ) {
   const exhausted = current_retry_count + 1 >= max_retries;
 
@@ -411,11 +412,13 @@ export async function markCronScheduleFailedOrRetry(
  * Used by enqueue-nudge to find cheer DM candidates.
  */
 export async function getCronUsersWithIncompleteSessions(
-  client: SupabaseClient<Database>
+  client: SupabaseClient<Database>,
 ) {
   const { data, error } = await client
     .from("nv2_sessions")
-    .select("auth_user_id, session_id, product_session_id, nv2_product_sessions!inner(session_number, title, nv2_learning_products!inner(name))")
+    .select(
+      "auth_user_id, session_id, product_session_id, nv2_product_sessions!inner(session_number, title, nv2_learning_products!inner(name))",
+    )
     .in("status", ["pending", "in_progress"]);
 
   if (error) throw error;
@@ -441,7 +444,7 @@ export async function getCronUsersWithIncompleteSessions(
  * Fetches stage progress rows due for review dispatch.
  */
 export async function getCronStageProgressDueForReview(
-  client: SupabaseClient<Database>
+  client: SupabaseClient<Database>,
 ) {
   const now = new Date().toISOString();
 
@@ -457,9 +460,14 @@ export async function getCronStageProgressDueForReview(
       retry_count,
       next_review_at,
       nv2_stages!inner ( id, learning_product_id, stage_number, title, stage_type )
-    `
+    `,
     )
-    .in("review_status", ["r1_pending", "r2_pending", "r3_pending", "r4_pending"])
+    .in("review_status", [
+      "r1_pending",
+      "r2_pending",
+      "r3_pending",
+      "r4_pending",
+    ])
     .lte("next_review_at", now)
     .eq("nv2_stages.stage_type", "learning")
     .order("next_review_at", { ascending: true });
@@ -473,7 +481,7 @@ export async function getCronStageProgressDueForReview(
  */
 export async function getProductSessionContainingStage(
   client: SupabaseClient<Database>,
-  stage_id: string
+  stage_id: string,
 ) {
   const { data, error } = await client
     .from("nv2_product_session_stages")
@@ -481,7 +489,7 @@ export async function getProductSessionContainingStage(
       `
       product_session_id,
       nv2_product_sessions!inner ( id, product_id, session_number, title, is_active )
-    `
+    `,
     )
     .eq("stage_id", stage_id)
     .maybeSingle();
@@ -497,20 +505,22 @@ export async function getProductSessionContainingStage(
 export function calcNextReviewAt(round: number, retry_count: number): Date {
   const base_days = REVIEW_INTERVALS_DAYS[round] ?? 1;
   const halved = retry_count >= 3;
-  const hours = halved
-    ? Math.round((base_days * 24) / 2)
-    : base_days * 24;
+  const hours = halved ? Math.round((base_days * 24) / 2) : base_days * 24;
 
   const next = new Date();
   next.setUTCHours(next.getUTCHours() + hours);
   return next;
 }
 
+type ReviewStatus = NonNullable<
+  Database["public"]["Tables"]["nv2_stage_progress"]["Row"]["review_status"]
+>;
+
 /**
  * Maps review_status to the next status after completing a review.
  */
-export function nextReviewStatus(current: string): string {
-  const map: Record<string, string> = {
+export function nextReviewStatus(current: string): ReviewStatus {
+  const map: Record<string, ReviewStatus> = {
     r1_pending: "r2_pending",
     r2_pending: "r3_pending",
     r3_pending: "r4_pending",
@@ -526,7 +536,7 @@ export async function advanceCronReviewProgress(
   client: SupabaseClient<Database>,
   auth_user_id: string,
   stage_ids: string[],
-  review_round: number
+  review_round: number,
 ) {
   for (const stage_id of stage_ids) {
     const { data: progress } = await client
@@ -541,11 +551,12 @@ export async function advanceCronReviewProgress(
     const new_status = nextReviewStatus(progress.review_status);
     const is_mastered = new_status === "mastered";
 
-    const update: Record<string, unknown> = {
-      review_status: new_status,
-      review_round: is_mastered ? null : review_round + 1,
-      last_review_completed_at: new Date().toISOString(),
-    };
+    const update: Database["public"]["Tables"]["nv2_stage_progress"]["Update"] =
+      {
+        review_status: new_status,
+        review_round: is_mastered ? null : review_round + 1,
+        last_review_completed_at: new Date().toISOString(),
+      };
 
     if (!is_mastered) {
       const next_at = calcNextReviewAt(review_round + 1, progress.retry_count);
@@ -572,7 +583,7 @@ export async function advanceCronReviewProgress(
 export async function getLastMarathonNudge(
   client: SupabaseClient<Database>,
   auth_user_id: string,
-  slug: string
+  slug: string,
 ) {
   const cutoff = new Date();
   cutoff.setHours(cutoff.getHours() - 24);
@@ -605,11 +616,11 @@ export async function getLastMarathonNudge(
  * Called nightly by daily-reset cron.
  */
 export async function purgeStaleChatTurns(
-  client: SupabaseClient<Database>
+  client: SupabaseClient<Database>,
 ): Promise<{ purged_chat_turns: number }> {
   const retention_days = parseInt(
     process.env.CHAT_TURN_RETENTION_DAYS ?? "90",
-    10
+    10,
   );
 
   const cutoff = new Date();
