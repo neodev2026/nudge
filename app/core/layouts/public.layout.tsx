@@ -1,10 +1,10 @@
-import type { Route } from "./+types/public.layout";
+import type { LoaderFunctionArgs } from "react-router";
 
 import { Outlet, redirect } from "react-router";
 
 import makeServerClient from "../lib/supa-client.server";
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
   const [client] = makeServerClient(request);
   const {
     data: { user },

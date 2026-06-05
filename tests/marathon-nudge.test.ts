@@ -1,10 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
 import {
-  isWithinSendWindow,
-  isSameWindow,
   buildMarathonMessageBody,
-  needsCursorSync,
   getLocalTime,
+  isSameWindow,
+  isWithinSendWindow,
+  needsCursorSync,
 } from "../app/features/v2/cron/api/marathon-nudge";
 
 describe("getLocalTime", () => {
@@ -52,7 +53,9 @@ describe("isWithinSendWindow", () => {
 
   it("TC-MN-10: null timezone → Asia/Seoul fallback", () => {
     const utc = new Date("2026-04-29T21:00:00Z"); // KST 06:00
-    expect(isWithinSendWindow(utc, (null as any) ?? "Asia/Seoul")).toBe(true);
+    // A null timezone from the DB is defaulted to Asia/Seoul at the call site.
+    const tz: string | null = null;
+    expect(isWithinSendWindow(utc, tz ?? "Asia/Seoul")).toBe(true);
   });
 
   it("KST 09:14 (within +15 min) → included", () => {
@@ -95,7 +98,7 @@ describe("buildMarathonMessageBody", () => {
         cursor: 47,
         front: "der Film",
         back: "영화 작품",
-      })
+      }),
     ).toBe("marathon:deutsch-a1|200|47|der Film|영화 작품");
   });
 
@@ -107,7 +110,7 @@ describe("buildMarathonMessageBody", () => {
         cursor: 9999,
         front: "",
         back: "",
-      })
+      }),
     ).toBe("marathon:deutsch-a1|625|9999||");
   });
 });

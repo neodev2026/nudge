@@ -1,4 +1,4 @@
-import type { Route } from "./+types/navigation.layout";
+import type { LoaderFunctionArgs } from "react-router";
 
 import { Suspense } from "react";
 import { Await, Outlet } from "react-router";
@@ -7,13 +7,17 @@ import Footer from "../components/footer";
 import { NavigationBar } from "../components/navigation-bar";
 import makeServerClient from "../lib/supa-client.server";
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
   const [client] = makeServerClient(request);
   const userPromise = client.auth.getUser();
   return { userPromise };
 }
 
-export default function NavigationLayout({ loaderData }: Route.ComponentProps) {
+export default function NavigationLayout({
+  loaderData,
+}: {
+  loaderData: Awaited<ReturnType<typeof loader>>;
+}) {
   const { userPromise } = loaderData;
   return (
     <div className="flex min-h-screen flex-col justify-between">

@@ -25,17 +25,17 @@ import {
 
 /**
  * Creates a Supabase client for server-side operations with proper cookie handling
- * 
+ *
  * This function creates a Supabase client that can be used in server-side code (loaders, actions)
  * while properly handling authentication cookies. It returns both the client and headers that
  * need to be included in the response to maintain the authentication state.
- * 
+ *
  * The function:
  * 1. Creates a new Headers object to collect Set-Cookie headers
  * 2. Creates a Supabase client with environment variables
  * 3. Sets up cookie handlers to read cookies from the request and write cookies to the response
  * 4. Returns both the client and headers for use in server functions
- * 
+ *
  * @example
  * // In a loader or action function
  * export async function loader({ request }: LoaderArgs) {
@@ -43,7 +43,7 @@ import {
  *   const { data } = await client.from('table').select();
  *   return json({ data }, { headers });
  * }
- * 
+ *
  * @param request - The incoming request object containing cookies
  * @returns A tuple with the Supabase client and headers for the response
  */
@@ -64,7 +64,13 @@ export default function makeServerClient(
           // Parse cookies from the request headers
           return parseCookieHeader(request.headers.get("Cookie") ?? "");
         },
-        setAll(cookiesToSet) {
+        setAll(
+          cookiesToSet: {
+            name: string;
+            value: string;
+            options: Parameters<typeof serializeCookieHeader>[2];
+          }[],
+        ) {
           // Add Set-Cookie headers to the response headers
           cookiesToSet.forEach(({ name, value, options }) =>
             headers.append(

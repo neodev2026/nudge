@@ -1,10 +1,10 @@
-import type { Route } from "./+types/error";
+import type { MetaFunction } from "react-router";
 
 import { Link, useSearchParams } from "react-router";
 
 import { Button } from "~/core/components/ui/button";
 
-export const meta: Route.MetaFunction = () => {
+export const meta: MetaFunction = () => {
   return [
     {
       title: `Server Error | ${import.meta.env.VITE_APP_NAME}`,
