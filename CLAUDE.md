@@ -1,156 +1,167 @@
 # Nudge v2
 
-언어 학습 서비스. Discord DM으로 학습 세션 링크를 발송하는 구조.
+A language learning service. It sends study session links over Discord DM.
 
-## 스택
-- React Router v7 (Remix mode)
+## Stack
+
+- React Router v7 (framework mode, SSR)
 - Supabase PostgreSQL + Drizzle ORM
 - Shadcn/ui + Tailwind CSS
-- Vercel 배포, Cloudflare DNS
-- n8n 자동화 워크플로우
+- Vercel deployment, Cloudflare DNS
+- n8n automation workflows
 
 ---
 
-## 문서 구조
+## Document structure
 
 ```
 docs/
-├── core/          # 최우선 참조 — 태스크 시작 전 반드시 읽는다
-│   ├── nudge-v2-design-YYYY-MM-DD.md   # 설계 문서 (최고 우선순위)
-│   ├── *-prd.md                        # 피처별 PRD
-│   ├── *-task.md                       # 피처별 태스크 카드
-│   └── *-test-plan.md                  # 피처별 테스트 플랜
-├── ops/           # 운영 체크리스트
-│   ├── post-deploy-regression.md       # 매 배포 후 실시
-│   └── test-results/                   # 수동 TC 결과 로그
-└── archive/       # 구버전 — 충돌 시 무시
+├── core/          # Top priority: read before starting a task
+│   ├── nudge-v2-design-YYYY-MM-DD.md   # Design doc (highest priority)
+│   ├── *-prd.md                        # Per-feature PRD
+│   ├── *-task.md                       # Per-feature task card
+│   └── *-test-plan.md                  # Per-feature test plan
+├── ops/           # Operations checklists
+│   ├── post-deploy-regression.md       # Run after every deploy
+│   └── test-results/                   # Manual TC result logs
+└── archive/       # Old versions: ignore on conflict
 ```
 
-### 문서 우선순위 (높은 순)
+### Document priority (highest first)
 
-1. `docs/core/nudge-v2-design-YYYY-MM-DD.md` — 최신 버전
-2. 피처 PRD (`*-prd.md`)
-3. 피처 태스크 (`*-task.md`)
-4. 이 파일 (CLAUDE.md)
-5. 아카이브 — **상위 문서와 충돌 시 무시**
+1. `docs/core/nudge-v2-design-YYYY-MM-DD.md` (latest version)
+2. Feature PRD (`*-prd.md`)
+3. Feature task (`*-task.md`)
+4. This file (CLAUDE.md)
+5. Archive: **ignore when it conflicts with a higher-priority doc**
 
-두 문서가 서로 충돌할 경우, 우선순위가 높은 문서를 따르고 개발자에게 먼저 알린다.
+When two documents conflict, follow the higher-priority one and tell the developer first.
 
 ---
 
-## 핵심 개발 규칙
+## Core development rules
 
-### DB 스키마 변경
-순서를 절대 건너뛰지 않는다:
+### DB schema changes
+
+Never skip the order:
+
 ```
-1. app/features/<feature>/schema.ts 수정  (스키마는 피처별로 분산: app/features/**/schema.ts)
-2. npm run db:generate                    (마이그레이션은 sql/migrations/ 에 생성)
-3. npm run db:migrate                      (postdb:migrate 가 db:typegen → database.types.ts 자동 재생성)
+1. Edit app/features/<feature>/schema.ts  (schemas are split per feature: app/features/**/schema.ts)
+2. npm run db:generate                    (migrations are generated into sql/migrations/)
+3. npm run db:migrate                     (postdb:migrate regenerates db:typegen → database.types.ts automatically)
 ```
-- Supabase SQL Editor를 통한 직접 SQL 실행은 **금지**
-- SQL 함수·트리거는 `sql/functions/`에서 관리, Supabase SQL Editor로만 적용
-- Enum 값은 schema 파일 인라인 정의 — `constants.ts`에서 import 금지
 
-### Route 등록
-- 반드시 **라우트 파일 생성 후** `routes.ts`에 등록한다
-- 파일 없이 routes.ts 등록 시 React Router 7 `ENOENT` 크래시 발생
+- Running SQL directly through the Supabase SQL Editor is **forbidden**
+- SQL functions and triggers are managed in `sql/functions/`, applied only via the Supabase SQL Editor
+- Enum values are defined inline in the schema file: do not import them from `constants.ts`
 
-### 코드 스타일
-- 코드 코멘트: 영어로 작성
-- 커밋 메시지: 영어로 작성
-- 미사용 코드: 삭제 말고 주석 처리
-- loader 패턴: `useLoaderData<typeof loader>()` 사용 (`Route.ComponentProps` 금지)
+### Route registration
 
-### 익명 사용자
-- `auth_user_id.startsWith('anon:')` 으로 식별
-- OpenAI API 호출 차단 → 안내 메시지 반환
-- Marathon Mode: `/login?next=/products/:slug/marathon` 으로 리디렉트
+- Always **create the route file first**, then register it in `routes.ts`
+- Registering in routes.ts without the file causes a React Router 7 `ENOENT` crash
 
-### RLS 정책
-- RLS 우회: `adminClient` 사용
-- Enum 컬럼을 text와 비교할 때 `::text` 캐스트 필수
-  - 예: `status::text = 'active'::text`
+### Code style
+
+- Code comments: written in English
+- Commit messages: written in English
+- Unused code: comment it out, do not delete
+- loader pattern: use `useLoaderData<typeof loader>()` (do not use `Route.ComponentProps`)
+
+### Anonymous users
+
+- Identified by `auth_user_id.startsWith('anon:')`
+- Block OpenAI API calls, return a guidance message instead
+- Marathon Mode: redirect to `/login?next=/products/:slug/marathon`
+
+### RLS policy
+
+- Bypass RLS: use `adminClient`
+- A `::text` cast is required when comparing an enum column to text
+  - e.g. `status::text = 'active'::text`
 
 ---
 
-## 디버깅 규칙
+## Debugging rules
 
-- **loader 에러 추적**: 문제 발생 시 단계별 `console.log`를 즉시 추가해 어느 쿼리가 실패하는지 먼저 특정한다. 가설로 코드를 수정하기 전에 반드시 원인을 확인한다.
-- **Supabase 에러 throw**: `if (err) throw err` 금지. 반드시 `throw new Error(err.message)`로 감싸 ErrorBoundary가 인식할 수 있는 Error 인스턴스로 던진다.
-- **`.in()` 쿼리 크기**: PostgREST는 `.in()` 조건을 URL 파라미터로 전송한다. 수십 개 이상의 ID → URL 길이 초과 → `TypeError: fetch failed`. 부모-자식 관계(예: stage → cards)는 항상 nested select 사용.
+- **Tracing loader errors**: when a problem occurs, immediately add step-by-step `console.log` to first identify which query is failing. Confirm the cause before changing code on a hypothesis.
+- **Throwing Supabase errors**: do not use `if (err) throw err`. Always wrap it as `throw new Error(err.message)` so the ErrorBoundary receives a recognizable Error instance.
+- **`.in()` query size**: PostgREST sends `.in()` conditions as URL parameters. Dozens or more IDs exceed the URL length limit and cause `TypeError: fetch failed`. For parent-child relations (e.g. stage → cards), always use a nested select.
 
 ---
 
-## 테스트 규칙
+## Testing rules
 
-### 코드 변경 후 매회 실행
+### Run after every code change
+
 ```bash
 npm run test
 ```
-테스트 실패 시 완료 보고 전에 반드시 수정한다.
 
-### 테스트 유형별 기준
+If tests fail, you must fix them before reporting completion.
 
-| 유형 | 도구 | 시점 |
-|---|---|---|
-| 단위 테스트 | Vitest | 순수 로직 함수 구현 후 |
-| 통합 테스트 | Vitest + Supertest | API 엔드포인트 구현 후 |
-| 수동 TC | Test Plan 문서 | 스테이징 배포 후 |
-| 회귀 테스트 | post-deploy-regression.md | 매 Production 배포 후 |
+### Criteria by test type
 
-### 자동화 불가 항목 (수동 확인 필수)
-- TTS 오디오 재생
-- 브라우저 세션 이어하기 플로우
-- UI 렌더링 및 레이아웃
+| Type             | Tool                      | When                                    |
+| ---------------- | ------------------------- | --------------------------------------- |
+| Unit test        | Vitest                    | After implementing pure logic functions |
+| Integration test | Vitest + Supertest        | After implementing an API endpoint      |
+| Manual TC        | Test Plan doc             | After staging deploy                    |
+| Regression test  | post-deploy-regression.md | After every Production deploy           |
+
+### Cannot be automated (manual check required)
+
+- TTS audio playback
+- Browser session resume flow
+- UI rendering and layout
 
 ---
 
-## 태스크 워크플로우
+## Task workflow
 
-매 피처 구현 시 아래 순서를 따른다:
+Follow this order for every feature implementation:
 
 ```
-1. docs/core/ 읽기 → 설계 문서·PRD 확인
-2. 코드 작성 전 개발자와 접근 방식 확인
-3. DB 스키마 변경 (필요 시): schema.ts → db:generate → db:migrate
-4. routes.ts 등록 전 라우트 파일 먼저 생성
-5. API 엔드포인트 구현
-6. UI 화면 구현
-7. npm run test 실행
-8. 완료 보고 — 어떤 AC 항목이 확인되었는지 목록으로 제시
-9. 개발자가 Test Plan 기준으로 수동 TC 실시
-10. 설계 문서에 changelog 항목 추가 후 영어로 커밋
+1. Read docs/core/ → check the design doc and PRD
+2. Confirm the approach with the developer before writing code
+3. DB schema changes (if needed): schema.ts → db:generate → db:migrate
+4. Create the route file before registering it in routes.ts
+5. Implement the API endpoint(s)
+6. Implement the UI
+7. Run npm run test
+8. Report completion: list which AC items were verified
+9. Developer runs manual TC against the Test Plan
+10. Add a changelog entry to the design doc, then commit in English
 ```
 
 ---
 
 ## Known Pitfalls
 
-| 상황 | 규칙 |
-|---|---|
-| TTS 루프 버그 | 루프 상태 플래그는 훅 내부 `useRef`가 아니라 모듈 레벨 변수 사용 |
-| CRLF 파일 | Python `rb` 모드로 읽고 `\r\n` → `\n` 명시적 변환 |
-| n8n Code 노드 | `{ json: {...} }` 반환 (배열 금지); "Run Once For Each Item" 모드에서 `$('NodeName').item.json` 사용 |
-| Supabase upsert | `nv2_subscriptions` upsert는 unique constraint 확인 후 실시 |
-| 익명 세션 | `daily-reset` cron으로 7일 후 자동 삭제 |
-| `.in()` URL 초과 | 부모-자식 관계는 nested select 사용 (디버깅 규칙 참고) |
-| routes.ts 등록 순서 | 파일 생성 전 등록 시 ENOENT 크래시 — 파일 먼저, 등록 나중 |
+| Situation                    | Rule                                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
+| TTS loop bug                 | Keep the loop state flag in a module-level variable, not a hook-internal `useRef`                    |
+| CRLF files                   | Read with Python `rb` mode and explicitly convert `\r\n` → `\n`                                      |
+| n8n Code node                | Return `{ json: {...} }` (no arrays); in "Run Once For Each Item" mode use `$('NodeName').item.json` |
+| Supabase upsert              | Run the `nv2_subscriptions` upsert only after confirming the unique constraint                       |
+| Anonymous sessions           | Auto-deleted after 7 days by the `daily-reset` cron                                                  |
+| `.in()` URL overflow         | Use a nested select for parent-child relations (see Debugging rules)                                 |
+| routes.ts registration order | Registering before the file exists causes an ENOENT crash: file first, registration second           |
 
 ---
 
-## 현재 상태
+## Current status
 
-- **서비스**: 클로즈 베타 (7명)
-- **완료된 주요 피처**: 이메일/Google/Discord OAuth, 학습 세션, TTS, Quiz, Marathon Mode, Leni AI 채팅, Story Learning, 이메일 알림, Discord DM (n8n), 관리자 대시보드
-- **진행 중**: 없음 (다음 피처 기획 중)
+- **Service**: closed beta (7 users)
+- **Major features completed**: Email/Google/Discord OAuth, study sessions, TTS, Quiz, Marathon Mode, Leni AI chat, Story Learning, email notifications, Discord DM (n8n), admin dashboard
+- **In progress**: none (planning the next feature)
 
 ---
 
-## 구현 범위 외 (명시적 지시 없이 구현 금지)
+## Out of scope (do not implement without an explicit instruction)
 
-- 결제 연동 (Stripe / Toss)
-- KakaoTalk / Telegram 알림
-- 리더보드 / 멀티 유저 비교
-- 모바일 네이티브 앱
-- "오답만 보기" 모드 (PMF 이후 예정)
-- 크로스 상품 혼합 학습 (A1 + A2 혼합 등)
+- Payment integration (Stripe / Toss)
+- KakaoTalk / Telegram notifications
+- Leaderboard / multi-user comparison
+- Native mobile app
+- "Wrong answers only" mode (planned after PMF)
+- Cross-product mixed learning (e.g. A1 + A2 mixed)

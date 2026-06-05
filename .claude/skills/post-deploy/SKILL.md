@@ -3,7 +3,8 @@ name: post-deploy
 description: >-
   Run nudge's post-deploy regression checklist after a Production deploy and
   record results. TRIGGER right after a Production deploy to nudge.neowithai.com,
-  or when the user says "배포 후 회귀 / post-deploy / regression check". Walks
+  or when the user says "배포 후 회귀" (post-deploy regression) / "post-deploy" /
+  "regression check". Walks
   sections A–H, runs the Hyper-Sync SQL health queries, and writes a results file.
 ---
 
@@ -27,7 +28,7 @@ Run this **after every Production deploy**. Expected time ~35 min.
    account + test email** is used so real users never receive DMs/emails.
 
 4. **Hyper-Sync SQL health queries:** run the 5 queries from the doc's
-   "Hyper-Sync 데이터 확인 (SQL)" block in the Supabase SQL Editor and capture
+   "Hyper-Sync 데이터 확인 (SQL)" (Hyper-Sync data check) block in the Supabase SQL Editor and capture
    results. Abnormal signals: query 4 ≥ 1 (failed sends), query 5 ≥ 1 (dispatch
    backlog → check cron), query 1 = 0 with traffic (save-result API failure).
 
@@ -45,7 +46,7 @@ results file at:
 docs/ops/test-results/YYYY-MM-DD-HH-deploy.md
 ```
 
-Use the "결과 기록 템플릿" from the bottom of the regression doc: deploy
+Use the "결과 기록 템플릿" (results record template) from the bottom of the regression doc: deploy
 timestamp + commit hash, Pass/Fail/Skip summary, Fail items, actions taken, and
 the Hyper-Sync data table. Save it, then report the summary counts and any Fail
 items to the developer.

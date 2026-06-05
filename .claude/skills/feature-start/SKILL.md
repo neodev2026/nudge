@@ -4,7 +4,8 @@ description: >-
   Drive a nudge feature implementation through the project's mandatory 10-step
   task workflow (read docs/core → confirm approach → schema → routes → API → UI
   → test → AC report → changelog → commit). TRIGGER when starting a new feature,
-  picking up a PRD/task card, or when the user says "구현 시작 / 피처 작업 / new feature".
+  picking up a PRD/task card, or when the user says "구현 시작 / 피처 작업"
+  (start implementation / feature work) or "new feature".
 ---
 
 # Feature implementation workflow
@@ -14,7 +15,7 @@ the approach is confirmed.
 
 ## 0. Scope check first
 
-Confirm the feature is NOT in the explicit "구현 범위 외" list (payments,
+Confirm the feature is NOT in the explicit out-of-scope ("구현 범위 외") list (payments,
 Kakao/Telegram, leaderboard/multi-user compare, native app, "wrong-answers-only"
 mode, cross-product mixed learning). If it is, stop and flag the developer.
 
@@ -45,9 +46,11 @@ mode, cross-product mixed learning). If it is, stop and flag the developer.
 6. **Implement the UI.** Shadcn/ui + Tailwind, matching existing feature layout.
 
 7. **Run tests:**
+
    ```bash
    npm run test
    ```
+
    Fix every failure before reporting.
 
 8. **Report completion as an AC checklist** — list which acceptance-criteria

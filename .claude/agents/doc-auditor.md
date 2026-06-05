@@ -38,7 +38,7 @@ is the defect to report.
 4. **CLAUDE.md drift.** Flag where CLAUDE.md disagrees with a higher-priority doc
    (e.g. paths, sequences) — but remember CLAUDE.md outranks task cards and archive.
 5. **Scope leakage.** Flag anything in core docs that contradicts CLAUDE.md's
-   "구현 범위 외" list.
+   out-of-scope ("구현 범위 외") list.
 
 ## Output format
 
